@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>English Savior — 英語救星</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/minecraft.css">
+  <link rel="stylesheet" href="css/roblox.css">
+  <link rel="stylesheet" href="css/youtube.css">
+</head>
+<body>
+  <!-- Top HUD Bar -->
+  <header id="hud">
+    <div class="hud-left">
+      <span class="hud-avatar" id="hud-avatar">🧑‍🎓</span>
+      <span class="hud-name" id="hud-name">冒險者</span>
+      <span class="hud-level">Lv.<span id="hud-level">1</span></span>
+    </div>
+    <div class="hud-center">
+      <div class="xp-bar-container">
+        <div class="xp-bar" id="xp-bar" style="width:0%"></div>
+        <span class="xp-text" id="xp-text">0 / 100 XP</span>
+      </div>
+    </div>
+    <div class="hud-right">
+      <span class="hud-coins">💎 <span id="hud-gems">0</span></span>
+      <span class="hud-streak">🔥 <span id="hud-streak">0</span> 天</span>
+      <button class="hud-btn" id="btn-inventory" title="背包">🎒</button>
+      <button class="hud-btn" id="btn-achievements" title="成就">🏆</button>
+    </div>
+  </header>
+
+  <!-- Main Navigation Tabs -->
+  <nav id="main-nav">
+    <button class="nav-tab active" data-zone="hub">
+      <span class="nav-icon">🏠</span><span class="nav-label">基地</span>
+    </button>
+    <button class="nav-tab" data-zone="minecraft">
+      <span class="nav-icon">⛏️</span><span class="nav-label">挖礦學單字</span>
+    </button>
+    <button class="nav-tab" data-zone="roblox">
+      <span class="nav-icon">🏃</span><span class="nav-label">跑酷學文法</span>
+    </button>
+    <button class="nav-tab" data-zone="youtube">
+      <span class="nav-icon">📺</span><span class="nav-label">看片學英文</span>
+    </button>
+    <button class="nav-tab" data-zone="daily">
+      <span class="nav-icon">📋</span><span class="nav-label">每日任務</span>
+    </button>
+  </nav>
+
+  <!-- Zone: Hub (Home) -->
+  <main id="zone-hub" class="zone active">
+    <div class="hub-welcome">
+      <h1>⚔️ English Savior 英語救星 ⚔️</h1>
+      <p class="hub-subtitle">在遊戲世界中成為英語大師！</p>
+      <div class="hub-cards">
+        <div class="hub-card minecraft-card" data-zone="minecraft">
+          <div class="card-icon">⛏️</div>
+          <h3>挖礦學單字</h3>
+          <p>像 Minecraft 一樣挖掘方塊，收集字母合成英文單字！</p>
+          <span class="card-tag">Vocabulary</span>
+        </div>
+        <div class="hub-card roblox-card" data-zone="roblox">
+          <div class="card-icon">🏃</div>
+          <h3>跑酷學文法</h3>
+          <p>像 Roblox Obby 一樣跳躍闖關，選對文法才能前進！</p>
+          <span class="card-tag">Grammar</span>
+        </div>
+        <div class="hub-card youtube-card" data-zone="youtube">
+          <div class="card-icon">📺</div>
+          <h3>看片學英文</h3>
+          <p>看遊戲相關影片，回答問題賺取獎勵！</p>
+          <span class="card-tag">Comprehension</span>
+        </div>
+      </div>
+    </div>
+    <div class="hub-stats">
+      <h2>📊 我的冒險數據</h2>
+      <div class="stats-grid" id="stats-grid">
+        <div class="stat-box"><div class="stat-num" id="stat-words">0</div><div class="stat-label">已學單字</div></div>
+        <div class="stat-box"><div class="stat-num" id="stat-grammar">0</div><div class="stat-label">文法通關</div></div>
+        <div class="stat-box"><div class="stat-num" id="stat-videos">0</div><div class="stat-label">影片完成</div></div>
+        <div class="stat-box"><div class="stat-num" id="stat-streak">0</div><div class="stat-label">連續天數</div></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Zone: Minecraft Vocabulary -->
+  <main id="zone-minecraft" class="zone">
+    <div class="mc-container">
+      <div class="mc-header">
+        <h2>⛏️ 單字合成工坊</h2>
+        <div class="mc-difficulty">
+          <button class="mc-diff-btn active" data-diff="easy">簡單</button>
+          <button class="mc-diff-btn" data-diff="medium">中等</button>
+          <button class="mc-diff-btn" data-diff="hard">困難</button>
+        </div>
+      </div>
+      <div class="mc-game-area">
+        <div class="mc-hint-area">
+          <div class="mc-hint-img" id="mc-hint-img">🖼️</div>
+          <div class="mc-hint-text" id="mc-hint-text">準備開始挖礦...</div>
+          <div class="mc-hint-zh" id="mc-hint-zh"></div>
+        </div>
+        <div class="mc-crafting">
+          <div class="mc-crafting-grid" id="mc-crafting-grid">
+            <!-- Letter slots filled dynamically -->
+          </div>
+          <div class="mc-arrow">➡️</div>
+          <div class="mc-result" id="mc-result">
+            <span id="mc-result-word">?</span>
+          </div>
+        </div>
+        <div class="mc-blocks" id="mc-blocks">
+          <!-- Clickable letter blocks -->
+        </div>
+      </div>
+      <div class="mc-feedback" id="mc-feedback"></div>
+      <button class="mc-next-btn" id="mc-next-btn">⛏️ 下一個單字</button>
+    </div>
+  </main>
+
+  <!-- Zone: Roblox Grammar -->
+  <main id="zone-roblox" class="zone">
+    <div class="rb-container">
+      <div class="rb-header">
+        <h2>🏃 文法跑酷大冒險</h2>
+        <div class="rb-progress">
+          關卡 <span id="rb-stage">1</span> / <span id="rb-total">10</span>
+        </div>
+      </div>
+      <div class="rb-track">
+        <div class="rb-character" id="rb-character">🏃</div>
+        <div class="rb-platforms" id="rb-platforms">
+          <!-- Platforms generated dynamically -->
+        </div>
+      </div>
+      <div class="rb-question-area">
+        <div class="rb-sentence" id="rb-sentence"></div>
+        <div class="rb-options" id="rb-options">
+          <!-- Options generated dynamically -->
+        </div>
+      </div>
+      <div class="rb-feedback" id="rb-feedback"></div>
+    </div>
+  </main>
+
+  <!-- Zone: YouTube Comprehension -->
+  <main id="zone-youtube" class="zone">
+    <div class="yt-container">
+      <div class="yt-header">
+        <h2>📺 遊戲影片教室</h2>
+      </div>
+      <div class="yt-video-area">
+        <div class="yt-player" id="yt-player">
+          <div class="yt-thumbnail" id="yt-thumbnail">
+            <span class="yt-play-btn">▶</span>
+          </div>
+          <div class="yt-script" id="yt-script"></div>
+        </div>
+        <div class="yt-vocab-sidebar" id="yt-vocab-sidebar">
+          <h3>📝 重點單字</h3>
+          <div id="yt-vocab-list"></div>
+        </div>
+      </div>
+      <div class="yt-quiz-area" id="yt-quiz-area">
+        <h3>🎯 理解測驗</h3>
+        <div id="yt-quiz-questions"></div>
+        <button class="yt-submit-btn" id="yt-submit-quiz">提交答案</button>
+      </div>
+      <div class="yt-feedback" id="yt-feedback"></div>
+      <button class="yt-next-btn" id="yt-next-lesson">📺 下一課</button>
+    </div>
+  </main>
+
+  <!-- Zone: Daily Quests -->
+  <main id="zone-daily" class="zone">
+    <div class="daily-container">
+      <h2>📋 每日任務</h2>
+      <p class="daily-subtitle">完成每日任務獲得額外獎勵！</p>
+      <div class="daily-list" id="daily-list">
+        <!-- Generated dynamically -->
+      </div>
+      <div class="daily-bonus" id="daily-bonus">
+        <h3>🎁 全部完成獎勵</h3>
+        <p>完成所有每日任務可獲得 <strong>50 💎</strong> 和 <strong>神秘寶箱</strong>！</p>
+      </div>
+    </div>
+  </main>
+
+  <!-- Modal: Inventory -->
+  <div class="modal" id="modal-inventory">
+    <div class="modal-content inventory-modal">
+      <button class="modal-close" data-close="modal-inventory">&times;</button>
+      <h2>🎒 我的背包</h2>
+      <div class="inventory-grid" id="inventory-grid"></div>
+    </div>
+  </div>
+
+  <!-- Modal: Achievements -->
+  <div class="modal" id="modal-achievements">
+    <div class="modal-content achievements-modal">
+      <button class="modal-close" data-close="modal-achievements">&times;</button>
+      <h2>🏆 成就系統</h2>
+      <div class="achievements-list" id="achievements-list"></div>
+    </div>
+  </div>
+
+  <!-- Modal: Level Up -->
+  <div class="modal" id="modal-levelup">
+    <div class="modal-content levelup-modal">
+      <h2>🎉 升級了！</h2>
+      <div class="levelup-level" id="levelup-level"></div>
+      <div class="levelup-rewards" id="levelup-rewards"></div>
+      <button class="levelup-btn" data-close="modal-levelup">太棒了！</button>
+    </div>
+  </div>
+
+  <!-- Toast notifications -->
+  <div id="toast-container"></div>
+
+  <script src="js/data.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/minecraft.js"></script>
+  <script src="js/roblox.js"></script>
+  <script src="js/youtube.js"></script>
+  <script src="js/daily.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
