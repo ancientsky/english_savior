@@ -1,0 +1,198 @@
+/* ===== Minecraft Vocabulary Zone ===== */
+.mc-container { max-width: 700px; margin: 0 auto; }
+
+.mc-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mc-header h2 { font-size: 20px; }
+
+.mc-difficulty { display: flex; gap: 4px; }
+.mc-diff-btn {
+  padding: 6px 14px;
+  border: 2px solid #555;
+  background: rgba(0,0,0,0.3);
+  color: var(--text-dim);
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: var(--ui-font);
+  font-size: 12px;
+  transition: all 0.2s;
+}
+.mc-diff-btn.active {
+  border-color: #6abf40;
+  color: #6abf40;
+  background: rgba(106,191,64,0.15);
+}
+
+.mc-game-area {
+  background: linear-gradient(180deg, #3b2d1a 0%, #2d5016 100%);
+  border: 3px solid #6abf40;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.mc-hint-area {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.mc-hint-img {
+  font-size: 64px;
+  margin-bottom: 8px;
+}
+
+.mc-hint-text {
+  font-size: 16px;
+  color: #fff;
+  margin-bottom: 4px;
+}
+
+.mc-hint-zh {
+  font-size: 13px;
+  color: var(--gold);
+}
+
+/* Crafting table */
+.mc-crafting {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.mc-crafting-grid {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.mc-slot {
+  width: 48px;
+  height: 48px;
+  background: #8b6914;
+  border: 3px solid #c9a84c;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--pixel-font);
+  font-size: 18px;
+  color: #fff;
+  text-shadow: 2px 2px 0 #000;
+  image-rendering: pixelated;
+}
+
+.mc-slot.filled {
+  background: #4a7c23;
+  border-color: #6abf40;
+  animation: slotFill 0.3s ease;
+}
+
+.mc-slot.wrong {
+  background: #8b1a1a;
+  border-color: #e74c3c;
+  animation: shake 0.3s ease;
+}
+
+.mc-arrow { font-size: 32px; }
+
+.mc-result {
+  width: 64px;
+  height: 64px;
+  background: linear-gradient(135deg, #c9a84c, #8b6914);
+  border: 3px solid var(--gold);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--pixel-font);
+  font-size: 11px;
+  color: var(--gold);
+}
+
+.mc-result.success {
+  background: linear-gradient(135deg, #4a7c23, #2d5016);
+  border-color: #6abf40;
+  animation: glow 1s ease;
+}
+
+/* Letter blocks */
+.mc-blocks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+
+.mc-block {
+  width: 52px;
+  height: 52px;
+  background: linear-gradient(180deg, #8b6914, #6b4f0e);
+  border: 3px outset #c9a84c;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--pixel-font);
+  font-size: 20px;
+  color: #fff;
+  text-shadow: 2px 2px 0 #000;
+  cursor: pointer;
+  transition: transform 0.1s;
+  image-rendering: pixelated;
+}
+
+.mc-block:hover {
+  transform: scale(1.1);
+  background: linear-gradient(180deg, #a87b1a, #8b6914);
+}
+
+.mc-block:active { transform: scale(0.95); }
+
+.mc-block.used {
+  opacity: 0.3;
+  pointer-events: none;
+  border-style: inset;
+}
+
+.mc-block.stone { background: linear-gradient(180deg, #888, #666); border-color: #aaa; }
+.mc-block.diamond { background: linear-gradient(180deg, #4fd1c5, #2b9ea0); border-color: #81e6d9; }
+.mc-block.gold { background: linear-gradient(180deg, #f5c518, #c49b0e); border-color: #ffe066; }
+.mc-block.emerald { background: linear-gradient(180deg, #48bb78, #2f855a); border-color: #68d391; }
+
+.mc-feedback {
+  text-align: center;
+  padding: 10px;
+  font-size: 14px;
+  min-height: 40px;
+}
+.mc-feedback.correct { color: var(--green); }
+.mc-feedback.wrong { color: var(--accent); }
+
+.mc-next-btn {
+  display: block;
+  margin: 0 auto;
+  padding: 12px 24px;
+  background: linear-gradient(180deg, #4a7c23, #2d5016);
+  border: 2px solid #6abf40;
+  color: #fff;
+  font-family: var(--pixel-font);
+  font-size: 11px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.mc-next-btn:hover { background: linear-gradient(180deg, #5a9c2e, #3d6a1e); }
+
+@keyframes slotFill { from { transform: scale(1.3); } to { transform: scale(1); } }
+@keyframes shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+@keyframes glow { 0%,100% { box-shadow: 0 0 5px var(--gold); } 50% { box-shadow: 0 0 25px var(--gold); } }

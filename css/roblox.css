@@ -1,0 +1,177 @@
+/* ===== Roblox Grammar Zone ===== */
+.rb-container { max-width: 700px; margin: 0 auto; }
+
+.rb-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.rb-header h2 { font-size: 20px; }
+.rb-progress {
+  font-family: var(--pixel-font);
+  font-size: 12px;
+  color: var(--gold);
+}
+
+/* Track / Obby */
+.rb-track {
+  position: relative;
+  height: 120px;
+  background: linear-gradient(180deg, #87ceeb 0%, #87ceeb 60%, transparent 60%);
+  border-radius: 12px;
+  margin-bottom: 20px;
+  overflow: hidden;
+  border: 2px solid #555;
+}
+
+.rb-track::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 30px;
+  background: linear-gradient(180deg, #2d5016, #1a3a0a);
+}
+
+.rb-character {
+  position: absolute;
+  bottom: 28px;
+  left: 5%;
+  font-size: 36px;
+  transition: left 0.5s ease;
+  z-index: 2;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+}
+
+.rb-platforms {
+  position: absolute;
+  bottom: 30px;
+  left: 0;
+  right: 0;
+  height: 60px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-around;
+  padding: 0 5%;
+}
+
+.rb-platform {
+  width: 8%;
+  height: 16px;
+  border-radius: 3px;
+  transition: all 0.3s;
+}
+
+.rb-platform.inactive { background: #555; }
+.rb-platform.current { background: var(--gold); box-shadow: 0 0 10px var(--gold); }
+.rb-platform.passed { background: var(--green); }
+.rb-platform.failed { background: var(--accent); }
+
+/* Question area */
+.rb-question-area {
+  background: linear-gradient(135deg, #2d1a1a, #4a1a1a);
+  border: 2px solid #e74c3c;
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.rb-sentence {
+  font-size: 18px;
+  text-align: center;
+  margin-bottom: 20px;
+  line-height: 1.8;
+  min-height: 40px;
+}
+
+.rb-sentence .rb-blank {
+  display: inline-block;
+  min-width: 80px;
+  border-bottom: 3px solid var(--gold);
+  padding: 2px 8px;
+  margin: 0 4px;
+  color: var(--gold);
+  font-weight: 700;
+}
+
+.rb-options {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.rb-option {
+  padding: 14px;
+  background: rgba(255,255,255,0.05);
+  border: 2px solid #555;
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: var(--ui-font);
+  text-align: center;
+}
+
+.rb-option:hover {
+  border-color: var(--gold);
+  background: rgba(245,197,24,0.1);
+}
+
+.rb-option.correct {
+  border-color: var(--green);
+  background: rgba(78,204,163,0.2);
+  color: var(--green);
+}
+
+.rb-option.wrong {
+  border-color: var(--accent);
+  background: rgba(233,69,96,0.2);
+  color: var(--accent);
+}
+
+.rb-option.disabled {
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+.rb-feedback {
+  text-align: center;
+  padding: 12px;
+  font-size: 14px;
+  min-height: 44px;
+  margin-top: 12px;
+}
+.rb-feedback.correct { color: var(--green); }
+.rb-feedback.wrong { color: var(--accent); }
+
+/* Celebration */
+.rb-celebrate {
+  text-align: center;
+  padding: 40px;
+}
+.rb-celebrate h2 {
+  font-family: var(--pixel-font);
+  font-size: 16px;
+  color: var(--gold);
+  margin-bottom: 12px;
+}
+.rb-celebrate .rb-score {
+  font-family: var(--pixel-font);
+  font-size: 36px;
+  color: var(--green);
+  margin-bottom: 16px;
+}
+.rb-retry-btn {
+  padding: 12px 24px;
+  background: linear-gradient(180deg, #c0392b, #8b1a1a);
+  border: 2px solid #e74c3c;
+  color: #fff;
+  font-family: var(--pixel-font);
+  font-size: 11px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.rb-retry-btn:hover { background: linear-gradient(180deg, #e74c3c, #c0392b); }
