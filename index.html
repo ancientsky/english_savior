@@ -42,6 +42,7 @@
     <div class="hud-right">
       <span class="hud-coins">💎 <span id="hud-gems">0</span></span>
       <span class="hud-streak">🔥 <span id="hud-streak">0</span> 天</span>
+      <button class="hud-btn" id="btn-shop" title="商店">🛒</button>
       <button class="hud-btn" id="btn-inventory" title="背包">🎒</button>
       <button class="hud-btn" id="btn-achievements" title="成就">🏆</button>
       <button class="hud-btn" id="btn-help" title="使用說明">❓</button>
@@ -232,6 +233,25 @@
       <div class="levelup-level" id="levelup-level"></div>
       <div class="levelup-rewards" id="levelup-rewards"></div>
       <button class="levelup-btn" data-close="modal-levelup">太棒了！</button>
+    </div>
+  </div>
+
+  <!-- Modal: Shop -->
+  <div class="modal" id="modal-shop">
+    <div class="modal-content shop-modal">
+      <button class="modal-close" data-close="modal-shop">&times;</button>
+      <div class="shop-header">
+        <h2>🛒 寶石商店</h2>
+        <div class="shop-balance">💎 <span id="shop-gems">0</span></div>
+      </div>
+      <div class="shop-tabs">
+        <button class="shop-tab active" data-tab="consumables" onclick="GameEngine.switchShopTab('consumables')">🧪 道具</button>
+        <button class="shop-tab" data-tab="skins" onclick="GameEngine.switchShopTab('skins')">🎨 皮膚</button>
+        <button class="shop-tab" data-tab="titles" onclick="GameEngine.switchShopTab('titles')">🏷️ 稱號</button>
+      </div>
+      <div class="shop-grid" id="shop-grid">
+        <!-- Items rendered dynamically -->
+      </div>
     </div>
   </div>
 

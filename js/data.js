@@ -1582,3 +1582,64 @@ const INVENTORY_ITEMS = [
   { id: 'nether_star', name: '乙太之星', icon: '⭐', desc: '來自異世界的獎勵' },
   { id: 'totem', name: '不死圖騰', icon: '🗿', desc: '永不放棄的象徵' },
 ];
+
+// ===== 寶石商店商品 =====
+const SHOP_ITEMS = {
+  // 消耗品（可重複購買）
+  consumables: [
+    { id: 'xp_boost', name: '雙倍經驗卷軸', icon: '📜', price: 50,
+      desc: '下次答題獲得雙倍 XP', effect: 'double_xp' },
+    { id: 'hint_crystal', name: '提示水晶', icon: '🔮', price: 30,
+      desc: '單字遊戲顯示第一個字母提示', effect: 'hint' },
+    { id: 'revive_feather', name: '復活羽毛', icon: '🪶', price: 40,
+      desc: '文法答錯時可重試一次', effect: 'revive' },
+    { id: 'lucky_cookie', name: '幸運餅乾', icon: '🥠', price: 60,
+      desc: '提高獲得稀有道具的機率', effect: 'lucky' },
+    { id: 'xp_potion', name: '經驗藥水', icon: '🧪', price: 80,
+      desc: '立即獲得 50 XP', effect: 'instant_xp' },
+    { id: 'gem_finder', name: '寶石探測器', icon: '💠', price: 100,
+      desc: '下 5 次答題額外獲得寶石', effect: 'gem_bonus' },
+  ],
+  // 皮膚（永久擁有）
+  skins: [
+    { id: 'default', name: '經典冒險者', icon: '🧑‍🎓', price: 0,
+      desc: '每個英語勇者的起點' },
+    { id: 'diamond_knight', name: '鑽石騎士', icon: '💎', price: 200,
+      desc: '閃耀的鑽石戰士' },
+    { id: 'fire_mage', name: '火焰法師', icon: '🔥', price: 150,
+      desc: '掌握火焰的魔法師' },
+    { id: 'ocean_explorer', name: '海洋探險家', icon: '🌊', price: 150,
+      desc: '來自深海的冒險者' },
+    { id: 'shadow_ninja', name: '暗夜忍者', icon: '🥷', price: 300,
+      desc: '神秘的影子刺客' },
+    { id: 'rainbow_unicorn', name: '彩虹獨角獸', icon: '🦄', price: 250,
+      desc: '夢幻的魔法生物' },
+    { id: 'space_astronaut', name: '太空人', icon: '👨‍🚀', price: 350,
+      desc: '探索宇宙的勇者' },
+    { id: 'pixel_robot', name: '像素機器人', icon: '🤖', price: 280,
+      desc: '來自未來的學習夥伴' },
+    { id: 'dragon_master', name: '馴龍大師', icon: '🐉', price: 400,
+      desc: '傳說中的龍之守護者' },
+  ],
+  // 稱號（永久擁有）
+  titles: [
+    { id: 'beginner', name: '初心者', price: 0,
+      display: '初心者', desc: '每個冒險者的起點' },
+    { id: 'english_star', name: '英文小達人', price: 100,
+      display: '英文小達人', desc: '閃耀的英語之星' },
+    { id: 'word_hunter', name: '單字獵人', price: 120,
+      display: '單字獵人', desc: '專門狩獵單字的高手' },
+    { id: 'grammar_master', name: '文法大師', price: 150,
+      display: '文法大師', desc: '精通文法的學者' },
+    { id: 'bookworm', name: '學霸', price: 200,
+      display: '學霸', desc: '知識淵博的天才' },
+    { id: 'speed_learner', name: '速學者', price: 180,
+      display: '速學者', desc: '學習速度驚人' },
+    { id: 'persistent', name: '永不放棄', price: 160,
+      display: '永不放棄', desc: '堅持不懈的精神' },
+    { id: 'legend', name: '傳說勇者', price: 500,
+      display: '傳說勇者', desc: '最強的英語戰士', special: true },
+    { id: 'champion', name: '冠軍', price: 400,
+      display: '冠軍', desc: '頂尖的學習者', special: true },
+  ]
+};

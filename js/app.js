@@ -37,6 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // HUD buttons
+  document.getElementById('btn-shop').addEventListener('click', GameEngine.showShop);
   document.getElementById('btn-inventory').addEventListener('click', GameEngine.showInventory);
   document.getElementById('btn-achievements').addEventListener('click', GameEngine.showAchievements);
   document.getElementById('btn-help').addEventListener('click', () => {
