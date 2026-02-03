@@ -27,12 +27,13 @@ const YoutubeGame = (() => {
     script.innerHTML = '';
 
     const scriptP = document.createElement('p');
-    scriptP.textContent = lesson.script;
+    scriptP.innerHTML = lesson.script;
     script.appendChild(scriptP);
 
-    // Add TTS button for the script
+    // Add TTS button for the script (strip HTML tags for plain text reading)
     if (TTSManager.isSupported()) {
-      const ttsBtn = TTSManager.createButton(lesson.script, 'en-US');
+      const plainText = lesson.script.replace(/<[^>]*>/g, '');
+      const ttsBtn = TTSManager.createButton(plainText, 'en-US');
       ttsBtn.style.marginTop = '12px';
       script.appendChild(ttsBtn);
     }
