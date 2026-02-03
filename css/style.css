@@ -636,7 +636,156 @@ body {
 .shop-owned-qty {
   font-size: 10px;
   color: var(--text-dim);
-  margin-top: 4px;
+}
+
+.shop-owned-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.shop-use-btn {
+  padding: 4px 12px;
+  background: var(--green);
+  color: #000;
+  border: none;
+  border-radius: 4px;
+  font-family: var(--pixel-font);
+  font-size: 9px;
+  cursor: pointer;
+  transition: transform 0.1s, background 0.2s;
+}
+
+.shop-use-btn:hover {
+  background: #5ddb9e;
+  transform: scale(1.05);
+}
+
+/* ===== Enhanced Inventory Sections ===== */
+.inventory-modal {
+  max-width: 520px;
+}
+
+.inv-section {
+  margin-bottom: 20px;
+}
+
+.inv-section-title {
+  font-family: var(--pixel-font);
+  font-size: 12px;
+  color: var(--accent);
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(233, 69, 96, 0.3);
+}
+
+/* Consumables grid in inventory */
+.inv-consumables-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.inv-consumable-slot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid #444;
+  border-radius: 8px;
+  transition: border-color 0.2s;
+}
+
+.inv-consumable-slot:hover {
+  border-color: var(--accent);
+}
+
+.inv-consumable-icon {
+  font-size: 28px;
+  flex-shrink: 0;
+}
+
+.inv-consumable-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.inv-consumable-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.inv-consumable-qty {
+  font-size: 11px;
+  color: var(--gold);
+  font-family: var(--pixel-font);
+}
+
+.inv-use-btn {
+  padding: 8px 16px;
+  background: var(--green);
+  color: #000;
+  border: none;
+  border-radius: 6px;
+  font-family: var(--pixel-font);
+  font-size: 10px;
+  cursor: pointer;
+  transition: transform 0.1s, background 0.2s;
+}
+
+.inv-use-btn:hover {
+  background: #5ddb9e;
+  transform: scale(1.05);
+}
+
+/* Active buffs in inventory */
+.inv-buffs-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.inv-buff-slot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: linear-gradient(135deg, rgba(245, 197, 24, 0.15), rgba(245, 197, 24, 0.05));
+  border: 1px solid var(--gold);
+  border-radius: 8px;
+  animation: buffGlow 2s ease-in-out infinite;
+}
+
+@keyframes buffGlow {
+  0%, 100% { box-shadow: 0 0 5px rgba(245, 197, 24, 0.3); }
+  50% { box-shadow: 0 0 15px rgba(245, 197, 24, 0.5); }
+}
+
+.inv-buff-icon {
+  font-size: 20px;
+}
+
+.inv-buff-name {
+  font-size: 11px;
+  color: var(--text);
+}
+
+.inv-buff-uses {
+  font-size: 10px;
+  color: var(--gold);
+  font-family: var(--pixel-font);
+}
+
+/* Collection grid in inventory */
+.inv-collection-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
 }
 
 /* Scrollbar for shop grid */
