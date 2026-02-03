@@ -28,6 +28,17 @@ const GameEngine = (() => {
       dailyDate: null,
       // history
       learnedWordsList: [],
+      // shop system
+      owned: {
+        consumables: {},  // { itemId: quantity }
+        skins: ['default'],
+        titles: ['beginner']
+      },
+      equipped: {
+        skin: 'default',
+        title: 'beginner'
+      },
+      activeBuffs: [],  // [{ type: 'double_xp', uses: 1 }, ...]
     };
   }
 
@@ -40,7 +51,16 @@ const GameEngine = (() => {
     if (raw) {
       try {
         const saved = JSON.parse(raw);
-        state = { ...getDefaultState(), ...saved };
+        const defaults = getDefaultState();
+        state = { ...defaults, ...saved };
+        // Deep merge for nested objects (shop system)
+        state.owned = {
+          consumables: { ...defaults.owned.consumables, ...(saved.owned?.consumables || {}) },
+          skins: saved.owned?.skins || defaults.owned.skins,
+          titles: saved.owned?.titles || defaults.owned.titles,
+        };
+        state.equipped = { ...defaults.equipped, ...(saved.equipped || {}) };
+        state.activeBuffs = saved.activeBuffs || [];
       } catch { /* use default */ }
     }
     // Check streak
@@ -161,6 +181,16 @@ const GameEngine = (() => {
     document.getElementById('xp-text').textContent = `${state.xp} / ${needed} XP`;
     document.getElementById('hud-gems').textContent = state.gems;
     document.getElementById('hud-streak').textContent = state.streak;
+
+    // Update equipped skin and title
+    const skin = SHOP_ITEMS?.skins?.find(s => s.id === (state.equipped?.skin || 'default'));
+    const title = SHOP_ITEMS?.titles?.find(t => t.id === (state.equipped?.title || 'beginner'));
+    if (skin) {
+      document.getElementById('hud-avatar').textContent = skin.icon;
+    }
+    if (title) {
+      document.getElementById('hud-name').textContent = title.display || '冒險者';
+    }
   }
 
   function updateStats() {
@@ -227,6 +257,206 @@ const GameEngine = (() => {
     setTimeout(() => toast.remove(), 3000);
   }
 
+  // ===== Shop System =====
+  let currentShopTab = 'consumables';
+
+  function showShop() {
+    renderShopItems(currentShopTab);
+    document.getElementById('shop-gems').textContent = state.gems;
+    document.getElementById('modal-shop').classList.add('active');
+  }
+
+  function switchShopTab(tab) {
+    currentShopTab = tab;
+    document.querySelectorAll('.shop-tab').forEach(t => t.classList.remove('active'));
+    document.querySelector(`.shop-tab[data-tab="${tab}"]`).classList.add('active');
+    renderShopItems(tab);
+  }
+
+  function renderShopItems(category) {
+    const grid = document.getElementById('shop-grid');
+    grid.innerHTML = '';
+    const items = SHOP_ITEMS[category];
+
+    items.forEach(item => {
+      const owned = isItemOwned(category, item.id);
+      const equipped = isItemEquipped(category, item.id);
+      const canAfford = state.gems >= item.price;
+      const quantity = category === 'consumables' ? (state.owned.consumables[item.id] || 0) : 0;
+
+      const card = document.createElement('div');
+      card.className = 'shop-card' + (owned && category !== 'consumables' ? ' owned' : '') + (equipped ? ' equipped' : '');
+
+      let buttonHtml = '';
+      if (category === 'consumables') {
+        buttonHtml = `<button class="shop-buy-btn${!canAfford ? ' disabled' : ''}"
+          onclick="GameEngine.buyItem('${category}', '${item.id}')"
+          ${!canAfford ? 'disabled' : ''}>
+          ${canAfford ? '購買' : '寶石不足'}
+        </button>`;
+        if (quantity > 0) {
+          buttonHtml += `<span class="shop-owned-qty">已擁有: ${quantity}</span>`;
+        }
+      } else if (owned) {
+        if (equipped) {
+          buttonHtml = `<button class="shop-equipped-btn" disabled>裝備中</button>`;
+        } else {
+          buttonHtml = `<button class="shop-equip-btn" onclick="GameEngine.equipItem('${category}', '${item.id}')">裝備</button>`;
+        }
+      } else if (item.price === 0) {
+        buttonHtml = `<button class="shop-buy-btn" onclick="GameEngine.buyItem('${category}', '${item.id}')">免費領取</button>`;
+      } else {
+        buttonHtml = `<button class="shop-buy-btn${!canAfford ? ' disabled' : ''}"
+          onclick="GameEngine.buyItem('${category}', '${item.id}')"
+          ${!canAfford ? 'disabled' : ''}>
+          ${canAfford ? '購買' : '寶石不足'}
+        </button>`;
+      }
+
+      const iconHtml = item.icon || '';
+      const priceHtml = item.price > 0 ? `<span class="shop-price">💎 ${item.price}</span>` : `<span class="shop-price free">免費</span>`;
+      const specialClass = item.special ? ' special' : '';
+
+      card.innerHTML = `
+        <div class="shop-card-icon${specialClass}">${iconHtml}</div>
+        <div class="shop-card-info">
+          <h4 class="shop-card-name${specialClass}">${item.name}</h4>
+          <p class="shop-card-desc">${item.desc}</p>
+          ${priceHtml}
+        </div>
+        <div class="shop-card-action">
+          ${buttonHtml}
+        </div>
+      `;
+      grid.appendChild(card);
+    });
+  }
+
+  function isItemOwned(category, itemId) {
+    if (category === 'consumables') {
+      return (state.owned.consumables[itemId] || 0) > 0;
+    }
+    return state.owned[category]?.includes(itemId);
+  }
+
+  function isItemEquipped(category, itemId) {
+    if (category === 'consumables') return false;
+    const key = category === 'skins' ? 'skin' : 'title';
+    return state.equipped[key] === itemId;
+  }
+
+  function buyItem(category, itemId) {
+    const item = SHOP_ITEMS[category].find(i => i.id === itemId);
+    if (!item) {
+      showToast('商品不存在', 'error');
+      return false;
+    }
+
+    if (state.gems < item.price) {
+      showToast('寶石不足！', 'error');
+      return false;
+    }
+
+    // Check if already owned (for skins/titles)
+    if (category !== 'consumables' && state.owned[category]?.includes(itemId)) {
+      showToast('已擁有此商品', 'error');
+      return false;
+    }
+
+    // Deduct gems
+    state.gems -= item.price;
+
+    // Add to owned
+    if (category === 'consumables') {
+      state.owned.consumables[itemId] = (state.owned.consumables[itemId] || 0) + 1;
+      showToast(`購買成功！獲得 ${item.icon} ${item.name}`, 'achievement');
+    } else {
+      if (!state.owned[category]) state.owned[category] = [];
+      state.owned[category].push(itemId);
+      showToast(`購買成功！獲得 ${item.icon || ''} ${item.name}`, 'achievement');
+    }
+
+    save();
+    updateHUD();
+    renderShopItems(currentShopTab);
+    document.getElementById('shop-gems').textContent = state.gems;
+    return true;
+  }
+
+  function equipItem(category, itemId) {
+    if (!state.owned[category]?.includes(itemId)) {
+      showToast('尚未擁有此商品', 'error');
+      return false;
+    }
+
+    const key = category === 'skins' ? 'skin' : 'title';
+    state.equipped[key] = itemId;
+
+    const item = SHOP_ITEMS[category].find(i => i.id === itemId);
+    showToast(`已裝備 ${item?.icon || ''} ${item?.name || itemId}`, 'info');
+
+    save();
+    updateHUD();
+    renderShopItems(currentShopTab);
+    return true;
+  }
+
+  function useConsumable(itemId) {
+    if (!state.owned.consumables[itemId] || state.owned.consumables[itemId] <= 0) {
+      showToast('沒有此道具', 'error');
+      return false;
+    }
+
+    const item = SHOP_ITEMS.consumables.find(i => i.id === itemId);
+    if (!item) return false;
+
+    // Apply effect
+    if (item.effect === 'instant_xp') {
+      // Instant effect: add XP directly
+      state.owned.consumables[itemId]--;
+      save();
+      addXP(50);
+      showToast(`使用 ${item.icon} ${item.name}，獲得 50 XP！`, 'xp');
+    } else {
+      // Buff effect: add to active buffs
+      state.owned.consumables[itemId]--;
+      const uses = item.effect === 'gem_bonus' ? 5 : 1;
+      state.activeBuffs.push({ type: item.effect, uses: uses });
+      save();
+      showToast(`啟用 ${item.icon} ${item.name}！`, 'achievement');
+    }
+
+    renderShopItems(currentShopTab);
+    return true;
+  }
+
+  function hasBuff(buffType) {
+    return state.activeBuffs.some(b => b.type === buffType && b.uses > 0);
+  }
+
+  function consumeBuff(buffType) {
+    const buff = state.activeBuffs.find(b => b.type === buffType && b.uses > 0);
+    if (buff) {
+      buff.uses--;
+      if (buff.uses <= 0) {
+        state.activeBuffs = state.activeBuffs.filter(b => b !== buff);
+      }
+      save();
+      return true;
+    }
+    return false;
+  }
+
+  function getEquippedSkin() {
+    const skinId = state.equipped?.skin || 'default';
+    return SHOP_ITEMS.skins.find(s => s.id === skinId) || SHOP_ITEMS.skins[0];
+  }
+
+  function getEquippedTitle() {
+    const titleId = state.equipped?.title || 'beginner';
+    return SHOP_ITEMS.titles.find(t => t.id === titleId) || SHOP_ITEMS.titles[0];
+  }
+
   return {
     load, save, getState,
     addXP, addGems,
@@ -235,5 +465,9 @@ const GameEngine = (() => {
     updateHUD, updateStats,
     showInventory, showAchievements, showToast,
     checkAchievements,
+    // Shop functions
+    showShop, switchShopTab, buyItem, equipItem,
+    useConsumable, hasBuff, consumeBuff,
+    getEquippedSkin, getEquippedTitle,
   };
 })();
