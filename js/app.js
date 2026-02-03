@@ -39,6 +39,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // HUD buttons
   document.getElementById('btn-inventory').addEventListener('click', GameEngine.showInventory);
   document.getElementById('btn-achievements').addEventListener('click', GameEngine.showAchievements);
+  document.getElementById('btn-help').addEventListener('click', () => {
+    document.getElementById('modal-help').classList.add('active');
+  });
 });
 
 function switchZone(zoneId) {
