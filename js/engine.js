@@ -209,6 +209,71 @@ const GameEngine = (() => {
   function showInventory() {
     const grid = document.getElementById('inventory-grid');
     grid.innerHTML = '';
+
+    // Section 1: Shop consumables (purchased items that can be used)
+    const ownedConsumables = Object.entries(state.owned.consumables || {}).filter(([id, qty]) => qty > 0);
+    if (ownedConsumables.length > 0) {
+      const consumablesSection = document.createElement('div');
+      consumablesSection.className = 'inv-section';
+      consumablesSection.innerHTML = '<h3 class="inv-section-title">🧪 可使用道具</h3>';
+      const consumablesGrid = document.createElement('div');
+      consumablesGrid.className = 'inv-consumables-grid';
+
+      ownedConsumables.forEach(([itemId, quantity]) => {
+        const item = SHOP_ITEMS.consumables.find(i => i.id === itemId);
+        if (item) {
+          const slot = document.createElement('div');
+          slot.className = 'inv-consumable-slot';
+          slot.innerHTML = `
+            <div class="inv-consumable-icon">${item.icon}</div>
+            <div class="inv-consumable-info">
+              <span class="inv-consumable-name">${item.name}</span>
+              <span class="inv-consumable-qty">x${quantity}</span>
+            </div>
+            <button class="inv-use-btn" onclick="GameEngine.useConsumable('${itemId}'); GameEngine.showInventory();">使用</button>
+          `;
+          slot.title = item.desc;
+          consumablesGrid.appendChild(slot);
+        }
+      });
+
+      consumablesSection.appendChild(consumablesGrid);
+      grid.appendChild(consumablesSection);
+    }
+
+    // Section 2: Active buffs
+    if (state.activeBuffs && state.activeBuffs.length > 0) {
+      const buffsSection = document.createElement('div');
+      buffsSection.className = 'inv-section';
+      buffsSection.innerHTML = '<h3 class="inv-section-title">✨ 啟用中效果</h3>';
+      const buffsGrid = document.createElement('div');
+      buffsGrid.className = 'inv-buffs-grid';
+
+      state.activeBuffs.forEach(buff => {
+        const item = SHOP_ITEMS.consumables.find(i => i.effect === buff.type);
+        if (item) {
+          const slot = document.createElement('div');
+          slot.className = 'inv-buff-slot';
+          slot.innerHTML = `
+            <span class="inv-buff-icon">${item.icon}</span>
+            <span class="inv-buff-name">${item.name}</span>
+            <span class="inv-buff-uses">剩餘 ${buff.uses} 次</span>
+          `;
+          buffsGrid.appendChild(slot);
+        }
+      });
+
+      buffsSection.appendChild(buffsGrid);
+      grid.appendChild(buffsSection);
+    }
+
+    // Section 3: Collection items (from level-up rewards)
+    const collectionSection = document.createElement('div');
+    collectionSection.className = 'inv-section';
+    collectionSection.innerHTML = '<h3 class="inv-section-title">🎒 收藏品</h3>';
+    const collectionGrid = document.createElement('div');
+    collectionGrid.className = 'inv-collection-grid';
+
     INVENTORY_ITEMS.forEach(item => {
       const count = state.inventory[item.id] || 0;
       const slot = document.createElement('div');
@@ -217,14 +282,19 @@ const GameEngine = (() => {
         ? `${item.icon}<span class="inv-count">x${count}</span>`
         : '';
       slot.title = count > 0 ? `${item.name}: ${item.desc}` : '空';
-      grid.appendChild(slot);
+      collectionGrid.appendChild(slot);
     });
-    // Fill empty slots
-    for (let i = INVENTORY_ITEMS.length; i < 20; i++) {
+
+    // Fill empty slots for collection
+    for (let i = INVENTORY_ITEMS.length; i < 16; i++) {
       const slot = document.createElement('div');
       slot.className = 'inv-slot empty';
-      grid.appendChild(slot);
+      collectionGrid.appendChild(slot);
     }
+
+    collectionSection.appendChild(collectionGrid);
+    grid.appendChild(collectionSection);
+
     document.getElementById('modal-inventory').classList.add('active');
   }
 
@@ -289,13 +359,18 @@ const GameEngine = (() => {
 
       let buttonHtml = '';
       if (category === 'consumables') {
+        // Buy button
         buttonHtml = `<button class="shop-buy-btn${!canAfford ? ' disabled' : ''}"
           onclick="GameEngine.buyItem('${category}', '${item.id}')"
           ${!canAfford ? 'disabled' : ''}>
           ${canAfford ? '購買' : '寶石不足'}
         </button>`;
+        // If owned, show quantity and use button
         if (quantity > 0) {
-          buttonHtml += `<span class="shop-owned-qty">已擁有: ${quantity}</span>`;
+          buttonHtml += `<div class="shop-owned-info">
+            <span class="shop-owned-qty">已擁有: ${quantity}</span>
+            <button class="shop-use-btn" onclick="GameEngine.useConsumable('${item.id}')">使用</button>
+          </div>`;
         }
       } else if (owned) {
         if (equipped) {
