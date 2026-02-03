@@ -35,8 +35,26 @@ const MinecraftGame = (() => {
 
     // Set hint
     document.getElementById('mc-hint-img').textContent = currentWord.hint;
-    document.getElementById('mc-hint-text').textContent = currentWord.sentence.replace('_____', '______');
-    document.getElementById('mc-hint-zh').textContent = currentWord.zh;
+
+    // Add TTS button for the sentence
+    const hintTextEl = document.getElementById('mc-hint-text');
+    hintTextEl.innerHTML = '';
+    const sentenceText = currentWord.sentence.replace('_____', '______');
+    hintTextEl.textContent = sentenceText;
+    if (TTSManager.isSupported()) {
+      const ttsBtn = TTSManager.createButton(currentWord.sentence.replace('_____', currentWord.word), 'en-US');
+      hintTextEl.appendChild(ttsBtn);
+    }
+
+    // Add TTS button for Chinese translation
+    const hintZhEl = document.getElementById('mc-hint-zh');
+    hintZhEl.innerHTML = '';
+    hintZhEl.textContent = currentWord.zh;
+    if (TTSManager.isSupported()) {
+      const ttsBtnZh = TTSManager.createButton(currentWord.zh, 'zh-TW');
+      hintZhEl.appendChild(ttsBtnZh);
+    }
+
     document.getElementById('mc-feedback').textContent = '';
     document.getElementById('mc-feedback').className = 'mc-feedback';
     document.getElementById('mc-result-word').textContent = '?';
@@ -104,8 +122,17 @@ const MinecraftGame = (() => {
     usedWords.push(currentWord.word);
     document.getElementById('mc-result-word').textContent = currentWord.word;
     document.getElementById('mc-result').classList.add('success');
-    document.getElementById('mc-feedback').textContent = `✅ 太棒了！「${currentWord.word}」合成成功！`;
-    document.getElementById('mc-feedback').className = 'mc-feedback correct';
+
+    // Add feedback with TTS button for the completed word
+    const feedbackEl = document.getElementById('mc-feedback');
+    feedbackEl.innerHTML = '';
+    feedbackEl.textContent = `✅ 太棒了！「${currentWord.word}」合成成功！`;
+    feedbackEl.className = 'mc-feedback correct';
+
+    if (TTSManager.isSupported()) {
+      const ttsBtn = TTSManager.createButton(currentWord.word, 'en-US');
+      feedbackEl.appendChild(ttsBtn);
+    }
 
     // Rewards
     const xpReward = { easy: 10, medium: 20, hard: 35 }[currentDifficulty];

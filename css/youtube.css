@@ -55,7 +55,7 @@
 
 .yt-script {
   padding: 16px;
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.8;
   max-height: 200px;
   overflow-y: auto;
@@ -93,14 +93,15 @@
 
 .yt-vocab-word {
   font-weight: 700;
-  font-size: 14px;
+  font-size: 16px;
   color: var(--blue);
 }
 
 .yt-vocab-def {
-  font-size: 11px;
+  font-size: 14px;
   color: var(--text-dim);
   margin-top: 2px;
+  line-height: 1.5;
 }
 
 /* Quiz */
@@ -122,8 +123,9 @@
 }
 
 .yt-question p {
-  font-size: 14px;
+  font-size: 16px;
   margin-bottom: 10px;
+  line-height: 1.6;
 }
 
 .yt-question-options {
@@ -138,11 +140,12 @@
   border: 1px solid #444;
   border-radius: 6px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 15px;
   font-family: var(--ui-font);
   color: var(--text);
   text-align: left;
   transition: all 0.2s;
+  line-height: 1.5;
 }
 
 .yt-q-option:hover { border-color: var(--blue); background: rgba(85,85,238,0.1); }
@@ -167,8 +170,9 @@
 .yt-feedback {
   text-align: center;
   padding: 10px;
-  font-size: 14px;
+  font-size: 16px;
   min-height: 40px;
+  line-height: 1.6;
 }
 
 .yt-next-btn {

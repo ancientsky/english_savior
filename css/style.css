@@ -23,6 +23,7 @@ body {
   background: var(--bg-dark);
   color: var(--text);
   font-family: var(--ui-font);
+  font-size: 16px;
   min-height: 100vh;
   overflow-x: hidden;
 }
@@ -176,8 +177,8 @@ body {
 .youtube-card { background: linear-gradient(135deg, #1a1a4e, #2d2d8e); border: 2px solid #5555ee; }
 
 .card-icon { font-size: 48px; margin-bottom: 12px; }
-.hub-card h3 { font-size: 18px; margin-bottom: 8px; }
-.hub-card p { font-size: 13px; color: rgba(255,255,255,0.8); margin-bottom: 12px; }
+.hub-card h3 { font-size: 20px; margin-bottom: 8px; }
+.hub-card p { font-size: 15px; color: rgba(255,255,255,0.8); margin-bottom: 12px; line-height: 1.5; }
 
 .card-tag {
   display: inline-block;
@@ -432,6 +433,50 @@ body {
 .help-section strong {
   color: var(--gold);
   font-weight: 700;
+}
+
+/* ===== TTS Buttons ===== */
+.tts-btn {
+  background: rgba(78, 204, 163, 0.2);
+  border: 2px solid var(--green);
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+.tts-btn:hover {
+  background: rgba(78, 204, 163, 0.3);
+  transform: scale(1.1);
+}
+
+.tts-btn.speaking {
+  background: var(--green);
+  animation: pulse 1s infinite;
+}
+
+.tts-inline {
+  display: inline-flex;
+  cursor: pointer;
+  transition: transform 0.2s;
+  opacity: 0.7;
+}
+
+.tts-inline:hover {
+  transform: scale(1.2);
+  opacity: 1;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
 }
 
 /* ===== Responsive ===== */
