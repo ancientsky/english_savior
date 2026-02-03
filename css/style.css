@@ -388,6 +388,52 @@ body {
   border-radius: var(--radius);
 }
 
+/* ===== Help Modal ===== */
+.help-modal {
+  max-width: 700px;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.help-content {
+  margin-top: 16px;
+}
+
+.help-section {
+  margin-bottom: 24px;
+  padding: 16px;
+  background: rgba(255,255,255,0.03);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+}
+
+.help-section h3 {
+  font-size: 16px;
+  color: var(--gold);
+  margin-bottom: 8px;
+}
+
+.help-section p {
+  color: var(--text);
+  margin-bottom: 12px;
+  line-height: 1.6;
+}
+
+.help-section ul {
+  margin-left: 20px;
+  color: var(--text-dim);
+}
+
+.help-section li {
+  margin-bottom: 6px;
+  line-height: 1.5;
+}
+
+.help-section strong {
+  color: var(--gold);
+  font-weight: 700;
+}
+
 /* ===== Responsive ===== */
 @media (max-width: 600px) {
   .stats-grid { grid-template-columns: repeat(2, 1fr); }

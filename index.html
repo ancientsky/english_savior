@@ -3,6 +3,22 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="English Savior 英語救星 - 專為熱愛 Minecraft、Roblox 和 YouTube 的孩子設計的遊戲化英語學習平台。透過有趣的遊戲學習單字、文法和閱讀理解！">
+  <meta name="keywords" content="英語學習, English learning, Minecraft, Roblox, YouTube, 遊戲化學習, 兒童英語, 單字, 文法">
+  <meta name="author" content="English Savior">
+  <meta name="theme-color" content="#e94560">
+
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="English Savior — 英語救星">
+  <meta property="og:description" content="在遊戲世界中成為英語大師！透過 Minecraft、Roblox 和 YouTube 主題學習英語。">
+  <meta property="og:site_name" content="English Savior">
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="English Savior — 英語救星">
+  <meta name="twitter:description" content="在遊戲世界中成為英語大師！">
+
   <title>English Savior — 英語救星</title>
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="css/minecraft.css">
@@ -28,6 +44,7 @@
       <span class="hud-streak">🔥 <span id="hud-streak">0</span> 天</span>
       <button class="hud-btn" id="btn-inventory" title="背包">🎒</button>
       <button class="hud-btn" id="btn-achievements" title="成就">🏆</button>
+      <button class="hud-btn" id="btn-help" title="使用說明">❓</button>
     </div>
   </header>
 
@@ -215,6 +232,62 @@
       <div class="levelup-level" id="levelup-level"></div>
       <div class="levelup-rewards" id="levelup-rewards"></div>
       <button class="levelup-btn" data-close="modal-levelup">太棒了！</button>
+    </div>
+  </div>
+
+  <!-- Modal: Help -->
+  <div class="modal" id="modal-help">
+    <div class="modal-content help-modal">
+      <button class="modal-close" data-close="modal-help">&times;</button>
+      <h2>❓ 使用說明</h2>
+      <div class="help-content">
+        <div class="help-section">
+          <h3>⛏️ 挖礦學單字</h3>
+          <p>像 Minecraft 一樣點擊字母方塊，按照正確順序合成英文單字！</p>
+          <ul>
+            <li>選擇難度等級（簡單/中等/困難）</li>
+            <li>根據提示圖示和中文說明猜測單字</li>
+            <li>點擊正確的字母方塊填入空格</li>
+            <li>完成後獲得 XP 和寶石獎勵</li>
+          </ul>
+        </div>
+        <div class="help-section">
+          <h3>🏃 跑酷學文法</h3>
+          <p>像 Roblox Obby 一樣闖關，選擇正確的文法選項才能繼續前進！</p>
+          <ul>
+            <li>閱讀句子，找出需要填空的地方</li>
+            <li>從四個選項中選擇正確答案</li>
+            <li>答對後角色會向前跳躍</li>
+            <li>完成 10 個關卡獲得豐厚獎勵</li>
+          </ul>
+        </div>
+        <div class="help-section">
+          <h3>📺 看片學英文</h3>
+          <p>觀看遊戲相關的英文影片，學習重點單字，完成理解測驗！</p>
+          <ul>
+            <li>點擊播放按鈕觀看影片腳本</li>
+            <li>查看側邊欄的重點單字解釋</li>
+            <li>完成下方的理解測驗題</li>
+            <li>全對可獲得最高獎勵</li>
+          </ul>
+        </div>
+        <div class="help-section">
+          <h3>📋 每日任務</h3>
+          <p>每天完成三個任務，保持學習連勝！</p>
+          <ul>
+            <li>學習 3 個新單字</li>
+            <li>通過 3 個文法關卡</li>
+            <li>完成 1 個影片課程</li>
+          </ul>
+        </div>
+        <div class="help-section">
+          <h3>🎯 獎勵系統</h3>
+          <p><strong>經驗值 (XP)</strong> - 完成任務獲得，累積升級</p>
+          <p><strong>寶石 💎</strong> - 完成任務和升級時獲得</p>
+          <p><strong>道具 🎒</strong> - 升級時隨機獲得收藏品</p>
+          <p><strong>成就 🏆</strong> - 達成特殊條件解鎖徽章</p>
+        </div>
+      </div>
     </div>
   </div>
 
