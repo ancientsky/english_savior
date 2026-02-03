@@ -68,17 +68,44 @@ const RobloxGame = (() => {
     } else {
       html = q.sentence.replace('_____', '<span class="rb-blank">?</span>');
     }
-    document.getElementById('rb-sentence').innerHTML = html;
+
+    const sentenceEl = document.getElementById('rb-sentence');
+    sentenceEl.innerHTML = html;
+
+    // Add TTS button for the sentence
+    if (TTSManager.isSupported()) {
+      const fullSentence = q.sentence.replace(/_____/g, q.blank);
+      const ttsBtn = TTSManager.createButton(fullSentence, 'en-US');
+      sentenceEl.appendChild(ttsBtn);
+    }
 
     // Options
     const opts = document.getElementById('rb-options');
     opts.innerHTML = '';
     shuffle(q.options).forEach(opt => {
+      const optContainer = document.createElement('div');
+      optContainer.style.display = 'flex';
+      optContainer.style.alignItems = 'center';
+      optContainer.style.gap = '8px';
+
       const btn = document.createElement('button');
       btn.className = 'rb-option';
       btn.textContent = opt;
       btn.addEventListener('click', () => handleAnswer(btn, opt, q));
-      opts.appendChild(btn);
+
+      optContainer.appendChild(btn);
+
+      // Add small TTS button for each option
+      if (TTSManager.isSupported()) {
+        const ttsBtn = TTSManager.createButton(opt, 'en-US', '🔊');
+        ttsBtn.style.width = '28px';
+        ttsBtn.style.height = '28px';
+        ttsBtn.style.fontSize = '14px';
+        ttsBtn.style.marginLeft = '0';
+        optContainer.appendChild(ttsBtn);
+      }
+
+      opts.appendChild(optContainer);
     });
 
     document.getElementById('rb-feedback').textContent = '';

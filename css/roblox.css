@@ -79,7 +79,7 @@
 }
 
 .rb-sentence {
-  font-size: 18px;
+  font-size: 20px;
   text-align: center;
   margin-bottom: 20px;
   line-height: 1.8;
@@ -108,7 +108,7 @@
   border: 2px solid #555;
   border-radius: var(--radius);
   color: var(--text);
-  font-size: 15px;
+  font-size: 16px;
   cursor: pointer;
   transition: all 0.2s;
   font-family: var(--ui-font);
@@ -140,9 +140,10 @@
 .rb-feedback {
   text-align: center;
   padding: 12px;
-  font-size: 14px;
+  font-size: 16px;
   min-height: 44px;
   margin-top: 12px;
+  line-height: 1.6;
 }
 .rb-feedback.correct { color: var(--green); }
 .rb-feedback.wrong { color: var(--accent); }
