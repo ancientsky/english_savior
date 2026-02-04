@@ -2,6 +2,150 @@
    Handles XP, levels, gems, inventory, achievements, save/load.
 */
 
+// ===== Sound Manager =====
+const SoundManager = (() => {
+  let audioContext = null;
+  let enabled = true;
+
+  function getContext() {
+    if (!audioContext) {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    return audioContext;
+  }
+
+  function resumeContext() {
+    const ctx = getContext();
+    if (ctx.state === 'suspended') {
+      ctx.resume();
+    }
+  }
+
+  // Play a synthesized tone
+  function playTone(frequency, duration, type = 'sine', volume = 0.3) {
+    if (!enabled) return;
+    try {
+      resumeContext();
+      const ctx = getContext();
+      const oscillator = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+
+      oscillator.connect(gainNode);
+      gainNode.connect(ctx.destination);
+
+      oscillator.frequency.value = frequency;
+      oscillator.type = type;
+
+      gainNode.gain.setValueAtTime(volume, ctx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration);
+
+      oscillator.start(ctx.currentTime);
+      oscillator.stop(ctx.currentTime + duration);
+    } catch (e) {
+      console.warn('Sound playback failed:', e);
+    }
+  }
+
+  // Correct answer - cheerful ascending chime
+  function playCorrect() {
+    if (!enabled) return;
+    resumeContext();
+    const ctx = getContext();
+    const now = ctx.currentTime;
+
+    [523.25, 659.25, 783.99].forEach((freq, i) => {
+      setTimeout(() => playTone(freq, 0.15, 'sine', 0.25), i * 80);
+    });
+  }
+
+  // Wrong answer - descending buzz
+  function playWrong() {
+    if (!enabled) return;
+    playTone(200, 0.3, 'square', 0.15);
+    setTimeout(() => playTone(150, 0.2, 'square', 0.1), 100);
+  }
+
+  // Level up - triumphant fanfare
+  function playLevelUp() {
+    if (!enabled) return;
+    const notes = [
+      { freq: 392.00, delay: 0 },     // G4
+      { freq: 523.25, delay: 100 },   // C5
+      { freq: 659.25, delay: 200 },   // E5
+      { freq: 783.99, delay: 300 },   // G5
+      { freq: 1046.50, delay: 450 },  // C6
+    ];
+    notes.forEach(note => {
+      setTimeout(() => playTone(note.freq, 0.3, 'sine', 0.2), note.delay);
+    });
+  }
+
+  // Achievement unlock - special sparkle sound
+  function playAchievement() {
+    if (!enabled) return;
+    const notes = [
+      { freq: 880, delay: 0 },
+      { freq: 1108.73, delay: 80 },
+      { freq: 1318.51, delay: 160 },
+      { freq: 1760, delay: 240 },
+    ];
+    notes.forEach(note => {
+      setTimeout(() => playTone(note.freq, 0.2, 'sine', 0.15), note.delay);
+    });
+  }
+
+  // Quest complete - happy completion sound
+  function playQuestComplete() {
+    if (!enabled) return;
+    const notes = [
+      { freq: 587.33, delay: 0 },    // D5
+      { freq: 739.99, delay: 100 },  // F#5
+      { freq: 880.00, delay: 200 },  // A5
+      { freq: 1174.66, delay: 350 }, // D6
+    ];
+    notes.forEach(note => {
+      setTimeout(() => playTone(note.freq, 0.25, 'triangle', 0.2), note.delay);
+    });
+  }
+
+  function setEnabled(value) {
+    enabled = value;
+    localStorage.setItem('sound_enabled', value ? '1' : '0');
+  }
+
+  function isEnabled() {
+    return enabled;
+  }
+
+  function loadSettings() {
+    const saved = localStorage.getItem('sound_enabled');
+    if (saved !== null) {
+      enabled = saved === '1';
+    }
+  }
+
+  // Initialize on first user interaction
+  function init() {
+    loadSettings();
+    document.addEventListener('click', resumeContext, { once: true });
+    document.addEventListener('touchstart', resumeContext, { once: true });
+  }
+
+  return {
+    init,
+    playCorrect,
+    playWrong,
+    playLevelUp,
+    playAchievement,
+    playQuestComplete,
+    setEnabled,
+    isEnabled,
+  };
+})();
+
+// Initialize sound manager
+SoundManager.init();
+
 const GameEngine = (() => {
   const SAVE_KEY = 'english_savior_save';
   const XP_PER_LEVEL = lvl => 80 + lvl * 20; // increases each level
@@ -209,6 +353,7 @@ const GameEngine = (() => {
       if (!state.achievements.includes(ach.id) && ach.condition(state)) {
         state.achievements.push(ach.id);
         showToast(`🏆 成就解鎖：${ach.name}`, 'achievement');
+        SoundManager.playAchievement();
         addGems(15);
       }
     });
@@ -247,6 +392,7 @@ const GameEngine = (() => {
     document.getElementById('levelup-level').textContent = `Lv.${state.level}`;
     document.getElementById('levelup-rewards').textContent = `獎勵：+10 💎 + 隨機道具`;
     document.getElementById('modal-levelup').classList.add('active');
+    SoundManager.playLevelUp();
   }
 
   function showInventory() {

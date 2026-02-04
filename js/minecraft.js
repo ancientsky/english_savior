@@ -119,6 +119,7 @@ const MinecraftGame = (() => {
       setTimeout(() => slot.classList.remove('wrong'), 400);
       document.getElementById('mc-feedback').textContent = `❌ 不是 ${letter}，再試試看！`;
       document.getElementById('mc-feedback').className = 'mc-feedback wrong';
+      SoundManager.playWrong();
     }
   }
 
@@ -126,6 +127,9 @@ const MinecraftGame = (() => {
     usedWords.push(currentWord.word);
     document.getElementById('mc-result-word').textContent = currentWord.word;
     document.getElementById('mc-result').classList.add('success');
+
+    // Play correct sound
+    SoundManager.playCorrect();
 
     // Add feedback with TTS button for the completed word
     const feedbackEl = document.getElementById('mc-feedback');

@@ -1,7 +1,12 @@
 /* ===== Daily Quests Module ===== */
 
 const DailyQuests = (() => {
+  let wasAllDone = false; // Track previous state to detect completion moment
+
   function init() {
+    // Initialize wasAllDone based on current state
+    const state = GameEngine.getState();
+    wasAllDone = DAILY_QUESTS.every(quest => (state[quest.key] || 0) >= quest.target);
     render();
   }
 
@@ -32,6 +37,11 @@ const DailyQuests = (() => {
     const bonus = document.getElementById('daily-bonus');
     if (allDone) {
       bonus.innerHTML = `<h3>🎁 全部完成！</h3><p style="color:var(--green)">恭喜你完成今天的所有任務！明天再來挑戰吧！</p>`;
+      // Play sound only when transitioning from not-all-done to all-done
+      if (!wasAllDone) {
+        SoundManager.playQuestComplete();
+        wasAllDone = true;
+      }
     }
   }
 

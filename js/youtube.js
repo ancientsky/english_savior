@@ -161,11 +161,17 @@ const YoutubeGame = (() => {
     if (correct === total) {
       fb.textContent = `🎉 全部正確！太厲害了！獲得 30 XP 和 5 💎`;
       fb.style.color = 'var(--green)';
+      SoundManager.playQuestComplete();
       GameEngine.addXP(30);
       GameEngine.addGems(5);
     } else {
       fb.textContent = `答對 ${correct}/${total} 題。獲得 ${correct * 10} XP`;
       fb.style.color = 'var(--gold)';
+      if (correct > 0) {
+        SoundManager.playCorrect();
+      } else {
+        SoundManager.playWrong();
+      }
       GameEngine.addXP(correct * 10);
       GameEngine.addGems(correct);
     }
