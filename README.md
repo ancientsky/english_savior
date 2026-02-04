@@ -39,10 +39,12 @@
 
 - **經驗值與等級** - 完成任務賺取 XP，持續升級
 - **寶石獎勵系統** - 累積寶石解鎖更多內容
+- **寶石商店** - 使用寶石購買道具，提升學習效率
 - **成就徽章** - 12 種成就等你解鎖
 - **道具系統** - 收集各種遊戲道具
 - **連續天數** - 追蹤學習連勝紀錄
 - **每日任務** - 每天三個任務保持學習動力
+- **音效系統** - 使用 Web Audio API 提供即時遊戲音效
 
 ### 💾 其他功能 | Additional Features
 
@@ -50,6 +52,7 @@
 - **完全離線** - 無需網路連線即可使用
 - **響應式設計** - 支援各種裝置螢幕
 - **無需安裝** - 直接在瀏覽器中開啟即可使用
+- **語音朗讀** - 支援 TTS 文字轉語音功能，練習單字發音
 
 ## 🚀 快速開始 | Quick Start
 
@@ -93,23 +96,27 @@ english_savior/
 │   └── youtube.css     # YouTube 主題樣式
 ├── js/
 │   ├── data.js         # 所有學習內容資料
-│   ├── engine.js       # 遊戲引擎（XP、等級、成就、儲存）
+│   ├── engine.js       # 遊戲引擎（XP、等級、成就、儲存、音效）
 │   ├── minecraft.js    # Minecraft 單字遊戲邏輯
 │   ├── roblox.js       # Roblox 文法遊戲邏輯
 │   ├── youtube.js      # YouTube 影片課程邏輯
 │   ├── daily.js        # 每日任務系統
+│   ├── tts.js          # 文字轉語音模組
 │   └── app.js          # 應用程式初始化與導航
-├── CLAUDE.md          # Claude Code 開發指南
-└── README.md          # 專案說明文件
+├── reference/          # 參考資料
+├── CLAUDE.md           # Claude Code 開發指南
+├── CHANGELOG.md        # 更新日誌
+├── CONTRIBUTING.md     # 貢獻指南
+└── README.md           # 專案說明文件
 ```
 
 ## 🎓 學習內容 | Learning Content
 
 ### 單字庫 | Vocabulary Database
-- **簡單難度**: 15 個基礎遊戲相關單字
-- **中等難度**: 15 個進階詞彙
-- **困難難度**: 15 個高階詞彙
-- **總計**: 45+ 個精選單字
+- **簡單難度**: 基礎遊戲相關單字
+- **中等難度**: 進階詞彙
+- **困難難度**: 高階詞彙
+- **總計**: 1300+ 個精選單字（涵蓋台灣國小英語 1000 字）
 
 ### 文法主題 | Grammar Topics
 涵蓋 20 種重要文法概念：
@@ -133,6 +140,8 @@ english_savior/
 - **前端框架**: 純 JavaScript (Vanilla JS)
 - **樣式**: CSS3 with CSS Variables
 - **儲存**: LocalStorage API
+- **音效**: Web Audio API（合成音效）
+- **語音**: Web Speech API（TTS 文字轉語音）
 - **字體**: Google Fonts (Press Start 2P, Noto Sans TC)
 - **構建工具**: 無（免構建工具）
 - **依賴項**: 零外部依賴
@@ -186,8 +195,9 @@ const GRAMMAR_DATA = [
 - 連續天數
 - 已學單字列表
 - 成就解鎖狀態
-- 道具清單
+- 道具清單（消耗品效果）
 - 每日任務進度
+- 音效設定偏好
 
 ### 成就系統 | Achievement System
 12 種成就類型：
