@@ -5,6 +5,7 @@ const RobloxGame = (() => {
   let currentIndex = 0;
   let correctCount = 0;
   let answered = false;
+  let reviveUsedThisQuestion = false; // Track if revive was used for current question
 
   function init() {
     startRun();
@@ -52,6 +53,7 @@ const RobloxGame = (() => {
     }
 
     answered = false;
+    reviveUsedThisQuestion = false; // Reset revive status for new question
     const q = questions[currentIndex];
     document.getElementById('rb-stage').textContent = currentIndex + 1;
 
@@ -115,10 +117,23 @@ const RobloxGame = (() => {
 
   function handleAnswer(btn, selected, q) {
     if (answered) return;
-    answered = true;
 
     const isCorrect = selected === q.blank;
     const platform = document.querySelector(`.rb-platform[data-index="${currentIndex}"]`);
+
+    // Check for revive buff on wrong answer
+    if (!isCorrect && !reviveUsedThisQuestion && GameEngine.hasBuff('revive')) {
+      reviveUsedThisQuestion = true;
+      GameEngine.consumeBuff('revive');
+      btn.classList.add('wrong');
+      setTimeout(() => btn.classList.remove('wrong'), 400);
+      document.getElementById('rb-feedback').textContent = `🪶 復活羽毛生效！再試一次吧！`;
+      document.getElementById('rb-feedback').className = 'rb-feedback';
+      GameEngine.showToast('🪶 復活羽毛生效！再試一次！', 'achievement');
+      return; // Don't mark as answered, let them try again
+    }
+
+    answered = true;
 
     // Disable all options
     document.querySelectorAll('.rb-option').forEach(o => o.classList.add('disabled'));
@@ -134,8 +149,27 @@ const RobloxGame = (() => {
         b.textContent = q.blank;
         b.style.color = 'var(--green)';
       });
-      GameEngine.addXP(15);
-      GameEngine.addGems(2);
+
+      // Calculate rewards with buff checks
+      let xpReward = 15;
+      let gemReward = 2;
+
+      // Double XP buff
+      if (GameEngine.hasBuff('double_xp')) {
+        xpReward *= 2;
+        GameEngine.consumeBuff('double_xp');
+        GameEngine.showToast('📜 雙倍經驗卷軸生效！', 'achievement');
+      }
+
+      // Gem bonus buff
+      if (GameEngine.hasBuff('gem_bonus')) {
+        gemReward += 2;
+        GameEngine.consumeBuff('gem_bonus');
+        GameEngine.showToast('💠 寶石探測器生效！+2 額外寶石', 'gem');
+      }
+
+      GameEngine.addXP(xpReward);
+      GameEngine.addGems(gemReward);
       GameEngine.recordGrammar();
     } else {
       btn.classList.add('wrong');
