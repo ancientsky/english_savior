@@ -144,6 +144,7 @@ const RobloxGame = (() => {
       correctCount++;
       document.getElementById('rb-feedback').textContent = `✅ 正確！${q.explain}`;
       document.getElementById('rb-feedback').className = 'rb-feedback correct';
+      SoundManager.playCorrect();
       // Fill in blank
       document.querySelectorAll('.rb-blank').forEach(b => {
         b.textContent = q.blank;
@@ -174,6 +175,7 @@ const RobloxGame = (() => {
     } else {
       btn.classList.add('wrong');
       platform.classList.add('failed');
+      SoundManager.playWrong();
       // Highlight correct
       document.querySelectorAll('.rb-option').forEach(o => {
         if (o.textContent === q.blank) o.classList.add('correct');
