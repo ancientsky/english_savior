@@ -33,8 +33,12 @@ const MinecraftGame = (() => {
     currentWord = pool[Math.floor(Math.random() * pool.length)];
     currentSlotIndex = 0;
 
-    // Set hint
-    document.getElementById('mc-hint-img').textContent = currentWord.hint;
+    // Check if hint crystal buff is active - show first letter
+    if (GameEngine.hasBuff('hint')) {
+      document.getElementById('mc-hint-img').textContent = currentWord.hint + ` 💡 提示：第一個字母是「${currentWord.word[0].toUpperCase()}」`;
+    } else {
+      document.getElementById('mc-hint-img').textContent = currentWord.hint;
+    }
 
     // Add TTS button for the sentence
     const hintTextEl = document.getElementById('mc-hint-text');
@@ -134,9 +138,29 @@ const MinecraftGame = (() => {
       feedbackEl.appendChild(ttsBtn);
     }
 
-    // Rewards
-    const xpReward = { easy: 10, medium: 20, hard: 35 }[currentDifficulty];
-    const gemReward = { easy: 1, medium: 2, hard: 4 }[currentDifficulty];
+    // Rewards - check for buffs
+    let xpReward = { easy: 10, medium: 20, hard: 35 }[currentDifficulty];
+    let gemReward = { easy: 1, medium: 2, hard: 4 }[currentDifficulty];
+
+    // Double XP buff
+    if (GameEngine.hasBuff('double_xp')) {
+      xpReward *= 2;
+      GameEngine.consumeBuff('double_xp');
+      GameEngine.showToast('📜 雙倍經驗卷軸生效！', 'achievement');
+    }
+
+    // Hint crystal consumed after successful word
+    if (GameEngine.hasBuff('hint')) {
+      GameEngine.consumeBuff('hint');
+    }
+
+    // Gem bonus buff
+    if (GameEngine.hasBuff('gem_bonus')) {
+      gemReward += 2;
+      GameEngine.consumeBuff('gem_bonus');
+      GameEngine.showToast('💠 寶石探測器生效！+2 額外寶石', 'gem');
+    }
+
     GameEngine.addXP(xpReward);
     GameEngine.addGems(gemReward);
     GameEngine.recordWord(currentWord.word);

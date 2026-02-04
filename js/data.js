@@ -1573,14 +1573,14 @@ const DAILY_QUESTS = [
 ];
 
 const INVENTORY_ITEMS = [
-  { id: 'wood_sword', name: '木劍', icon: '🗡️', desc: '初學者的武器' },
-  { id: 'stone_pick', name: '石鎬', icon: '⛏️', desc: '挖掘知識的工具' },
-  { id: 'iron_shield', name: '鐵盾', icon: '🛡️', desc: '保護你的英文基礎' },
-  { id: 'gold_apple', name: '金蘋果', icon: '🍎', desc: '恢復學習動力' },
-  { id: 'diamond_book', name: '鑽石書', icon: '📘', desc: '珍貴的知識結晶' },
-  { id: 'enchant_scroll', name: '附魔卷軸', icon: '📜', desc: '強化你的能力' },
-  { id: 'nether_star', name: '乙太之星', icon: '⭐', desc: '來自異世界的獎勵' },
-  { id: 'totem', name: '不死圖騰', icon: '🗿', desc: '永不放棄的象徵' },
+  { id: 'wood_sword', name: '木劍', icon: '🗡️', desc: '初學者的武器', rarity: 'common' },
+  { id: 'stone_pick', name: '石鎬', icon: '⛏️', desc: '挖掘知識的工具', rarity: 'common' },
+  { id: 'iron_shield', name: '鐵盾', icon: '🛡️', desc: '保護你的英文基礎', rarity: 'common' },
+  { id: 'gold_apple', name: '金蘋果', icon: '🍎', desc: '恢復學習動力', rarity: 'uncommon' },
+  { id: 'diamond_book', name: '鑽石書', icon: '📘', desc: '珍貴的知識結晶', rarity: 'rare' },
+  { id: 'enchant_scroll', name: '附魔卷軸', icon: '📜', desc: '強化你的能力', rarity: 'rare' },
+  { id: 'nether_star', name: '乙太之星', icon: '⭐', desc: '來自異世界的獎勵', rarity: 'epic' },
+  { id: 'totem', name: '不死圖騰', icon: '🗿', desc: '永不放棄的象徵', rarity: 'legendary' },
 ];
 
 // ===== 寶石商店商品 =====

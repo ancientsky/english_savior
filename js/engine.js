@@ -155,9 +155,52 @@ const GameEngine = (() => {
   }
 
   function grantRandomItem() {
-    const item = INVENTORY_ITEMS[Math.floor(Math.random() * INVENTORY_ITEMS.length)];
+    // Rarity weights: common=50%, uncommon=25%, rare=15%, epic=7%, legendary=3%
+    // With lucky buff: common=20%, uncommon=30%, rare=25%, epic=15%, legendary=10%
+    const hasLucky = hasBuff('lucky');
+    const weights = hasLucky
+      ? { common: 20, uncommon: 30, rare: 25, epic: 15, legendary: 10 }
+      : { common: 50, uncommon: 25, rare: 15, epic: 7, legendary: 3 };
+
+    // Group items by rarity
+    const byRarity = {};
+    INVENTORY_ITEMS.forEach(item => {
+      const rarity = item.rarity || 'common';
+      if (!byRarity[rarity]) byRarity[rarity] = [];
+      byRarity[rarity].push(item);
+    });
+
+    // Roll for rarity
+    const roll = Math.random() * 100;
+    let cumulative = 0;
+    let selectedRarity = 'common';
+    for (const [rarity, weight] of Object.entries(weights)) {
+      cumulative += weight;
+      if (roll < cumulative) {
+        selectedRarity = rarity;
+        break;
+      }
+    }
+
+    // Pick random item from that rarity (fallback to common if empty)
+    const pool = byRarity[selectedRarity] || byRarity['common'] || INVENTORY_ITEMS;
+    const item = pool[Math.floor(Math.random() * pool.length)];
+
     state.inventory[item.id] = (state.inventory[item.id] || 0) + 1;
-    showToast(`獲得 ${item.icon} ${item.name}！`, 'achievement');
+
+    // Show rarity in toast for rare+ items
+    const rarityLabels = { rare: '💙 稀有', epic: '💜 史詩', legendary: '🧡 傳說' };
+    const rarityLabel = rarityLabels[item.rarity] || '';
+    const toastMsg = rarityLabel
+      ? `獲得 ${rarityLabel} ${item.icon} ${item.name}！`
+      : `獲得 ${item.icon} ${item.name}！`;
+
+    if (hasLucky) {
+      consumeBuff('lucky');
+      showToast('🥠 幸運餅乾生效！', 'achievement');
+    }
+
+    showToast(toastMsg, 'achievement');
     save();
   }
 
