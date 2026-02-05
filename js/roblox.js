@@ -145,6 +145,11 @@ const RobloxGame = (() => {
       document.getElementById('rb-feedback').textContent = `✅ 正確！${q.explain}`;
       document.getElementById('rb-feedback').className = 'rb-feedback correct';
       SoundManager.playCorrect();
+
+      // 觸發角色跳躍動畫
+      const character = document.getElementById('rb-character');
+      character.classList.add('jumping');
+      setTimeout(() => character.classList.remove('jumping'), 600);
       // Fill in blank
       document.querySelectorAll('.rb-blank').forEach(b => {
         b.textContent = q.blank;
@@ -176,6 +181,11 @@ const RobloxGame = (() => {
       btn.classList.add('wrong');
       platform.classList.add('failed');
       SoundManager.playWrong();
+
+      // 觸發角色踉蹌動畫
+      const character = document.getElementById('rb-character');
+      character.classList.add('stumble');
+      setTimeout(() => character.classList.remove('stumble'), 500);
       // Highlight correct
       document.querySelectorAll('.rb-option').forEach(o => {
         if (o.textContent === q.blank) o.classList.add('correct');

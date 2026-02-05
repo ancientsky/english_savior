@@ -19,13 +19,33 @@
 .rb-track {
   position: relative;
   height: 120px;
-  background: linear-gradient(180deg, #87ceeb 0%, #87ceeb 60%, transparent 60%);
+  background: linear-gradient(180deg, #87ceeb 0%, #5eb3e4 40%, #87ceeb 60%, transparent 60%);
   border-radius: 12px;
   margin-bottom: 20px;
   overflow: hidden;
   border: 2px solid #555;
 }
 
+/* 雲朵動畫 */
+.rb-track::before {
+  content: '☁️  ☁️    ☁️';
+  position: absolute;
+  top: 8px;
+  left: -100%;
+  font-size: 20px;
+  white-space: nowrap;
+  animation: rb-clouds 20s linear infinite;
+  opacity: 0.8;
+  letter-spacing: 30px;
+  z-index: 0;
+}
+
+@keyframes rb-clouds {
+  0% { left: -100%; }
+  100% { left: 100%; }
+}
+
+/* 草地 */
 .rb-track::after {
   content: '';
   position: absolute;
@@ -33,7 +53,8 @@
   left: 0;
   right: 0;
   height: 30px;
-  background: linear-gradient(180deg, #2d5016, #1a3a0a);
+  background: linear-gradient(180deg, #3d6b1f, #2d5016, #1a3a0a);
+  box-shadow: inset 0 2px 10px rgba(255,255,255,0.1);
 }
 
 .rb-character {
@@ -44,6 +65,39 @@
   transition: left 0.5s ease;
   z-index: 2;
   filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+  transform: scaleX(-1); /* 翻轉角色面向右邊（前進方向） */
+  animation: rb-run 0.4s steps(2) infinite;
+}
+
+/* 跑步動畫 */
+@keyframes rb-run {
+  0%, 100% { transform: scaleX(-1) translateY(0); }
+  50% { transform: scaleX(-1) translateY(-4px); }
+}
+
+/* 角色跳躍動畫（答對時） */
+.rb-character.jumping {
+  animation: rb-jump 0.6s ease-out;
+}
+
+@keyframes rb-jump {
+  0% { transform: scaleX(-1) translateY(0); }
+  30% { transform: scaleX(-1) translateY(-20px) rotate(10deg); }
+  50% { transform: scaleX(-1) translateY(-25px) rotate(15deg); }
+  100% { transform: scaleX(-1) translateY(0) rotate(0deg); }
+}
+
+/* 角色跌倒動畫（答錯時） */
+.rb-character.stumble {
+  animation: rb-stumble 0.5s ease-out;
+}
+
+@keyframes rb-stumble {
+  0% { transform: scaleX(-1) translateY(0) rotate(0deg); }
+  25% { transform: scaleX(-1) translateY(-5px) rotate(-15deg); }
+  50% { transform: scaleX(-1) translateY(0) rotate(-25deg); }
+  75% { transform: scaleX(-1) translateY(0) rotate(-15deg); }
+  100% { transform: scaleX(-1) translateY(0) rotate(0deg); }
 }
 
 .rb-platforms {
@@ -63,12 +117,63 @@
   height: 16px;
   border-radius: 3px;
   transition: all 0.3s;
+  animation: rb-float 2s ease-in-out infinite;
+}
+
+/* 為每個平台添加不同的動畫延遲，產生波浪效果 */
+.rb-platform:nth-child(1) { animation-delay: 0s; }
+.rb-platform:nth-child(2) { animation-delay: 0.2s; }
+.rb-platform:nth-child(3) { animation-delay: 0.4s; }
+.rb-platform:nth-child(4) { animation-delay: 0.6s; }
+.rb-platform:nth-child(5) { animation-delay: 0.8s; }
+.rb-platform:nth-child(6) { animation-delay: 1.0s; }
+.rb-platform:nth-child(7) { animation-delay: 1.2s; }
+.rb-platform:nth-child(8) { animation-delay: 1.4s; }
+.rb-platform:nth-child(9) { animation-delay: 1.6s; }
+.rb-platform:nth-child(10) { animation-delay: 1.8s; }
+
+@keyframes rb-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
 }
 
 .rb-platform.inactive { background: #555; }
-.rb-platform.current { background: var(--gold); box-shadow: 0 0 10px var(--gold); }
-.rb-platform.passed { background: var(--green); }
-.rb-platform.failed { background: var(--accent); }
+.rb-platform.current {
+  background: var(--gold);
+  box-shadow: 0 0 15px var(--gold), 0 0 30px rgba(245, 197, 24, 0.5);
+  animation: rb-float 2s ease-in-out infinite, rb-pulse 1s ease-in-out infinite;
+}
+
+@keyframes rb-pulse {
+  0%, 100% { box-shadow: 0 0 15px var(--gold), 0 0 30px rgba(245, 197, 24, 0.5); }
+  50% { box-shadow: 0 0 25px var(--gold), 0 0 50px rgba(245, 197, 24, 0.8); }
+}
+
+.rb-platform.passed {
+  background: var(--green);
+  box-shadow: 0 0 10px var(--green);
+  animation: rb-passed 0.5s ease-out forwards, rb-float 2s ease-in-out infinite;
+}
+
+@keyframes rb-passed {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+.rb-platform.failed {
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent);
+  animation: rb-shake 0.5s ease-out, rb-float 2s ease-in-out infinite;
+}
+
+@keyframes rb-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-3px); }
+  40% { transform: translateX(3px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(3px); }
+}
 
 /* Question area */
 .rb-question-area {
@@ -113,23 +218,68 @@
   transition: all 0.2s;
   font-family: var(--ui-font);
   text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+/* 選項出現動畫 */
+.rb-options .rb-option {
+  animation: rb-option-appear 0.4s ease-out backwards;
+}
+
+.rb-options > div:nth-child(1) .rb-option { animation-delay: 0.1s; }
+.rb-options > div:nth-child(2) .rb-option { animation-delay: 0.2s; }
+.rb-options > div:nth-child(3) .rb-option { animation-delay: 0.3s; }
+.rb-options > div:nth-child(4) .rb-option { animation-delay: 0.4s; }
+
+@keyframes rb-option-appear {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .rb-option:hover {
   border-color: var(--gold);
   background: rgba(245,197,24,0.1);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(245,197,24,0.2);
+}
+
+.rb-option:active {
+  transform: translateY(0);
 }
 
 .rb-option.correct {
   border-color: var(--green);
   background: rgba(78,204,163,0.2);
   color: var(--green);
+  animation: rb-correct-pulse 0.6s ease-out;
+}
+
+@keyframes rb-correct-pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); box-shadow: 0 0 20px rgba(78,204,163,0.5); }
+  100% { transform: scale(1); }
 }
 
 .rb-option.wrong {
   border-color: var(--accent);
   background: rgba(233,69,96,0.2);
   color: var(--accent);
+  animation: rb-wrong-shake 0.5s ease-out;
+}
+
+@keyframes rb-wrong-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-5px); }
+  40% { transform: translateX(5px); }
+  60% { transform: translateX(-5px); }
+  80% { transform: translateX(5px); }
 }
 
 .rb-option.disabled {
