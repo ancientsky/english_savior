@@ -154,7 +154,7 @@ const RobloxGame = (() => {
       btn.classList.add('correct');
       platform.classList.add('passed');
       correctCount++;
-      document.getElementById('rb-feedback').textContent = `✅ 正確！${q.explain}`;
+      document.getElementById('rb-feedback').innerHTML = `✅ 正確！${q.explain}${q.translation ? '<br><span style="color:var(--text-dim);font-size:0.93em">📝 ' + q.translation + '</span>' : ''}`;
       document.getElementById('rb-feedback').className = 'rb-feedback correct';
       SoundManager.playCorrect();
 
@@ -206,7 +206,7 @@ const RobloxGame = (() => {
         b.textContent = q.blank;
         b.style.color = 'var(--accent)';
       });
-      document.getElementById('rb-feedback').textContent = `❌ 答案是「${q.blank}」。${q.explain}`;
+      document.getElementById('rb-feedback').innerHTML = `❌ 答案是「${q.blank}」。${q.explain}${q.translation ? '<br><span style="color:var(--text-dim);font-size:0.93em">📝 ' + q.translation + '</span>' : ''}`;
       document.getElementById('rb-feedback').className = 'rb-feedback wrong';
     }
 
