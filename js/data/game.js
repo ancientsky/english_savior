@@ -1,0 +1,93 @@
+// Game system data: achievements, daily quests, inventory items, and shop items
+const ACHIEVEMENTS = [
+  { id: 'first_word', name: '初來乍到', desc: '完成第一個單字', icon: '🌱', condition: s => s.wordsLearned >= 1 },
+  { id: 'ten_words', name: '字彙新手', desc: '學會 10 個單字', icon: '📖', condition: s => s.wordsLearned >= 10 },
+  { id: 'fifty_words', name: '字彙達人', desc: '學會 50 個單字', icon: '📚', condition: s => s.wordsLearned >= 50 },
+  { id: 'first_grammar', name: '文法起步', desc: '完成第一個文法題', icon: '✏️', condition: s => s.grammarPassed >= 1 },
+  { id: 'ten_grammar', name: '文法勇者', desc: '通過 10 個文法關卡', icon: '📝', condition: s => s.grammarPassed >= 10 },
+  { id: 'first_video', name: '觀影入門', desc: '完成第一個影片課程', icon: '📺', condition: s => s.videosCompleted >= 1 },
+  { id: 'level5', name: '五級冒險者', desc: '達到等級 5', icon: '⭐', condition: s => s.level >= 5 },
+  { id: 'level10', name: '十級勇者', desc: '達到等級 10', icon: '🌟', condition: s => s.level >= 10 },
+  { id: 'streak3', name: '三日連勝', desc: '連續學習 3 天', icon: '🔥', condition: s => s.streak >= 3 },
+  { id: 'streak7', name: '一週戰士', desc: '連續學習 7 天', icon: '💪', condition: s => s.streak >= 7 },
+  { id: 'gems100', name: '百寶收藏家', desc: '累積 100 顆寶石', icon: '💎', condition: s => s.gems >= 100 },
+  { id: 'perfect_grammar', name: '完美文法', desc: '一輪文法全部答對', icon: '🏅', condition: s => s.perfectGrammarRun },
+];
+
+const DAILY_QUESTS = [
+  { id: 'dq_words', name: '學習 3 個新單字', desc: '在單字合成工坊學習 3 個單字', icon: '⛏️', target: 3, key: 'dailyWords' },
+  { id: 'dq_grammar', name: '通過 3 個文法關卡', desc: '在文法跑酷中答對 3 題', icon: '🏃', target: 3, key: 'dailyGrammar' },
+  { id: 'dq_video', name: '完成 1 個影片課程', desc: '看完一個影片並通過測驗', icon: '📺', target: 1, key: 'dailyVideos' },
+];
+
+const INVENTORY_ITEMS = [
+  { id: 'wood_sword', name: '木劍', icon: '🗡️', desc: '初學者的武器', rarity: 'common' },
+  { id: 'stone_pick', name: '石鎬', icon: '⛏️', desc: '挖掘知識的工具', rarity: 'common' },
+  { id: 'iron_shield', name: '鐵盾', icon: '🛡️', desc: '保護你的英文基礎', rarity: 'common' },
+  { id: 'gold_apple', name: '金蘋果', icon: '🍎', desc: '恢復學習動力', rarity: 'uncommon' },
+  { id: 'diamond_book', name: '鑽石書', icon: '📘', desc: '珍貴的知識結晶', rarity: 'rare' },
+  { id: 'enchant_scroll', name: '附魔卷軸', icon: '📜', desc: '強化你的能力', rarity: 'rare' },
+  { id: 'nether_star', name: '乙太之星', icon: '⭐', desc: '來自異世界的獎勵', rarity: 'epic' },
+  { id: 'totem', name: '不死圖騰', icon: '🗿', desc: '永不放棄的象徵', rarity: 'legendary' },
+];
+
+// ===== 寶石商店商品 =====
+const SHOP_ITEMS = {
+  // 消耗品（可重複購買）
+  consumables: [
+    { id: 'xp_boost', name: '雙倍經驗卷軸', icon: '📜', price: 50,
+      desc: '下次答題獲得雙倍 XP', effect: 'double_xp' },
+    { id: 'hint_crystal', name: '提示水晶', icon: '🔮', price: 30,
+      desc: '單字遊戲顯示首字母／文法跑酷顯示中文翻譯', effect: 'hint' },
+    { id: 'revive_feather', name: '復活羽毛', icon: '🪶', price: 40,
+      desc: '文法答錯時可重試一次', effect: 'revive' },
+    { id: 'lucky_cookie', name: '幸運餅乾', icon: '🥠', price: 60,
+      desc: '提高獲得稀有道具的機率', effect: 'lucky' },
+    { id: 'xp_potion', name: '經驗藥水', icon: '🧪', price: 80,
+      desc: '立即獲得 50 XP', effect: 'instant_xp' },
+    { id: 'gem_finder', name: '寶石探測器', icon: '💠', price: 100,
+      desc: '下 5 次答題額外獲得寶石', effect: 'gem_bonus' },
+  ],
+  // 皮膚（永久擁有）
+  skins: [
+    { id: 'default', name: '經典冒險者', icon: '🧑‍🎓', price: 0,
+      desc: '每個英語勇者的起點' },
+    { id: 'diamond_knight', name: '鑽石騎士', icon: '💎', price: 200,
+      desc: '閃耀的鑽石戰士' },
+    { id: 'fire_mage', name: '火焰法師', icon: '🔥', price: 150,
+      desc: '掌握火焰的魔法師' },
+    { id: 'ocean_explorer', name: '海洋探險家', icon: '🌊', price: 150,
+      desc: '來自深海的冒險者' },
+    { id: 'shadow_ninja', name: '暗夜忍者', icon: '🥷', price: 300,
+      desc: '神秘的影子刺客' },
+    { id: 'rainbow_unicorn', name: '彩虹獨角獸', icon: '🦄', price: 250,
+      desc: '夢幻的魔法生物' },
+    { id: 'space_astronaut', name: '太空人', icon: '👨‍🚀', price: 350,
+      desc: '探索宇宙的勇者' },
+    { id: 'pixel_robot', name: '像素機器人', icon: '🤖', price: 280,
+      desc: '來自未來的學習夥伴' },
+    { id: 'dragon_master', name: '馴龍大師', icon: '🐉', price: 400,
+      desc: '傳說中的龍之守護者' },
+  ],
+  // 稱號（永久擁有）
+  titles: [
+    { id: 'beginner', name: '初心者', price: 0,
+      display: '初心者', desc: '每個冒險者的起點' },
+    { id: 'english_star', name: '英文小達人', price: 100,
+      display: '英文小達人', desc: '閃耀的英語之星' },
+    { id: 'word_hunter', name: '單字獵人', price: 120,
+      display: '單字獵人', desc: '專門狩獵單字的高手' },
+    { id: 'grammar_master', name: '文法大師', price: 150,
+      display: '文法大師', desc: '精通文法的學者' },
+    { id: 'bookworm', name: '學霸', price: 200,
+      display: '學霸', desc: '知識淵博的天才' },
+    { id: 'speed_learner', name: '速學者', price: 180,
+      display: '速學者', desc: '學習速度驚人' },
+    { id: 'persistent', name: '永不放棄', price: 160,
+      display: '永不放棄', desc: '堅持不懈的精神' },
+    { id: 'legend', name: '傳說勇者', price: 500,
+      display: '傳說勇者', desc: '最強的英語戰士', special: true },
+    { id: 'champion', name: '冠軍', price: 400,
+      display: '冠軍', desc: '頂尖的學習者', special: true },
+  ]
+};
