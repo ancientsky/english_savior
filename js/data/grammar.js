@@ -1243,4 +1243,842 @@ const GRAMMAR_DATA = [
     topic: '條件句',
     translation: '只要你有火把，怪物就不會生成。'
   },
+  // === 新增第二批 100 題 ===
+  // --- 反身代名詞 ---
+  {
+    sentence: 'Be careful! Don\'t hurt _____ with that sword.',
+    blank: 'yourself',
+    options: ['yourself', 'you', 'your', 'yours'],
+    explain: '反身代名詞 yourself：不要傷到你自己',
+    topic: '反身代名詞',
+    translation: '小心！不要被那把劍傷到你自己。'
+  },
+  {
+    sentence: 'The cat in Minecraft can defend _____.',
+    blank: 'itself',
+    options: ['itself', 'it', 'its', 'themselves'],
+    explain: '主詞 The cat 是單數第三人稱（物），用 itself',
+    topic: '反身代名詞',
+    translation: 'Minecraft 裡的貓可以保護自己。'
+  },
+  {
+    sentence: 'We taught _____ how to use redstone.',
+    blank: 'ourselves',
+    options: ['ourselves', 'us', 'our', 'we'],
+    explain: '主詞 We 的反身代名詞是 ourselves',
+    topic: '反身代名詞',
+    translation: '我們自學了如何使用紅石。'
+  },
+  // --- 不定代名詞 ---
+  {
+    sentence: 'Is there _____ in the chest?',
+    blank: 'anything',
+    options: ['anything', 'something', 'nothing', 'everything'],
+    explain: '疑問句中用 anything',
+    topic: '不定代名詞',
+    translation: '箱子裡有任何東西嗎？'
+  },
+  {
+    sentence: 'I found _____ interesting in the abandoned mineshaft.',
+    blank: 'something',
+    options: ['something', 'anything', 'nothing', 'everything'],
+    explain: '肯定句中用 something',
+    topic: '不定代名詞',
+    translation: '我在廢棄礦坑裡找到了有趣的東西。'
+  },
+  {
+    sentence: '_____ knows the secret password to the server.',
+    blank: 'Nobody',
+    options: ['Nobody', 'Somebody', 'Anybody', 'Everybody'],
+    explain: 'Nobody 表示「沒有人」',
+    topic: '不定代名詞',
+    translation: '沒有人知道伺服器的秘密密碼。'
+  },
+  {
+    sentence: '_____ in our team wants to fight the Wither.',
+    blank: 'Everyone',
+    options: ['Everyone', 'Anyone', 'No one', 'Someone'],
+    explain: 'Everyone 表示「每個人」',
+    topic: '不定代名詞',
+    translation: '我們隊伍裡的每個人都想打乾燥者。'
+  },
+  // --- 片語動詞 ---
+  {
+    sentence: 'I need to _____ out how to solve this puzzle.',
+    blank: 'figure',
+    options: ['figure', 'find', 'look', 'check'],
+    explain: 'figure out：想出、弄明白',
+    topic: '片語動詞',
+    translation: '我需要想辦法解決這個謎題。'
+  },
+  {
+    sentence: 'Don\'t _____ up! You can beat this level.',
+    blank: 'give',
+    options: ['give', 'take', 'pick', 'make'],
+    explain: 'give up：放棄',
+    topic: '片語動詞',
+    translation: '不要放棄！你可以打過這一關。'
+  },
+  {
+    sentence: 'He _____ up a rare item from the ground.',
+    blank: 'picked',
+    options: ['picked', 'gave', 'took', 'made'],
+    explain: 'pick up：撿起',
+    topic: '片語動詞',
+    translation: '他從地上撿起了一個稀有物品。'
+  },
+  {
+    sentence: 'Please _____ down the volume. It\'s too loud.',
+    blank: 'turn',
+    options: ['turn', 'put', 'take', 'bring'],
+    explain: 'turn down：調低（音量）',
+    topic: '片語動詞',
+    translation: '請把音量調小一點，太吵了。'
+  },
+  {
+    sentence: 'We need to _____ on more armor before the boss fight.',
+    blank: 'put',
+    options: ['put', 'get', 'take', 'turn'],
+    explain: 'put on：穿上',
+    topic: '片語動詞',
+    translation: '我們需要在打 Boss 之前穿上更多盔甲。'
+  },
+  {
+    sentence: 'I\'m looking _____ to the new game update.',
+    blank: 'forward',
+    options: ['forward', 'up', 'out', 'back'],
+    explain: 'look forward to：期待',
+    topic: '片語動詞',
+    translation: '我很期待新的遊戲更新。'
+  },
+  {
+    sentence: 'We need to come _____ with a better strategy.',
+    blank: 'up',
+    options: ['up', 'out', 'in', 'down'],
+    explain: 'come up with：想出（主意、計策）',
+    topic: '片語動詞',
+    translation: '我們需要想出更好的策略。'
+  },
+  // --- -ing/-ed 形容詞 ---
+  {
+    sentence: 'This puzzle is really _____. I can\'t solve it.',
+    blank: 'confusing',
+    options: ['confusing', 'confused', 'confuse', 'confuses'],
+    explain: '-ing 形容詞描述事物的性質：令人困惑的',
+    topic: '-ing/-ed 形容詞',
+    translation: '這個謎題真的很令人困惑。我解不出來。'
+  },
+  {
+    sentence: 'I am _____ about the new Minecraft update.',
+    blank: 'excited',
+    options: ['excited', 'exciting', 'excite', 'excites'],
+    explain: '-ed 形容詞描述人的感受：感到興奮的',
+    topic: '-ing/-ed 形容詞',
+    translation: '我對新的 Minecraft 更新感到很興奮。'
+  },
+  {
+    sentence: 'The horror map was really _____!',
+    blank: 'frightening',
+    options: ['frightening', 'frightened', 'frighten', 'frightens'],
+    explain: '-ing 形容詞描述事物：令人恐懼的',
+    topic: '-ing/-ed 形容詞',
+    translation: '那個恐怖地圖真的很嚇人！'
+  },
+  {
+    sentence: 'We were _____ when we lost all our items.',
+    blank: 'disappointed',
+    options: ['disappointed', 'disappointing', 'disappoint', 'disappoints'],
+    explain: '-ed 形容詞描述人的感受：感到失望的',
+    topic: '-ing/-ed 形容詞',
+    translation: '當我們失去所有物品時，我們感到很失望。'
+  },
+  // --- some/any ---
+  {
+    sentence: 'Do you have _____ extra diamonds I can borrow?',
+    blank: 'any',
+    options: ['any', 'some', 'no', 'much'],
+    explain: '疑問句中通常用 any',
+    topic: 'some/any',
+    translation: '你有多餘的鑽石可以借我嗎？'
+  },
+  {
+    sentence: 'I bought _____ new skins from the shop.',
+    blank: 'some',
+    options: ['some', 'any', 'no', 'much'],
+    explain: '肯定句中用 some',
+    topic: 'some/any',
+    translation: '我從商店買了一些新造型。'
+  },
+  {
+    sentence: 'There aren\'t _____ arrows left in my inventory.',
+    blank: 'any',
+    options: ['any', 'some', 'no', 'much'],
+    explain: '否定句中用 any',
+    topic: 'some/any',
+    translation: '我的背包裡沒有剩餘的箭了。'
+  },
+  // --- 所有格 ---
+  {
+    sentence: 'That is my _____ favorite game.',
+    blank: 'sister\'s',
+    options: ['sister\'s', 'sisters', 'sister', 'sisters\''],
+    explain: '單數名詞的所有格加 \'s',
+    topic: '所有格',
+    translation: '那是我姊姊最喜歡的遊戲。'
+  },
+  {
+    sentence: 'The _____ swords are all in the chest.',
+    blank: 'players\'',
+    options: ['players\'', 'player\'s', 'players', 'player'],
+    explain: '複數名詞已有 s，所有格只加 \'',
+    topic: '所有格',
+    translation: '玩家們的劍都在箱子裡。'
+  },
+  {
+    sentence: 'The _____ health bar is almost empty.',
+    blank: 'boss\'s',
+    options: ['boss\'s', 'boss', 'bosses', 'bosses\''],
+    explain: '以 s 結尾的單數名詞所有格加 \'s',
+    topic: '所有格',
+    translation: 'Boss 的血條快空了。'
+  },
+  // --- would rather / had better ---
+  {
+    sentence: 'I would rather _____ Minecraft than do homework.',
+    blank: 'play',
+    options: ['play', 'playing', 'to play', 'played'],
+    explain: 'would rather + 原形動詞：寧願…',
+    topic: 'would rather / had better',
+    translation: '我寧願玩 Minecraft 也不想做作業。'
+  },
+  {
+    sentence: 'You had better _____ your game before the power goes out.',
+    blank: 'save',
+    options: ['save', 'saving', 'to save', 'saved'],
+    explain: 'had better + 原形動詞：最好…',
+    topic: 'would rather / had better',
+    translation: '你最好在停電前存檔。'
+  },
+  {
+    sentence: 'We\'d better not _____ into that dark cave alone.',
+    blank: 'go',
+    options: ['go', 'going', 'to go', 'went'],
+    explain: 'had better not + 原形動詞：最好不要…',
+    topic: 'would rather / had better',
+    translation: '我們最好不要獨自走進那個黑暗的洞穴。'
+  },
+  {
+    sentence: 'I\'d rather you _____ touch my stuff.',
+    blank: 'didn\'t',
+    options: ['didn\'t', 'don\'t', 'won\'t', 'aren\'t'],
+    explain: 'would rather + 人 + 過去式（希望別人不做某事）',
+    topic: 'would rather / had better',
+    translation: '我寧願你別碰我的東西。'
+  },
+  // --- 情態動詞 might/could ---
+  {
+    sentence: 'There _____ be a hidden chest behind that wall.',
+    blank: 'might',
+    options: ['might', 'will', 'is', 'must'],
+    explain: 'might 表示「可能」（不確定的推測）',
+    topic: '情態動詞',
+    translation: '那面牆後面可能有一個隱藏的箱子。'
+  },
+  {
+    sentence: '_____ you help me defeat this boss?',
+    blank: 'Could',
+    options: ['Could', 'Might', 'Should', 'Must'],
+    explain: 'Could you...? 禮貌請求：你能不能…？',
+    topic: '情態動詞',
+    translation: '你能幫我打敗這個 Boss 嗎？'
+  },
+  {
+    sentence: 'She _____ have forgotten to save her game.',
+    blank: 'might',
+    options: ['might', 'will', 'can', 'shall'],
+    explain: 'might have + 過去分詞：可能已經…（對過去的推測）',
+    topic: '情態動詞',
+    translation: '她可能忘了存檔。'
+  },
+  {
+    sentence: 'He plays all day. He _____ really love this game.',
+    blank: 'must',
+    options: ['must', 'can', 'may', 'shall'],
+    explain: 'must 表示很有把握的推測：一定…',
+    topic: '情態動詞',
+    translation: '他整天都在玩。他一定很喜歡這個遊戲。'
+  },
+  {
+    sentence: 'The server is down. It _____ be under maintenance.',
+    blank: 'might',
+    options: ['might', 'must', 'will', 'shall'],
+    explain: 'might 表示不確定的推測：可能…',
+    topic: '情態動詞',
+    translation: '伺服器掛了。可能在維護中。'
+  },
+  // --- 附和句 ---
+  {
+    sentence: 'I love playing Roblox. — So _____ I!',
+    blank: 'do',
+    options: ['do', 'am', 'have', 'can'],
+    explain: 'So do I：我也是（附和肯定句，一般動詞用 do）',
+    topic: '附和句',
+    translation: '我喜歡玩 Roblox。——我也是！'
+  },
+  {
+    sentence: 'He can\'t swim in lava. — Neither _____ I.',
+    blank: 'can',
+    options: ['can', 'do', 'am', 'have'],
+    explain: 'Neither can I：我也不行（附和否定句）',
+    topic: '附和句',
+    translation: '他不能在岩漿中游泳。——我也不行。'
+  },
+  {
+    sentence: 'She has finished the quest. — So _____ he.',
+    blank: 'has',
+    options: ['has', 'does', 'is', 'did'],
+    explain: 'So has he：他也完成了（完成式用 has）',
+    topic: '附和句',
+    translation: '她完成任務了。——他也完成了。'
+  },
+  // --- 間接引語 ---
+  {
+    sentence: 'He said that he _____ playing Minecraft.',
+    blank: 'was',
+    options: ['was', 'is', 'are', 'am'],
+    explain: '間接引語時態後移：is → was',
+    topic: '間接引語',
+    translation: '他說他正在玩 Minecraft。'
+  },
+  {
+    sentence: 'She told me that she _____ found a diamond.',
+    blank: 'had',
+    options: ['had', 'has', 'have', 'was'],
+    explain: '間接引語時態後移：has found → had found',
+    topic: '間接引語',
+    translation: '她告訴我她找到了一顆鑽石。'
+  },
+  {
+    sentence: 'They asked me _____ I wanted to join their team.',
+    blank: 'if',
+    options: ['if', 'that', 'what', 'who'],
+    explain: '間接引語的 Yes/No 問句用 if/whether 引導',
+    topic: '間接引語',
+    translation: '他們問我是否想加入他們的隊伍。'
+  },
+  {
+    sentence: 'He asked me where I _____ the treasure.',
+    blank: 'found',
+    options: ['found', 'find', 'finding', 'did find'],
+    explain: '間接引語用正常語序，且時態後移',
+    topic: '間接引語',
+    translation: '他問我在哪裡找到寶藏的。'
+  },
+  // --- 過去完成進行式 ---
+  {
+    sentence: 'I had been _____ for hours before I found any diamonds.',
+    blank: 'mining',
+    options: ['mining', 'mined', 'mine', 'mines'],
+    explain: '過去完成進行式：had been + V-ing（過去某時之前持續的動作）',
+    topic: '過去完成進行式',
+    translation: '在找到鑽石之前，我已經挖了好幾個小時了。'
+  },
+  {
+    sentence: 'They had been _____ the game for two years before it shut down.',
+    blank: 'playing',
+    options: ['playing', 'played', 'play', 'plays'],
+    explain: '過去完成進行式：had been + V-ing',
+    topic: '過去完成進行式',
+    translation: '在遊戲關閉之前，他們已經玩了兩年了。'
+  },
+  // --- 未來完成式 ---
+  {
+    sentence: 'By next month, I will have _____ 1000 hours on Minecraft.',
+    blank: 'spent',
+    options: ['spent', 'spend', 'spending', 'spends'],
+    explain: '未來完成式：will have + 過去分詞',
+    topic: '未來完成式',
+    translation: '到下個月，我在 Minecraft 上的遊玩時數將達到 1000 小時。'
+  },
+  {
+    sentence: 'She will have _____ all the levels by tomorrow.',
+    blank: 'completed',
+    options: ['completed', 'complete', 'completing', 'completes'],
+    explain: '未來完成式：will have + 過去分詞（在未來某時已完成）',
+    topic: '未來完成式',
+    translation: '到明天她將完成所有關卡。'
+  },
+  // --- 可數/不可數名詞 ---
+  {
+    sentence: 'I need more _____ to build a house.',
+    blank: 'wood',
+    options: ['wood', 'woods', 'a wood', 'woodes'],
+    explain: 'wood（木材）是不可數名詞，不加 s',
+    topic: '可數/不可數名詞',
+    translation: '我需要更多木材來蓋房子。'
+  },
+  {
+    sentence: 'She gave me two _____ of advice for the boss fight.',
+    blank: 'pieces',
+    options: ['pieces', 'piece', 'advices', 'advise'],
+    explain: 'advice 是不可數名詞，用 pieces of advice',
+    topic: '可數/不可數名詞',
+    translation: '她給了我兩條打 Boss 的建議。'
+  },
+  {
+    sentence: 'We need a lot of _____ to make glass in Minecraft.',
+    blank: 'sand',
+    options: ['sand', 'sands', 'a sand', 'the sands'],
+    explain: 'sand（沙子）是不可數名詞',
+    topic: '可數/不可數名詞',
+    translation: '我們需要很多沙子來製作玻璃。'
+  },
+  // --- 非限定關係子句 ---
+  {
+    sentence: 'Minecraft, _____ was released in 2011, is still popular today.',
+    blank: 'which',
+    options: ['which', 'that', 'who', 'what'],
+    explain: '非限定關係子句（逗號後）修飾物用 which，不用 that',
+    topic: '非限定關係子句',
+    translation: 'Minecraft 在 2011 年發行，至今仍然很受歡迎。'
+  },
+  {
+    sentence: 'My friend Alex, _____ loves Roblox, invited me to play.',
+    blank: 'who',
+    options: ['who', 'which', 'that', 'whom'],
+    explain: '非限定關係子句修飾人用 who',
+    topic: '非限定關係子句',
+    translation: '我的朋友 Alex 很喜歡 Roblox，他邀請我一起玩。'
+  },
+  {
+    sentence: 'The Nether, _____ is full of lava, is very dangerous.',
+    blank: 'which',
+    options: ['which', 'that', 'where', 'who'],
+    explain: '非限定關係子句用 which（不用 that）',
+    topic: '非限定關係子句',
+    translation: '地獄充滿岩漿，非常危險。'
+  },
+  // --- 第三條件句 ---
+  {
+    sentence: 'If I had brought a shield, I _____ not have died.',
+    blank: 'would',
+    options: ['would', 'will', 'could', 'should'],
+    explain: '第三條件句：If + had + p.p., would have + p.p.',
+    topic: '第三條件句',
+    translation: '如果我帶了盾牌，我就不會死了。'
+  },
+  {
+    sentence: 'If she had saved the game, she would have _____ her progress.',
+    blank: 'kept',
+    options: ['kept', 'keep', 'keeping', 'keeps'],
+    explain: '第三條件句：would have + 過去分詞 (kept)',
+    topic: '第三條件句',
+    translation: '如果她存了檔，她就不會丟失進度了。'
+  },
+  {
+    sentence: 'We wouldn\'t have lost if we _____ practiced more.',
+    blank: 'had',
+    options: ['had', 'have', 'has', 'would'],
+    explain: '第三條件句：If + had + 過去分詞（與過去事實相反）',
+    topic: '第三條件句',
+    translation: '如果我們多練習的話，就不會輸了。'
+  },
+  // --- wish + 過去完成式 ---
+  {
+    sentence: 'I wish I _____ saved my game before the crash.',
+    blank: 'had',
+    options: ['had', 'have', 'has', 'would'],
+    explain: 'I wish + had + p.p.：表示對過去事實的遺憾',
+    topic: '假設語氣',
+    translation: '我真希望在遊戲當機前有存檔。'
+  },
+  {
+    sentence: 'She wishes she _____ bought that rare skin when it was on sale.',
+    blank: 'had',
+    options: ['had', 'has', 'have', 'would'],
+    explain: 'wish + had + p.p.：表示過去沒做而後悔',
+    topic: '假設語氣',
+    translation: '她真希望那個稀有造型特價時有買下來。'
+  },
+  // --- 分詞構句 ---
+  {
+    sentence: '_____ in the cave, he found a hidden treasure.',
+    blank: 'Exploring',
+    options: ['Exploring', 'Explored', 'To explore', 'Explore'],
+    explain: '現在分詞構句：Exploring...（當他在探索時）',
+    topic: '分詞構句',
+    translation: '在洞穴裡探索時，他發現了一個隱藏的寶藏。'
+  },
+  {
+    sentence: '_____ by the explosion, the house collapsed.',
+    blank: 'Damaged',
+    options: ['Damaged', 'Damaging', 'To damage', 'Damage'],
+    explain: '過去分詞構句：表示被動 Damaged by...（被爆炸損壞）',
+    topic: '分詞構句',
+    translation: '被爆炸損壞後，房子塌了。'
+  },
+  {
+    sentence: '_____ heard the creeper hissing, I ran away immediately.',
+    blank: 'Having',
+    options: ['Having', 'Have', 'Had', 'Has'],
+    explain: '完成分詞構句：Having + p.p.（在…之後）',
+    topic: '分詞構句',
+    translation: '聽到苦力怕的嘶嘶聲後，我立刻跑了。'
+  },
+  // --- 形容詞與副詞 ---
+  {
+    sentence: 'She plays the game _____.',
+    blank: 'well',
+    options: ['well', 'good', 'better', 'best'],
+    explain: 'well 是副詞，修飾動詞 plays；good 是形容詞',
+    topic: '形容詞與副詞',
+    translation: '她遊戲玩得很好。'
+  },
+  {
+    sentence: 'He ran _____ to escape the zombie.',
+    blank: 'quickly',
+    options: ['quickly', 'quick', 'quicker', 'quickest'],
+    explain: '副詞 quickly 修飾動詞 ran',
+    topic: '形容詞與副詞',
+    translation: '他跑得很快來逃離殭屍。'
+  },
+  {
+    sentence: 'The new update looks _____!',
+    blank: 'amazing',
+    options: ['amazing', 'amazingly', 'amazed', 'amaze'],
+    explain: 'look 是感官連綴動詞，後接形容詞 amazing',
+    topic: '形容詞與副詞',
+    translation: '新的更新看起來很棒！'
+  },
+  // --- 名詞複數 ---
+  {
+    sentence: 'There are three _____ in the pen.',
+    blank: 'sheep',
+    options: ['sheep', 'sheeps', 'sheepes', 'sheepies'],
+    explain: 'sheep 單複數同形（不規則名詞）',
+    topic: '名詞複數',
+    translation: '圍欄裡有三隻羊。'
+  },
+  {
+    sentence: 'Two _____ fell into the lava.',
+    blank: 'wolves',
+    options: ['wolves', 'wolfs', 'wolfes', 'wolf'],
+    explain: 'wolf 的複數是 wolves（f → ves）',
+    topic: '名詞複數',
+    translation: '兩隻狼掉進了岩漿裡。'
+  },
+  {
+    sentence: 'The _____ in this game are really cute.',
+    blank: 'children',
+    options: ['children', 'childs', 'childrens', 'child'],
+    explain: 'child 的複數是 children（不規則變化）',
+    topic: '名詞複數',
+    translation: '這個遊戲裡的小孩真的很可愛。'
+  },
+  // --- 過去式（不規則動詞補充）---
+  {
+    sentence: 'She _____ me how to build a portal.',
+    blank: 'taught',
+    options: ['taught', 'teached', 'teaching', 'teaches'],
+    explain: 'teach 的過去式是 taught（不規則動詞）',
+    topic: '過去式',
+    translation: '她教了我如何建造傳送門。'
+  },
+  {
+    sentence: 'I _____ my sword fighting the skeleton.',
+    blank: 'broke',
+    options: ['broke', 'breaked', 'broken', 'breaking'],
+    explain: 'break 的過去式是 broke（不規則動詞）',
+    topic: '過去式',
+    translation: '我在跟骷髏戰鬥時弄壞了我的劍。'
+  },
+  {
+    sentence: 'The ghast _____ a fireball at us.',
+    blank: 'threw',
+    options: ['threw', 'throwed', 'thrown', 'throwing'],
+    explain: 'throw 的過去式是 threw（不規則動詞）',
+    topic: '過去式',
+    translation: '乾懼者朝我們射了一顆火球。'
+  },
+  // --- 被動語態（進階）---
+  {
+    sentence: 'New features are being _____ to the game.',
+    blank: 'added',
+    options: ['added', 'add', 'adding', 'adds'],
+    explain: '現在進行被動：are being + 過去分詞',
+    topic: '被動語態',
+    translation: '新功能正在被加入遊戲中。'
+  },
+  {
+    sentence: 'The bug will be _____ in the next update.',
+    blank: 'fixed',
+    options: ['fixed', 'fix', 'fixing', 'fixes'],
+    explain: '未來被動：will be + 過去分詞',
+    topic: '被動語態',
+    translation: '這個 bug 將在下次更新中被修復。'
+  },
+  {
+    sentence: 'The game _____ played by millions of children worldwide.',
+    blank: 'is',
+    options: ['is', 'are', 'were', 'has'],
+    explain: '被動語態：The game（單數）+ is played',
+    topic: '被動語態',
+    translation: '這個遊戲被全世界數百萬的兒童玩。'
+  },
+  // --- 不定詞（補充）---
+  {
+    sentence: 'It is important _____ backup your world regularly.',
+    blank: 'to',
+    options: ['to', 'for', 'of', 'at'],
+    explain: 'It is + 形容詞 + to + V：做…是重要的',
+    topic: '不定詞',
+    translation: '定期備份你的世界是很重要的。'
+  },
+  {
+    sentence: 'He needs _____ more iron to make a full set of armor.',
+    blank: 'to find',
+    options: ['to find', 'finding', 'find', 'found'],
+    explain: 'need + to + V：需要做…',
+    topic: '不定詞',
+    translation: '他需要找到更多鐵來做一整套盔甲。'
+  },
+  {
+    sentence: 'She asked me _____ help her build a house.',
+    blank: 'to',
+    options: ['to', 'for', 'of', 'at'],
+    explain: 'ask + 人 + to + V：請求某人做…',
+    topic: '不定詞',
+    translation: '她請我幫她蓋房子。'
+  },
+  {
+    sentence: 'It took me two hours _____ build this castle.',
+    blank: 'to',
+    options: ['to', 'for', 'in', 'at'],
+    explain: 'It takes + 時間 + to + V：花了…時間做…',
+    topic: '不定詞',
+    translation: '我花了兩個小時建造這座城堡。'
+  },
+  {
+    sentence: 'I would like _____ try the new game mode.',
+    blank: 'to',
+    options: ['to', 'for', '--', 'of'],
+    explain: 'would like + to + V：想要做…',
+    topic: '不定詞',
+    translation: '我想試試新的遊戲模式。'
+  },
+  // --- 動名詞（補充）---
+  {
+    sentence: 'I don\'t mind _____ you with the build.',
+    blank: 'helping',
+    options: ['helping', 'help', 'to help', 'helped'],
+    explain: 'mind 後面接動名詞 V-ing',
+    topic: '動名詞',
+    translation: '我不介意幫你建造。'
+  },
+  {
+    sentence: 'We considered _____ to a different server.',
+    blank: 'moving',
+    options: ['moving', 'move', 'to move', 'moved'],
+    explain: 'consider 後面接動名詞 V-ing',
+    topic: '動名詞',
+    translation: '我們考慮搬到另一個伺服器。'
+  },
+  // --- 現在簡單式 vs 現在進行式 ---
+  {
+    sentence: 'She usually _____ Minecraft, but today she is playing Roblox.',
+    blank: 'plays',
+    options: ['plays', 'is playing', 'play', 'playing'],
+    explain: 'usually + 現在簡單式（習慣），today + 現在進行式（此刻）',
+    topic: '現在簡單式',
+    translation: '她通常玩 Minecraft，但今天她在玩 Roblox。'
+  },
+  {
+    sentence: 'Listen! Someone _____ knocking on the door in the game.',
+    blank: 'is',
+    options: ['is', 'are', 'does', 'has'],
+    explain: 'Listen! 提示正在發生的事，用現在進行式',
+    topic: '現在進行式',
+    translation: '聽！遊戲裡有人在敲門。'
+  },
+  // --- 副詞（補充）---
+  {
+    sentence: 'He has _____ finished building his house.',
+    blank: 'just',
+    options: ['just', 'yet', 'still', 'ago'],
+    explain: 'just 放在助動詞 has 和動詞之間，表示「剛剛」',
+    topic: '副詞',
+    translation: '他剛剛蓋完他的房子。'
+  },
+  {
+    sentence: 'I _____ play games on weekdays.',
+    blank: 'rarely',
+    options: ['rarely', 'rare', 'rarer', 'rarest'],
+    explain: 'rarely 是頻率副詞，表示「很少」',
+    topic: '副詞',
+    translation: '我很少在平日打遊戲。'
+  },
+  // --- 介系詞（補充）---
+  {
+    sentence: 'I have been playing _____ two hours.',
+    blank: 'for',
+    options: ['for', 'since', 'during', 'while'],
+    explain: 'for + 一段時間（two hours）',
+    topic: '介系詞',
+    translation: '我已經玩了兩個小時了。'
+  },
+  {
+    sentence: 'She has been streaming _____ this morning.',
+    blank: 'since',
+    options: ['since', 'for', 'from', 'during'],
+    explain: 'since + 時間點（this morning）',
+    topic: '介系詞',
+    translation: '她從今天早上就開始直播了。'
+  },
+  {
+    sentence: 'The game is different _____ what I expected.',
+    blank: 'from',
+    options: ['from', 'than', 'to', 'with'],
+    explain: 'be different from：和…不同',
+    topic: '介系詞',
+    translation: '這個遊戲和我預期的不一樣。'
+  },
+  {
+    sentence: 'You should apologize _____ breaking his build.',
+    blank: 'for',
+    options: ['for', 'to', 'of', 'about'],
+    explain: 'apologize for + V-ing：為…道歉',
+    topic: '介系詞',
+    translation: '你應該為弄壞他的建築道歉。'
+  },
+  {
+    sentence: 'There is no point _____ complaining about the lag.',
+    blank: 'in',
+    options: ['in', 'of', 'at', 'on'],
+    explain: 'There is no point in + V-ing：做…沒有意義',
+    topic: '介系詞',
+    translation: '抱怨延遲是沒有意義的。'
+  },
+  // --- 比較級（補充）---
+  {
+    sentence: 'The _____ you practice, the better you become.',
+    blank: 'more',
+    options: ['more', 'most', 'much', 'many'],
+    explain: 'The + 比較級..., the + 比較級...：越…就越…',
+    topic: '比較級',
+    translation: '你練習越多，就會變得越好。'
+  },
+  {
+    sentence: 'I play games _____ often than my brother.',
+    blank: 'more',
+    options: ['more', 'most', 'much', 'many'],
+    explain: 'often 的比較級用 more often',
+    topic: '比較級',
+    translation: '我比我弟弟更常打遊戲。'
+  },
+  // --- 最高級（補充）---
+  {
+    sentence: 'He is _____ tallest player on the server.',
+    blank: 'the',
+    options: ['the', 'a', 'an', '--'],
+    explain: '最高級前面要加 the',
+    topic: '最高級',
+    translation: '他是伺服器上最高的玩家。'
+  },
+  // --- 現在完成式（補充）---
+  {
+    sentence: 'I have _____ to that server before.',
+    blank: 'been',
+    options: ['been', 'being', 'be', 'was'],
+    explain: '現在完成式：have been to（曾經去過）',
+    topic: '現在完成式',
+    translation: '我以前去過那個伺服器。'
+  },
+  // --- 現在完成進行式（補充）---
+  {
+    sentence: 'I _____ playing games since I was five years old.',
+    blank: 'have been',
+    options: ['have been', 'has been', 'am', 'was'],
+    explain: '現在完成進行式：have been + V-ing（持續至今的動作）',
+    topic: '現在完成進行式',
+    translation: '我從五歲就開始玩遊戲了。'
+  },
+  // --- used to（補充）---
+  {
+    sentence: 'He is used to _____ late at night.',
+    blank: 'gaming',
+    options: ['gaming', 'game', 'games', 'gamed'],
+    explain: 'be used to + V-ing：習慣做…',
+    topic: 'used to',
+    translation: '他習慣在深夜打遊戲。'
+  },
+  // --- 對等連接詞（補充）---
+  {
+    sentence: 'Not only does he play well, _____ he also teaches others.',
+    blank: 'but',
+    options: ['but', 'and', 'or', 'so'],
+    explain: 'not only...but also：不僅…而且…',
+    topic: '對等連接詞',
+    translation: '他不僅自己玩得好，而且還教別人。'
+  },
+  // --- 讓步子句（補充）---
+  {
+    sentence: '_____ happens, don\'t leave the base.',
+    blank: 'Whatever',
+    options: ['Whatever', 'Whenever', 'Wherever', 'However'],
+    explain: 'Whatever happens：無論發生什麼事',
+    topic: '讓步子句',
+    translation: '無論發生什麼事，都不要離開基地。'
+  },
+  // --- 關係子句（補充）---
+  {
+    sentence: 'This is the place _____ I first spawned.',
+    blank: 'where',
+    options: ['where', 'which', 'who', 'that'],
+    explain: '關係副詞 where 修飾地點 the place',
+    topic: '關係子句',
+    translation: '這是我第一次出生的地方。'
+  },
+  {
+    sentence: 'The game _____ I was talking about just got an update.',
+    blank: 'that',
+    options: ['that', 'who', 'where', 'when'],
+    explain: '關係代名詞 that 修飾物（the game）',
+    topic: '關係子句',
+    translation: '我剛才說的那個遊戲剛出了更新。'
+  },
+  // --- 假設語氣（補充）---
+  {
+    sentence: 'He speaks English _____ if he were a native speaker.',
+    blank: 'as',
+    options: ['as', 'like', 'so', 'that'],
+    explain: 'as if + 過去式：好像…（假設語氣）',
+    topic: '假設語氣',
+    translation: '他說英語好像是母語人士一樣。'
+  },
+  // --- 名詞子句（補充）---
+  {
+    sentence: 'I\'m not sure _____ to choose the sword or the bow.',
+    blank: 'whether',
+    options: ['whether', 'if', 'that', 'what'],
+    explain: 'whether to + V：是否要…',
+    topic: '名詞子句',
+    translation: '我不確定要選劍還是弓。'
+  },
+  {
+    sentence: 'He suggested _____ we take a break from the game.',
+    blank: 'that',
+    options: ['that', 'what', 'which', 'who'],
+    explain: 'suggest + that 子句：建議…',
+    topic: '名詞子句',
+    translation: '他建議我們休息一下不要玩遊戲。'
+  },
+  // --- 原因子句（補充）---
+  {
+    sentence: 'We stayed inside _____ there were too many mobs outside.',
+    blank: 'because',
+    options: ['because', 'although', 'unless', 'while'],
+    explain: 'because 引導原因子句：因為…',
+    topic: '原因子句',
+    translation: '我們待在裡面，因為外面怪物太多了。'
+  },
 ];
