@@ -201,6 +201,23 @@
   font-weight: 700;
 }
 
+.rb-hint {
+  text-align: center;
+  padding: 8px 12px;
+  margin-bottom: 14px;
+  font-size: 15px;
+  color: #c49bff;
+  background: rgba(138, 92, 246, 0.12);
+  border: 1px solid rgba(138, 92, 246, 0.3);
+  border-radius: 8px;
+  animation: rb-hint-glow 1.5s ease-in-out infinite alternate;
+}
+
+@keyframes rb-hint-glow {
+  0% { box-shadow: 0 0 4px rgba(138, 92, 246, 0.2); }
+  100% { box-shadow: 0 0 12px rgba(138, 92, 246, 0.5); }
+}
+
 .rb-options {
   display: grid;
   grid-template-columns: repeat(2, 1fr);

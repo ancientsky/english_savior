@@ -110,6 +110,18 @@ const RobloxGame = (() => {
       opts.appendChild(optContainer);
     });
 
+    // Check if hint crystal buff is active - show Chinese translation
+    const hintEl = document.getElementById('rb-hint');
+    if (GameEngine.hasBuff('hint') && q.translation) {
+      hintEl.textContent = `🔮 提示：${q.translation}`;
+      hintEl.style.display = 'block';
+      GameEngine.consumeBuff('hint');
+      GameEngine.showToast('🔮 提示水晶生效！顯示中文翻譯', 'achievement');
+    } else {
+      hintEl.textContent = '';
+      hintEl.style.display = 'none';
+    }
+
     document.getElementById('rb-feedback').textContent = '';
     document.getElementById('rb-feedback').className = 'rb-feedback';
     updateCharacterPos();
@@ -234,6 +246,7 @@ const RobloxGame = (() => {
         </div>
         <div class="rb-question-area">
           <div class="rb-sentence" id="rb-sentence"></div>
+          <div class="rb-hint" id="rb-hint" style="display:none"></div>
           <div class="rb-options" id="rb-options"></div>
         </div>
         <div class="rb-feedback" id="rb-feedback"></div>
