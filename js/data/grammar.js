@@ -3005,4 +3005,574 @@ const GRAMMAR_DATA = [
     topic: '情態動詞',
     translation: '建造這個的人一定是她。'
   },
+  // === 新增 60 題：熱門 Roblox 遊戲主題 ===
+  // --- Blox Fruits ---
+  {
+    sentence: 'He _____ a Legendary fruit in Blox Fruits yesterday.',
+    blank: 'got',
+    options: ['get', 'got', 'gets', 'getting'],
+    explain: 'yesterday 表示過去，get 的過去式是 got',
+    topic: '過去式',
+    translation: '他昨天在 Blox Fruits 裡拿到了一顆傳說果實。'
+  },
+  {
+    sentence: 'The Dragon fruit is _____ than the Flame fruit.',
+    blank: 'more powerful',
+    options: ['powerful', 'more powerful', 'most powerful', 'powerfuler'],
+    explain: '兩者比較用 more + 長形容詞',
+    topic: '比較級',
+    translation: '龍果實比火焰果實更強大。'
+  },
+  {
+    sentence: 'If you _____ enough fragments, you can awaken your fruit.',
+    blank: 'collect',
+    options: ['collect', 'collected', 'collects', 'will collect'],
+    explain: '第一條件句：If + 現在式, can + 原形',
+    topic: '條件句',
+    translation: '如果你收集到足夠的碎片，你就可以覺醒你的果實。'
+  },
+  {
+    sentence: 'She has been _____ for the Leopard fruit all day.',
+    blank: 'searching',
+    options: ['search', 'searched', 'searching', 'searches'],
+    explain: '現在完成進行式：has been + V-ing（持續進行的動作）',
+    topic: '現在完成進行式',
+    translation: '她已經找了一整天的豹果實。'
+  },
+  {
+    sentence: 'My friend _____ me how to combo in Blox Fruits.',
+    blank: 'taught',
+    options: ['teach', 'taught', 'teached', 'teaching'],
+    explain: 'teach 的過去式是 taught（不規則動詞）',
+    topic: '過去式',
+    translation: '我朋友教了我怎麼在 Blox Fruits 裡連招。'
+  },
+  // --- Adopt Me! ---
+  {
+    sentence: 'She _____ trading pets with her friends right now.',
+    blank: 'is',
+    options: ['is', 'are', 'am', 'was'],
+    explain: '主詞 She（第三人稱單數）+ 現在進行式用 is + V-ing',
+    topic: '現在進行式',
+    translation: '她現在正在跟朋友交換寵物。'
+  },
+  {
+    sentence: 'The Neon pet _____ made by combining four full-grown pets.',
+    blank: 'is',
+    options: ['is', 'are', 'was', 'were'],
+    explain: '被動語態：is made（描述一般事實）',
+    topic: '被動語態',
+    translation: '霓虹寵物是由四隻成年寵物合成的。'
+  },
+  {
+    sentence: 'I have _____ wanted a Mega Neon pet.',
+    blank: 'always',
+    options: ['always', 'never', 'yet', 'already'],
+    explain: 'always 放在 have 和過去分詞之間，表示「一直」',
+    topic: '現在完成式',
+    translation: '我一直都想要一隻超級霓虹寵物。'
+  },
+  {
+    sentence: 'Adopt Me! is the _____ visited game on Roblox.',
+    blank: 'most',
+    options: ['more', 'most', 'much', 'very'],
+    explain: '三者以上的最高級：the most + 長形容詞/過去分詞',
+    topic: '最高級',
+    translation: 'Adopt Me! 是 Roblox 上訪問量最大的遊戲。'
+  },
+  // --- Tower of Hell ---
+  {
+    sentence: 'I _____ climbing the tower when I fell off.',
+    blank: 'was',
+    options: ['was', 'were', 'am', 'is'],
+    explain: '主詞 I + 過去進行式用 was + V-ing',
+    topic: '過去進行式',
+    translation: '我正在爬塔的時候掉下去了。'
+  },
+  {
+    sentence: 'Tower of Hell is _____ than most obby games.',
+    blank: 'harder',
+    options: ['hard', 'harder', 'hardest', 'more hard'],
+    explain: '兩者比較用比較級：hard → harder',
+    topic: '比較級',
+    translation: 'Tower of Hell 比大多數跑酷遊戲更難。'
+  },
+  {
+    sentence: 'You _____ touch the red blocks, or you will die.',
+    blank: 'must not',
+    options: ['must not', 'can', 'should', 'will'],
+    explain: 'must not 表示「禁止、絕對不能」',
+    topic: '助動詞',
+    translation: '你絕對不能碰到紅色方塊，否則你會死。'
+  },
+  {
+    sentence: '_____ you ever reached the top of Tower of Hell?',
+    blank: 'Have',
+    options: ['Have', 'Has', 'Did', 'Do'],
+    explain: '主詞 you + 現在完成式疑問句：Have you ever...?',
+    topic: '現在完成式疑問句',
+    translation: '你有成功爬到 Tower of Hell 的頂端過嗎？'
+  },
+  // --- Murder Mystery 2 ---
+  {
+    sentence: 'The murderer _____ hiding behind the door.',
+    blank: 'is',
+    options: ['is', 'are', 'am', 'be'],
+    explain: '主詞 The murderer（單數）+ 現在進行式用 is + V-ing',
+    topic: '現在進行式',
+    translation: '兇手正躲在門後面。'
+  },
+  {
+    sentence: 'If I _____ the sheriff, I would protect everyone.',
+    blank: 'were',
+    options: ['am', 'were', 'was', 'is'],
+    explain: '第二條件句（與現在事實相反的假設）：If I were...，口語中 was 也常見但 were 更正式',
+    topic: '假設語氣',
+    translation: '如果我是警長，我會保護所有人。'
+  },
+  {
+    sentence: 'Nobody _____ who the murderer is.',
+    blank: 'knows',
+    options: ['know', 'knows', 'knew', 'knowing'],
+    explain: 'Nobody 是第三人稱單數，動詞加 s',
+    topic: '現在簡單式',
+    translation: '沒有人知道誰是兇手。'
+  },
+  {
+    sentence: 'The knife was _____ by the sheriff before the round ended.',
+    blank: 'found',
+    options: ['find', 'found', 'finding', 'finds'],
+    explain: '被動語態：was + 過去分詞 found',
+    topic: '被動語態',
+    translation: '回合結束前刀被警長找到了。'
+  },
+  // --- Doors ---
+  {
+    sentence: 'We _____ to hide inside the closet when we hear Screech.',
+    blank: 'need',
+    options: ['need', 'needs', 'needed', 'needing'],
+    explain: '主詞 We 是複數，現在簡單式用原形 need',
+    topic: '現在簡單式',
+    translation: '聽到 Screech 的時候我們需要躲進衣櫃裡。'
+  },
+  {
+    sentence: 'The player _____ survived all 100 doors without dying.',
+    blank: 'has',
+    options: ['has', 'have', 'had', 'is'],
+    explain: '主詞 The player（第三人稱單數）+ 現在完成式用 has + p.p.',
+    topic: '現在完成式',
+    translation: '那個玩家成功通過了全部 100 道門而沒有死掉。'
+  },
+  {
+    sentence: 'Doors is one of the _____ horror games on Roblox.',
+    blank: 'scariest',
+    options: ['scary', 'scarier', 'scariest', 'more scary'],
+    explain: 'one of the + 最高級 + 複數名詞',
+    topic: '最高級',
+    translation: 'Doors 是 Roblox 上最恐怖的遊戲之一。'
+  },
+  {
+    sentence: 'I wish I _____ braver when playing Doors.',
+    blank: 'were',
+    options: ['am', 'were', 'was', 'is'],
+    explain: 'I wish + 過去式（假設語氣），be 動詞用 were',
+    topic: '假設語氣',
+    translation: '我希望我玩 Doors 的時候能更勇敢。'
+  },
+  // --- Brookhaven RP ---
+  {
+    sentence: 'My sister enjoys _____ houses in Brookhaven.',
+    blank: 'decorating',
+    options: ['decorate', 'decorating', 'to decorate', 'decorated'],
+    explain: 'enjoy 後面接動名詞 V-ing',
+    topic: '動名詞',
+    translation: '我姐姐喜歡在 Brookhaven 裡裝飾房子。'
+  },
+  {
+    sentence: 'They _____ a roleplay story when I joined the server.',
+    blank: 'were creating',
+    options: ['were creating', 'are creating', 'created', 'create'],
+    explain: '過去進行式：were + V-ing，表示加入時他們正在進行的動作',
+    topic: '過去進行式',
+    translation: '我加入伺服器的時候他們正在編角色扮演的故事。'
+  },
+  {
+    sentence: 'Brookhaven _____ millions of players every month.',
+    blank: 'attracts',
+    options: ['attract', 'attracts', 'attracted', 'attracting'],
+    explain: 'Brookhaven（第三人稱單數）+ 描述一般事實 → attracts',
+    topic: '現在簡單式',
+    translation: 'Brookhaven 每個月吸引數百萬名玩家。'
+  },
+  {
+    sentence: 'The house _____ she chose has a swimming pool.',
+    blank: 'that',
+    options: ['who', 'that', 'where', 'when'],
+    explain: '關係代名詞修飾 house（物）用 that/which',
+    topic: '關係子句',
+    translation: '她選的那棟房子有游泳池。'
+  },
+  // --- Pet Simulator 99 ---
+  {
+    sentence: 'He _____ hatched over 500 eggs since he started playing.',
+    blank: 'has',
+    options: ['has', 'have', 'had', 'is'],
+    explain: '第三人稱單數 + 現在完成式用 has + 過去分詞',
+    topic: '現在完成式',
+    translation: '他從開始玩到現在已經孵了超過 500 顆蛋。'
+  },
+  {
+    sentence: 'The Huge pet is the _____ expensive one in the game.',
+    blank: 'most',
+    options: ['more', 'most', 'much', 'very'],
+    explain: '三者以上的最高級：the most + 長形容詞',
+    topic: '最高級',
+    translation: 'Huge 寵物是遊戲中最貴的寵物。'
+  },
+  {
+    sentence: 'If you _____ the golden egg, you might get a legendary pet.',
+    blank: 'open',
+    options: ['open', 'opened', 'opens', 'will open'],
+    explain: '第一條件句：If + 現在式, might + 原形',
+    topic: '條件句',
+    translation: '如果你打開金蛋，你可能會得到一隻傳說寵物。'
+  },
+  {
+    sentence: 'I am thinking _____ buying the VIP pass.',
+    blank: 'about',
+    options: ['about', 'of', 'to', 'for'],
+    explain: 'think about + V-ing：考慮做某事',
+    topic: '介系詞',
+    translation: '我正在考慮購買 VIP 通行證。'
+  },
+  // --- Jailbreak ---
+  {
+    sentence: 'The prisoner _____ from jail while the guards were sleeping.',
+    blank: 'escaped',
+    options: ['escape', 'escaped', 'escapes', 'escaping'],
+    explain: '過去式：while 引導過去進行式背景，主要動作用過去式 escaped',
+    topic: '過去式',
+    translation: '警衛在睡覺的時候犯人逃獄了。'
+  },
+  {
+    sentence: 'You can _____ be a cop or a criminal in Jailbreak.',
+    blank: 'either',
+    options: ['either', 'neither', 'both', 'nor'],
+    explain: 'either...or：不是…就是…（二選一）',
+    topic: '對等連接詞',
+    translation: '在 Jailbreak 裡你可以選擇當警察或罪犯。'
+  },
+  {
+    sentence: 'The police officer _____ chasing the robber for five minutes.',
+    blank: 'has been',
+    options: ['has been', 'have been', 'was', 'is'],
+    explain: '現在完成進行式：has been + V-ing（持續到現在的動作）',
+    topic: '現在完成進行式',
+    translation: '那個警察已經追了搶匪五分鐘了。'
+  },
+  {
+    sentence: 'The bank _____ robbed three times today.',
+    blank: 'has been',
+    options: ['has been', 'have been', 'was been', 'is been'],
+    explain: '現在完成被動：has been + 過去分詞',
+    topic: '被動語態',
+    translation: '銀行今天已經被搶了三次。'
+  },
+  // --- Bee Swarm Simulator ---
+  {
+    sentence: 'My bees _____ collecting pollen in the sunflower field.',
+    blank: 'are',
+    options: ['is', 'are', 'am', 'was'],
+    explain: '主詞 bees（複數）+ 現在進行式用 are + V-ing',
+    topic: '現在進行式',
+    translation: '我的蜜蜂正在向日葵田裡採花粉。'
+  },
+  {
+    sentence: 'You should _____ honey before buying new bees.',
+    blank: 'save',
+    options: ['save', 'saves', 'saved', 'saving'],
+    explain: 'should 後面接原形動詞',
+    topic: '助動詞',
+    translation: '你應該在買新蜜蜂之前先存蜂蜜。'
+  },
+  {
+    sentence: 'The _____ bee in my hive is the Gifted Vicious Bee.',
+    blank: 'strongest',
+    options: ['strong', 'stronger', 'strongest', 'most strong'],
+    explain: '三者以上的最高級：the + -est',
+    topic: '最高級',
+    translation: '我蜂巢裡最強的蜜蜂是天賦兇惡蜂。'
+  },
+  {
+    sentence: 'I _____ playing Bee Swarm Simulator since 2023.',
+    blank: 'have been',
+    options: ['have been', 'has been', 'am', 'was'],
+    explain: '現在完成進行式：have been + V-ing（從過去持續到現在）',
+    topic: '現在完成進行式',
+    translation: '我從 2023 年就開始玩 Bee Swarm Simulator 了。'
+  },
+  // --- Arsenal ---
+  {
+    sentence: 'He shoots _____ than anyone else on the team.',
+    blank: 'faster',
+    options: ['fast', 'faster', 'fastest', 'more fast'],
+    explain: '兩者比較用比較級：fast → faster',
+    topic: '比較級',
+    translation: '他射擊的速度比隊上任何人都快。'
+  },
+  {
+    sentence: 'I _____ just won three rounds in a row!',
+    blank: 'have',
+    options: ['have', 'has', 'had', 'am'],
+    explain: '主詞 I + 現在完成式用 have + 過去分詞',
+    topic: '現在完成式',
+    translation: '我剛剛連續贏了三回合！'
+  },
+  {
+    sentence: 'The golden knife _____ given to the best player.',
+    blank: 'was',
+    options: ['was', 'were', 'is', 'did'],
+    explain: '被動語態：The knife was given（單數主詞用 was）',
+    topic: '被動語態',
+    translation: '金刀被給了最厲害的玩家。'
+  },
+  {
+    sentence: 'You will _____ if you keep practicing every day.',
+    blank: 'improve',
+    options: ['improve', 'improves', 'improved', 'improving'],
+    explain: 'will 後面接原形動詞',
+    topic: '未來式',
+    translation: '如果你每天持續練習，你會進步的。'
+  },
+  // --- Dress to Impress ---
+  {
+    sentence: 'She _____ the most creative outfit in the fashion show.',
+    blank: 'wore',
+    options: ['wear', 'wore', 'wears', 'wearing'],
+    explain: 'wear 的過去式是 wore（不規則動詞），描述過去發生的事',
+    topic: '過去式',
+    translation: '她在時裝秀中穿了最有創意的服裝。'
+  },
+  {
+    sentence: 'Dress to Impress is more _____ than I expected.',
+    blank: 'entertaining',
+    options: ['entertaining', 'entertained', 'entertain', 'entertains'],
+    explain: 'more + 長形容詞原形（現在分詞作形容詞，描述事物的特質）',
+    topic: '比較級',
+    translation: 'Dress to Impress 比我預期的更有趣。'
+  },
+  {
+    sentence: 'I love _____ different themes in each round.',
+    blank: 'trying',
+    options: ['try', 'trying', 'to try', 'tried'],
+    explain: 'love + V-ing：喜歡做某事（動名詞）',
+    topic: '動名詞',
+    translation: '我喜歡每一回合嘗試不同的主題。'
+  },
+  {
+    sentence: 'The player _____ outfit was voted the best won 100 points.',
+    blank: 'whose',
+    options: ['who', 'whose', 'which', 'that'],
+    explain: 'whose 表示「誰的」，修飾名詞 outfit',
+    topic: '關係子句',
+    translation: '服裝被票選為最佳的那位玩家獲得了 100 分。'
+  },
+  // --- Fisch ---
+  {
+    sentence: 'He _____ fishing at the volcano when he caught a legendary fish.',
+    blank: 'was',
+    options: ['was', 'were', 'is', 'has'],
+    explain: '主詞 He + 過去進行式用 was + V-ing',
+    topic: '過去進行式',
+    translation: '他在火山釣魚的時候釣到了一條傳說魚。'
+  },
+  {
+    sentence: 'The Aurora Rod is the _____ fishing rod in Fisch.',
+    blank: 'best',
+    options: ['good', 'better', 'best', 'most good'],
+    explain: 'good 的最高級是 best（不規則變化）',
+    topic: '最高級',
+    translation: 'Aurora 魚竿是 Fisch 裡最好的釣竿。'
+  },
+  {
+    sentence: 'If I _____ a better rod, I could catch rarer fish.',
+    blank: 'had',
+    options: ['have', 'had', 'has', 'having'],
+    explain: '第二條件句（假設）：If + 過去式, could + 原形',
+    topic: '假設語氣',
+    translation: '如果我有一根更好的釣竿，我就能釣到更稀有的魚。'
+  },
+  {
+    sentence: 'I enjoy _____ with my friends in the ocean biome.',
+    blank: 'fishing',
+    options: ['fish', 'fishing', 'to fish', 'fished'],
+    explain: 'enjoy 後面接動名詞 V-ing',
+    topic: '動名詞',
+    translation: '我喜歡跟朋友在海洋生態區一起釣魚。'
+  },
+  // --- Blade Ball ---
+  {
+    sentence: 'The ball _____ coming toward you! Press the button!',
+    blank: 'is',
+    options: ['is', 'are', 'am', 'was'],
+    explain: '主詞 The ball（單數）+ 現在進行式用 is + V-ing',
+    topic: '現在進行式',
+    translation: '球正朝你飛過來！快按按鈕！'
+  },
+  {
+    sentence: 'She _____ the ball away just in time.',
+    blank: 'deflected',
+    options: ['deflect', 'deflected', 'deflects', 'deflecting'],
+    explain: 'just in time 暗示已經發生，用過去式 deflected',
+    topic: '過去式',
+    translation: '她在最後一刻把球擋開了。'
+  },
+  {
+    sentence: 'You _____ time your parry carefully to survive.',
+    blank: 'must',
+    options: ['must', 'can', 'may', 'might'],
+    explain: 'must 表示「必須」，強烈的必要性',
+    topic: '助動詞',
+    translation: '你必須仔細掌握格擋時機才能存活。'
+  },
+  {
+    sentence: 'Blade Ball is _____ exciting that millions of players love it.',
+    blank: 'so',
+    options: ['so', 'such', 'too', 'very'],
+    explain: 'so + 形容詞 + that：如此…以至於',
+    topic: '結果子句',
+    translation: 'Blade Ball 太刺激了，數百萬玩家都喜歡它。'
+  },
+  // --- Build A Boat For Treasure ---
+  {
+    sentence: 'We _____ building our boat when the timer ran out.',
+    blank: 'were',
+    options: ['was', 'were', 'are', 'is'],
+    explain: '主詞 We（複數）+ 過去進行式用 were + V-ing',
+    topic: '過去進行式',
+    translation: '計時結束的時候我們還在造船。'
+  },
+  {
+    sentence: 'The boat _____ by the waterfall was the strongest.',
+    blank: 'built',
+    options: ['build', 'built', 'building', 'builds'],
+    explain: '過去分詞作形容詞修飾 boat：被建造的船',
+    topic: '分詞',
+    translation: '在瀑布旁建造的那艘船是最堅固的。'
+  },
+  {
+    sentence: 'You should _____ your boat before the water comes.',
+    blank: 'finish',
+    options: ['finish', 'finishes', 'finished', 'finishing'],
+    explain: 'should 後面接原形動詞',
+    topic: '助動詞',
+    translation: '你應該在水來之前完成你的船。'
+  },
+  {
+    sentence: 'I want _____ a rocket-powered boat next time.',
+    blank: 'to build',
+    options: ['build', 'building', 'to build', 'built'],
+    explain: 'want 後面接 to + 原形動詞（不定詞）',
+    topic: '不定詞',
+    translation: '我下次想建一艘火箭動力船。'
+  },
+  // --- The Strongest Battlegrounds ---
+  {
+    sentence: 'He _____ all his opponents in The Strongest Battlegrounds.',
+    blank: 'defeated',
+    options: ['defeat', 'defeated', 'defeats', 'defeating'],
+    explain: '描述已完成的動作，用過去式 defeated',
+    topic: '過去式',
+    translation: '他在 The Strongest Battlegrounds 裡打敗了所有對手。'
+  },
+  {
+    sentence: 'This character is _____ than the one I used before.',
+    blank: 'stronger',
+    options: ['strong', 'stronger', 'strongest', 'more strong'],
+    explain: '兩者比較用比較級：strong → stronger',
+    topic: '比較級',
+    translation: '這個角色比我之前用的更強。'
+  },
+  {
+    sentence: '_____ you like to practice combos with me?',
+    blank: 'Would',
+    options: ['Would', 'Will', 'Do', 'Can'],
+    explain: 'Would you like to...? 是禮貌的邀請句型',
+    topic: '助動詞',
+    translation: '你想跟我一起練習連招嗎？'
+  },
+  {
+    sentence: 'The player who _____ the most damage wins the round.',
+    blank: 'deals',
+    options: ['deal', 'deals', 'dealt', 'dealing'],
+    explain: '關係子句中，主詞 who (the player) 是第三人稱單數，動詞加 s',
+    topic: '關係子句',
+    translation: '造成最多傷害的玩家贏得該回合。'
+  },
+  // --- King Legacy ---
+  {
+    sentence: 'She _____ sailing across the ocean to find a new island.',
+    blank: 'is',
+    options: ['is', 'are', 'am', 'was'],
+    explain: '主詞 She（第三人稱單數）+ 現在進行式用 is + V-ing',
+    topic: '現在進行式',
+    translation: '她正在航行穿越海洋去尋找新島嶼。'
+  },
+  {
+    sentence: 'I _____ already defeated the boss on that island.',
+    blank: 'have',
+    options: ['have', 'has', 'had', 'am'],
+    explain: '主詞 I + 現在完成式用 have + 過去分詞',
+    topic: '現在完成式',
+    translation: '我已經打敗了那座島上的 Boss。'
+  },
+  {
+    sentence: 'Neither the sword _____ the gun is strong enough for this boss.',
+    blank: 'nor',
+    options: ['or', 'nor', 'and', 'but'],
+    explain: 'neither...nor 是固定搭配：既不…也不',
+    topic: '對等連接詞',
+    translation: '劍和槍都不夠強來對付這個 Boss。'
+  },
+  {
+    sentence: 'The fruit _____ he ate gave him the power to fly.',
+    blank: 'that',
+    options: ['who', 'that', 'where', 'when'],
+    explain: '關係代名詞修飾 fruit（物）用 that/which',
+    topic: '關係子句',
+    translation: '他吃的那顆果實給了他飛行的能力。'
+  },
+  // --- Rivals (FPS) ---
+  {
+    sentence: 'My team _____ won five matches in a row!',
+    blank: 'has',
+    options: ['has', 'have', 'had', 'is'],
+    explain: '主詞 team（視為單數整體）+ 現在完成式用 has',
+    topic: '現在完成式',
+    translation: '我的隊伍已經連續贏了五場比賽！'
+  },
+  {
+    sentence: 'He plays Rivals _____ than he plays any other game.',
+    blank: 'more often',
+    options: ['often', 'more often', 'most often', 'oftener'],
+    explain: '兩者比較用 more + 長副詞',
+    topic: '比較級',
+    translation: '他玩 Rivals 比玩其他任何遊戲都更頻繁。'
+  },
+  {
+    sentence: 'If we _____ together, we will win the match.',
+    blank: 'work',
+    options: ['work', 'worked', 'works', 'will work'],
+    explain: '第一條件句：If + 現在式, will + 原形',
+    topic: '條件句',
+    translation: '如果我們合作，我們就會贏得比賽。'
+  },
+  {
+    sentence: 'The sniper rifle _____ used by professional players.',
+    blank: 'is often',
+    options: ['is often', 'often is', 'are often', 'often are'],
+    explain: '被動語態 + 頻率副詞：is + often + 過去分詞',
+    topic: '被動語態',
+    translation: '狙擊步槍經常被專業玩家使用。'
+  },
 ];
