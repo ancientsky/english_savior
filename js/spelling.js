@@ -56,6 +56,10 @@ const SpellingGame = (() => {
   let mountains = [];
   let starSeed = [];
 
+  // Idle animation
+  let idleAnimId = null;
+  let idleFrame = 0;
+
   // DOM refs
   let hpEl, wordEl, zhEl, scoreEl;
   let startScreen, gameoverScreen, completeScreen;
@@ -168,6 +172,9 @@ const SpellingGame = (() => {
     screenShake = 0;
     damageFlash = 0;
     wordCompleteFlash = 0;
+
+    // Stop idle animation
+    if (idleAnimId) { cancelAnimationFrame(idleAnimId); idleAnimId = null; }
 
     startScreen.style.display = 'none';
     gameoverScreen.style.display = 'none';
@@ -463,14 +470,24 @@ const SpellingGame = (() => {
 
   // ===== RENDERING =====
   function renderIdle() {
-    // Render a static background for the idle/start screen
+    if (idleAnimId) cancelAnimationFrame(idleAnimId);
+    idleFrame = 0;
+    idleLoop();
+  }
+
+  function idleLoop() {
+    if (state === 'running') return;
+    idleFrame++;
+    // Slow gentle bounce: period ~180 frames (~3 seconds at 60fps)
+    const bounce = Math.sin(idleFrame * 0.035) * 6;
     drawSky();
     drawStars();
     drawMountains(0);
     drawCloudsScene();
     drawGround(0);
-    // Draw idle character on ground
-    drawCharacterAt(CHAR_X, GROUND_Y, 0, false);
+    // Draw idle character with bounce offset
+    drawCharacterAt(CHAR_X, GROUND_Y + bounce, 0, false);
+    idleAnimId = requestAnimationFrame(idleLoop);
   }
 
   function render() {

@@ -144,31 +144,31 @@
   z-index: 5;
   text-align: center;
   padding: 20px;
+  gap: 6px;
 }
 
 .sp-start-screen h3 {
   font-family: var(--pixel-font);
   font-size: 18px;
   color: var(--gold);
-  margin-bottom: 14px;
   text-shadow: 0 0 20px rgba(245,197,24,0.5);
+  line-height: 1.4;
 }
 .sp-start-screen .sp-start-subtitle {
-  font-size: 14px;
+  font-size: 15px;
   color: var(--text);
-  margin-bottom: 12px;
+  line-height: 1.4;
 }
 .sp-start-screen .sp-instructions {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-dim);
-  margin-bottom: 8px;
-  line-height: 1.6;
+  line-height: 1.4;
 }
 .sp-start-screen .sp-start-hint {
   font-family: var(--pixel-font);
   font-size: 10px;
   color: var(--green);
-  margin-top: 12px;
+  margin-top: 6px;
   animation: sp-blink 1.2s ease-in-out infinite;
 }
 
