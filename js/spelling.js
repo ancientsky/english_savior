@@ -6,7 +6,7 @@
 const SpellingGame = (() => {
   // ===== CONSTANTS =====
   const CANVAS_W = 800;
-  const CANVAS_H = 280;
+  const CANVAS_H = 340;
   const GROUND_H = 45;
   const GROUND_Y = CANVAS_H - GROUND_H;
   const CHAR_X = 90;
@@ -15,13 +15,12 @@ const SpellingGame = (() => {
   const MAX_HP = 5;
   const WORDS_TO_WIN = 10;
   const HP_REWARD = 2;
-  const GEM_REWARD = 10;
   const XP_PER_WORD = 15;
 
   const DIFF_CONFIG = {
-    easy:   { speed: 3, gapMin: 240, gapMax: 340, distractMin: 2, distractMax: 4, pool: 'easy' },
-    medium: { speed: 4, gapMin: 200, gapMax: 300, distractMin: 2, distractMax: 3, pool: 'medium' },
-    hard:   { speed: 5.2, gapMin: 170, gapMax: 260, distractMin: 1, distractMax: 3, pool: 'hard' },
+    easy:   { speed: 3, gapMin: 240, gapMax: 340, distractMin: 2, distractMax: 4, pool: 'easy', gems: 10 },
+    medium: { speed: 4, gapMin: 200, gapMax: 300, distractMin: 2, distractMax: 3, pool: 'medium', gems: 20 },
+    hard:   { speed: 5.2, gapMin: 220, gapMax: 320, distractMin: 1, distractMax: 3, pool: 'hard', gems: 30 },
   };
 
   const OBS_COLORS = [
@@ -240,10 +239,10 @@ const SpellingGame = (() => {
     obstacles = obstacles.filter(o => o.x + o.w > -60);
 
     // Collision detection
-    const cx = CHAR_X + 6;
-    const cy = charY - 38;
-    const cw = 22;
-    const ch = 34;
+    const cx = CHAR_X + 2;
+    const cy = charY - 48;
+    const cw = 30;
+    const ch = 46;
 
     for (let i = 0; i < obstacles.length; i++) {
       const obs = obstacles[i];
@@ -337,7 +336,7 @@ const SpellingGame = (() => {
     // Dust particles
     for (let i = 0; i < 5; i++) {
       particles.push({
-        x: CHAR_X + 15, y: GROUND_Y,
+        x: CHAR_X + 10, y: GROUND_Y,
         vx: -1 + Math.random() * 2, vy: -1 - Math.random() * 2,
         life: 12 + Math.random() * 8, color: '#8d7b68', size: 2 + Math.random() * 2,
       });
@@ -379,7 +378,7 @@ const SpellingGame = (() => {
     // Red hit particles
     for (let i = 0; i < 10; i++) {
       particles.push({
-        x: CHAR_X + 15, y: charY - 20,
+        x: CHAR_X + 10, y: charY - 25,
         vx: -2 + Math.random() * 4, vy: -3 + Math.random() * 2,
         life: 18 + Math.random() * 8, color: '#e74c3c', size: 2.5 + Math.random() * 2,
       });
@@ -437,7 +436,7 @@ const SpellingGame = (() => {
   function roundComplete() {
     state = 'complete';
 
-    let gems = GEM_REWARD;
+    let gems = DIFF_CONFIG[diff].gems;
     if (GameEngine.hasBuff('gem_bonus')) {
       gems += 5;
       GameEngine.consumeBuff('gem_bonus');
@@ -661,80 +660,89 @@ const SpellingGame = (() => {
   function drawCharacterAt(x, y, frame, jumping) {
     ctx.save();
 
-    // Colors
-    const head = '#ffcc99';
-    const body = '#4ecca3';
-    const pants = '#2c3e50';
-    const shoes = '#e74c3c';
-    const hair = '#5d4037';
+    // Pixel-art T-Rex dinosaur (like Chrome dino)
+    const dino = '#4ecca3';       // main body green
+    const dinoDark = '#3ba88a';   // darker shade
+    const eye = '#fff';
 
-    // Hair
-    ctx.fillStyle = hair;
-    ctx.fillRect(x + 4, y - 42, 22, 6);
+    // === Tail ===
+    ctx.fillStyle = dino;
+    ctx.fillRect(x - 4, y - 24, 6, 4);
+    ctx.fillRect(x - 8, y - 22, 6, 4);
+    ctx.fillRect(x - 10, y - 20, 4, 4);
 
-    // Head
-    ctx.fillStyle = head;
-    roundRect(ctx, x + 5, y - 38, 20, 15, 3);
-    ctx.fill();
+    // === Body (main torso) ===
+    ctx.fillStyle = dino;
+    ctx.fillRect(x + 2, y - 32, 18, 20);  // torso
+    ctx.fillRect(x + 4, y - 36, 14, 6);   // upper body
 
-    // Eyes
-    ctx.fillStyle = '#333';
-    ctx.fillRect(x + 18, y - 34, 3, 3);
+    // === Belly highlight ===
+    ctx.fillStyle = dinoDark;
+    ctx.fillRect(x + 4, y - 18, 12, 6);
 
-    // Mouth
-    ctx.fillRect(x + 17, y - 28, 4, 1);
+    // === Head ===
+    ctx.fillStyle = dino;
+    ctx.fillRect(x + 12, y - 48, 18, 14);  // head block
+    ctx.fillRect(x + 16, y - 50, 12, 4);   // top of head
 
-    // Body
-    ctx.fillStyle = body;
-    ctx.fillRect(x + 7, y - 23, 18, 13);
+    // Jaw
+    ctx.fillRect(x + 18, y - 36, 14, 5);
 
-    // Belt
-    ctx.fillStyle = '#f5c518';
-    ctx.fillRect(x + 7, y - 12, 18, 2);
+    // Teeth (small white pixels on jaw)
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(x + 26, y - 36, 2, 2);
+    ctx.fillRect(x + 30, y - 36, 2, 2);
 
+    // Eye
+    ctx.fillStyle = eye;
+    ctx.fillRect(x + 24, y - 46, 4, 4);
+    // Pupil
+    ctx.fillStyle = '#111';
+    ctx.fillRect(x + 26, y - 45, 2, 2);
+
+    // === Small Arms ===
+    ctx.fillStyle = dino;
+    const armOff = jumping ? -2 : (frame % 2 === 0 ? 0 : 2);
+    ctx.fillRect(x + 16, y - 22 + armOff, 4, 6);
+    ctx.fillRect(x + 18, y - 16 + armOff, 2, 2);
+
+    // === Legs ===
     if (jumping) {
-      // Arms up
-      ctx.fillStyle = body;
-      ctx.fillRect(x + 1, y - 23, 6, 4);
-      ctx.fillRect(x + 25, y - 23, 6, 4);
-      // Legs tucked
-      ctx.fillStyle = pants;
-      ctx.fillRect(x + 9, y - 10, 6, 7);
-      ctx.fillRect(x + 17, y - 10, 6, 7);
-      // Shoes
-      ctx.fillStyle = shoes;
-      ctx.fillRect(x + 8, y - 3, 8, 3);
-      ctx.fillRect(x + 16, y - 3, 8, 3);
+      // Legs tucked up while jumping
+      ctx.fillStyle = dino;
+      ctx.fillRect(x + 4, y - 12, 6, 6);
+      ctx.fillRect(x + 14, y - 12, 6, 6);
+      // Feet
+      ctx.fillRect(x + 2, y - 6, 8, 3);
+      ctx.fillRect(x + 12, y - 6, 8, 3);
     } else {
-      // Running arms
-      ctx.fillStyle = body;
-      const armOff = frame % 2 === 0 ? -2 : 2;
-      ctx.fillRect(x + 1, y - 21 + armOff, 6, 4);
-      ctx.fillRect(x + 25, y - 21 - armOff, 6, 4);
-
-      // Running legs
-      const legData = [
-        [{ lx: 8, lh: 10 }, { lx: 18, lh: 5 }],
-        [{ lx: 10, lh: 8 }, { lx: 16, lh: 8 }],
-        [{ lx: 18, lh: 5 }, { lx: 8, lh: 10 }],
-        [{ lx: 16, lh: 8 }, { lx: 10, lh: 8 }],
+      // Running legs alternate
+      ctx.fillStyle = dino;
+      const legFrames = [
+        [{ lx: 4, ly: -12, lh: 10 }, { lx: 14, ly: -12, lh: 5 }],
+        [{ lx: 6, ly: -12, lh: 8 },  { lx: 12, ly: -12, lh: 8 }],
+        [{ lx: 14, ly: -12, lh: 5 }, { lx: 4, ly: -12, lh: 10 }],
+        [{ lx: 12, ly: -12, lh: 8 }, { lx: 6, ly: -12, lh: 8 }],
       ];
-      const legs = legData[frame];
-      ctx.fillStyle = pants;
-      ctx.fillRect(x + legs[0].lx, y - 10, 6, legs[0].lh);
-      ctx.fillRect(x + legs[1].lx, y - 10, 6, legs[1].lh);
-
-      // Shoes
-      ctx.fillStyle = shoes;
-      ctx.fillRect(x + legs[0].lx - 1, y - 10 + legs[0].lh, 8, 3);
-      ctx.fillRect(x + legs[1].lx - 1, y - 10 + legs[1].lh, 8, 3);
+      const legs = legFrames[frame];
+      ctx.fillRect(x + legs[0].lx, y + legs[0].ly, 6, legs[0].lh);
+      ctx.fillRect(x + legs[1].lx, y + legs[1].ly, 6, legs[1].lh);
+      // Feet
+      ctx.fillRect(x + legs[0].lx - 1, y + legs[0].ly + legs[0].lh, 8, 3);
+      ctx.fillRect(x + legs[1].lx - 1, y + legs[1].ly + legs[1].lh, 8, 3);
     }
+
+    // === Spikes on back ===
+    ctx.fillStyle = dinoDark;
+    ctx.fillRect(x + 8, y - 38, 4, 3);
+    ctx.fillRect(x + 14, y - 40, 4, 3);
+    ctx.fillRect(x + 6, y - 35, 3, 3);
 
     // Damage flash on character
     if (damageFlash > 0.5) {
       ctx.globalAlpha = (damageFlash - 0.5) * 0.6;
       ctx.fillStyle = '#e74c3c';
-      ctx.fillRect(x, y - 42, 32, 45);
+      ctx.fillRect(x - 10, y - 50, 44, 53);
       ctx.globalAlpha = 1;
     }
 
