@@ -10,10 +10,10 @@ const SpellingGame = (() => {
   const GROUND_H = 45;
   const GROUND_Y = CANVAS_H - GROUND_H;
   const CHAR_X = 90;
-  const GRAVITY = 0.38;
-  const JUMP_VEL = -14;
-  const APEX_GRAVITY = 0.18;
-  const APEX_THRESHOLD = 3;
+  const GRAVITY = 0.28;
+  const JUMP_VEL = -10;
+  const APEX_GRAVITY = 0.12;
+  const APEX_THRESHOLD = 4;
   const MAX_HP = 5;
   const WORDS_TO_WIN = 10;
   const HP_REWARD = 2;
@@ -182,6 +182,7 @@ const SpellingGame = (() => {
     gameoverScreen.style.display = 'none';
     completeScreen.style.display = 'none';
 
+    GameEngine.setDeferLevelUp(true);
     pickNewWord();
     updateHUD();
     state = 'running';
@@ -458,6 +459,9 @@ const SpellingGame = (() => {
     document.getElementById('sp-complete-gems').textContent = gems;
     completeScreen.style.display = 'flex';
 
+    GameEngine.setDeferLevelUp(false);
+    GameEngine.flushPendingLevelUps();
+
     // Final frame
     render();
   }
@@ -467,6 +471,9 @@ const SpellingGame = (() => {
 
     document.getElementById('sp-final-words').textContent = wordsCompleted;
     gameoverScreen.style.display = 'flex';
+
+    GameEngine.setDeferLevelUp(false);
+    GameEngine.flushPendingLevelUps();
 
     render();
   }
