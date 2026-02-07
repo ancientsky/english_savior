@@ -389,10 +389,30 @@ const GameEngine = (() => {
   }
 
   function showLevelUp() {
+    if (deferLevelUpModal) {
+      pendingLevelUps.push(state.level);
+      showToast(`🎉 升級了！Lv.${state.level} +10💎`, 'achievement');
+      SoundManager.playLevelUp();
+      return;
+    }
     document.getElementById('levelup-level').textContent = `Lv.${state.level}`;
     document.getElementById('levelup-rewards').textContent = `獎勵：+10 💎 + 隨機道具`;
     document.getElementById('modal-levelup').classList.add('active');
     SoundManager.playLevelUp();
+  }
+
+  function setDeferLevelUp(value) {
+    deferLevelUpModal = value;
+  }
+
+  function flushPendingLevelUps() {
+    if (pendingLevelUps.length > 0) {
+      const lastLevel = pendingLevelUps[pendingLevelUps.length - 1];
+      document.getElementById('levelup-level').textContent = `Lv.${lastLevel}`;
+      document.getElementById('levelup-rewards').textContent = `獎勵：+10 💎 + 隨機道具`;
+      document.getElementById('modal-levelup').classList.add('active');
+      pendingLevelUps = [];
+    }
   }
 
   function showInventory() {
@@ -517,6 +537,9 @@ const GameEngine = (() => {
   }
 
   // ===== Shop System =====
+  let deferLevelUpModal = false;
+  let pendingLevelUps = [];
+
   let currentShopTab = 'consumables';
 
   function showShop() {
@@ -733,5 +756,6 @@ const GameEngine = (() => {
     showShop, switchShopTab, buyItem, equipItem,
     useConsumable, hasBuff, consumeBuff,
     getEquippedSkin, getEquippedTitle,
+    setDeferLevelUp, flushPendingLevelUps,
   };
 })();
