@@ -10,7 +10,7 @@ const SpellingGame = (() => {
   const GROUND_H = 45;
   const GROUND_Y = CANVAS_H - GROUND_H;
   const CHAR_X = 90;
-  const GRAVITY = 0.65;
+  const GRAVITY = 0.5;
   const JUMP_VEL = -15;
   const MAX_HP = 5;
   const WORDS_TO_WIN = 10;
