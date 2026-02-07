@@ -150,25 +150,25 @@
   font-family: var(--pixel-font);
   font-size: 18px;
   color: var(--gold);
-  margin-bottom: 6px;
+  margin-bottom: 14px;
   text-shadow: 0 0 20px rgba(245,197,24,0.5);
 }
 .sp-start-screen .sp-start-subtitle {
   font-size: 14px;
   color: var(--text);
-  margin-bottom: 4px;
+  margin-bottom: 12px;
 }
 .sp-start-screen .sp-instructions {
   font-size: 12px;
   color: var(--text-dim);
-  margin-bottom: 2px;
-  line-height: 1.4;
+  margin-bottom: 8px;
+  line-height: 1.6;
 }
 .sp-start-screen .sp-start-hint {
   font-family: var(--pixel-font);
   font-size: 10px;
   color: var(--green);
-  margin-top: 4px;
+  margin-top: 12px;
   animation: sp-blink 1.2s ease-in-out infinite;
 }
 

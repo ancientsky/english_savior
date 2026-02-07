@@ -11,16 +11,16 @@ const SpellingGame = (() => {
   const GROUND_Y = CANVAS_H - GROUND_H;
   const CHAR_X = 90;
   const GRAVITY = 0.65;
-  const JUMP_VEL = -12.5;
+  const JUMP_VEL = -15;
   const MAX_HP = 5;
   const WORDS_TO_WIN = 10;
   const HP_REWARD = 2;
   const XP_PER_WORD = 15;
 
   const DIFF_CONFIG = {
-    easy:   { speed: 3, gapMin: 240, gapMax: 340, distractMin: 2, distractMax: 4, pool: 'easy', gems: 10 },
-    medium: { speed: 4, gapMin: 200, gapMax: 300, distractMin: 2, distractMax: 3, pool: 'medium', gems: 20 },
-    hard:   { speed: 5.2, gapMin: 220, gapMax: 320, distractMin: 1, distractMax: 3, pool: 'hard', gems: 30 },
+    easy:   { speed: 1.5, gapMin: 240, gapMax: 340, distractMin: 2, distractMax: 4, pool: 'easy', gems: 10 },
+    medium: { speed: 2, gapMin: 200, gapMax: 300, distractMin: 2, distractMax: 3, pool: 'medium', gems: 20 },
+    hard:   { speed: 2.6, gapMin: 220, gapMax: 320, distractMin: 1, distractMax: 3, pool: 'hard', gems: 30 },
   };
 
   const OBS_COLORS = [
