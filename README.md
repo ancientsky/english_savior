@@ -9,13 +9,13 @@
 
 ## 📖 專案簡介 | Project Overview
 
-**English Savior** 將英語學習融入孩子們最喜愛的遊戲世界中！透過三種不同主題的遊戲模式，讓學習英語變得有趣且充滿動力。
+**English Savior** 將英語學習融入孩子們最喜愛的遊戲世界中！透過四種不同主題的遊戲模式，讓學習英語變得有趣且充滿動力。
 
-**English Savior** transforms English learning into an engaging adventure inspired by popular games! Through three different game modes, learning English becomes fun and motivating.
+**English Savior** transforms English learning into an engaging adventure inspired by popular games! Through four different game modes, learning English becomes fun and motivating.
 
 ## ✨ 特色功能 | Features
 
-### 🎮 三大遊戲模式 | Three Game Modes
+### 🎮 四大遊戲模式 | Four Game Modes
 
 1. **⛏️ 挖礦學單字 (Minecraft Vocabulary)**
    - 像 Minecraft 一樣挖掘方塊收集字母
@@ -26,7 +26,7 @@
 2. **🏃 跑酷學文法 (Roblox Grammar)**
    - 像 Roblox Obby 一樣的跑酷闖關遊戲
    - 選擇正確的文法選項才能前進
-   - 250 道題目，涵蓋 60+ 種文法主題
+   - 430+ 道題目，涵蓋 62 種文法主題
    - 即時回饋和詳細解釋
 
 3. **📺 看片學英文 (YouTube Comprehension)**
@@ -35,12 +35,18 @@
    - 理解測驗檢驗學習成果
    - 真實情境的英語運用
 
+4. **🦖 拼字跑酷 (Spelling Runner)**
+   - Chrome Dino 風格的橫向捲軸遊戲
+   - 跳躍收集正確字母拼出單字
+   - 三種難度等級，速度與障礙物逐漸增加
+   - HP 系統、粒子特效、畫面震動效果
+
 ### 🎯 遊戲化系統 | Gamification Features
 
 - **經驗值與等級** - 完成任務賺取 XP，持續升級
 - **寶石獎勵系統** - 累積寶石解鎖更多內容
 - **寶石商店** - 使用寶石購買道具，提升學習效率
-- **成就徽章** - 12 種成就等你解鎖
+- **成就徽章** - 14 種成就等你解鎖
 - **道具系統** - 收集各種遊戲道具
 - **連續天數** - 追蹤學習連勝紀錄
 - **每日任務** - 每天三個任務保持學習動力
@@ -93,17 +99,19 @@ english_savior/
 │   ├── style.css       # 全域樣式與 UI 元件
 │   ├── minecraft.css   # Minecraft 主題樣式
 │   ├── roblox.css      # Roblox 主題樣式
-│   └── youtube.css     # YouTube 主題樣式
+│   ├── youtube.css     # YouTube 主題樣式
+│   └── spelling.css    # 拼字跑酷主題樣式
 ├── js/
 │   ├── data/           # 學習內容資料（分類）
-│   │   ├── vocab.js    # 單字庫（1300+ 單字）
-│   │   ├── grammar.js  # 文法題庫（250 題）
-│   │   ├── video.js    # 影片課程
+│   │   ├── vocab.js    # 單字庫（1,200+ 單字）
+│   │   ├── grammar.js  # 文法題庫（430+ 題）
+│   │   ├── video.js    # 影片課程（42 課）
 │   │   └── game.js     # 成就、任務、道具、商店
-│   ├── engine.js       # 遊戲引擎（XP、等級、成就、儲存、音效）
+│   ├── engine.js       # 遊戲引擎（XP、等級、成就、商店、Buff、儲存、音效）
 │   ├── minecraft.js    # Minecraft 單字遊戲邏輯
 │   ├── roblox.js       # Roblox 文法遊戲邏輯
 │   ├── youtube.js      # YouTube 影片課程邏輯
+│   ├── spelling.js     # 拼字跑酷遊戲邏輯（Canvas）
 │   ├── daily.js        # 每日任務系統
 │   ├── tts.js          # 文字轉語音模組
 │   └── app.js          # 應用程式初始化與導航
@@ -120,10 +128,10 @@ english_savior/
 - **簡單難度**: 基礎遊戲相關單字
 - **中等難度**: 進階詞彙
 - **困難難度**: 高階詞彙
-- **總計**: 1300+ 個精選單字（涵蓋台灣國小英語 1000 字）
+- **總計**: 1,200+ 個精選單字（涵蓋台灣國小英語 1000 字）
 
 ### 文法主題 | Grammar Topics
-250 道題目，涵蓋 60+ 種重要文法概念：
+430+ 道題目，涵蓋 62 種重要文法概念：
 - 基礎時態：現在簡單式、現在進行式、過去式、過去進行式、未來式
 - 完成式：現在完成式、現在完成進行式、過去完成式、過去完成進行式、未來完成式
 - 比較級、最高級
@@ -136,12 +144,10 @@ english_savior/
 - 片語動詞、名詞複數、所有格、-ing/-ed 形容詞等
 
 ### 影片課程 | Video Lessons
-5 堂遊戲主題英文課程：
-1. Minecraft 第一夜生存指南
-2. Roblox 新手必玩遊戲
-3. Minecraft 紅石基礎教學
-4. Roblox 安全交易指南
-5. Minecraft 建造你的第一棟房子
+42 堂遊戲主題英文課程，含 126 道理解測驗題，主題包括：
+- Minecraft 生存、挖礦、附魔、釀藥、農場、建築、終界龍
+- Roblox 入門遊戲、安全交易、Blox Fruits、Adopt Me!、Obby 技巧
+- YouTube 遊戲頻道經營等
 
 ## 🛠️ 技術架構 | Technology Stack
 
@@ -150,6 +156,7 @@ english_savior/
 - **儲存**: LocalStorage API
 - **音效**: Web Audio API（合成音效）
 - **語音**: Web Speech API（TTS 文字轉語音）
+- **繪圖**: Canvas 2D API（拼字跑酷遊戲）
 - **字體**: Google Fonts (Press Start 2P, Noto Sans TC)
 - **構建工具**: 無（免構建工具）
 - **依賴項**: 零外部依賴
@@ -158,7 +165,7 @@ english_savior/
 
 ### 新增單字 | Adding Vocabulary
 
-編輯 `js/data.js`，在 `VOCAB_DATA` 中新增：
+編輯 `js/data/vocab.js`，在 `VOCAB_DATA` 中新增：
 
 ```javascript
 const VOCAB_DATA = {
@@ -176,7 +183,7 @@ const VOCAB_DATA = {
 
 ### 新增文法題 | Adding Grammar Questions
 
-在 `js/data.js` 的 `GRAMMAR_DATA` 中新增：
+在 `js/data/grammar.js` 的 `GRAMMAR_DATA` 中新增：
 
 ```javascript
 const GRAMMAR_DATA = [
@@ -193,7 +200,7 @@ const GRAMMAR_DATA = [
 
 ### 新增影片課程 | Adding Video Lessons
 
-在 `js/data.js` 的 `VIDEO_LESSONS` 中新增課程。
+在 `js/data/video.js` 的 `VIDEO_LESSONS` 中新增課程。
 
 ## 📊 遊戲數據系統 | Game Data System
 
@@ -208,12 +215,14 @@ const GRAMMAR_DATA = [
 - 音效設定偏好
 
 ### 成就系統 | Achievement System
-12 種成就類型：
-- 學習里程碑（首個單字、10 個單字、50 個單字）
+14 種成就類型：
+- 學習里程碑（首個單字、10 個單字、50 個單字、100 個單字）
 - 文法精通（首次通關、10 次通關、完美通關）
+- 影片課程（完成首個影片）
 - 等級獎勵（等級 5、等級 10）
 - 連勝獎勵（3 天、7 天）
 - 財富累積（100 寶石）
+- 拼字跑酷（完成首個單字）
 
 ## 🤝 貢獻指南 | Contributing
 
