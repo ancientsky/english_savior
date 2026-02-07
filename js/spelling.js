@@ -10,8 +10,10 @@ const SpellingGame = (() => {
   const GROUND_H = 45;
   const GROUND_Y = CANVAS_H - GROUND_H;
   const CHAR_X = 90;
-  const GRAVITY = 0.5;
-  const JUMP_VEL = -15;
+  const GRAVITY = 0.38;
+  const JUMP_VEL = -14;
+  const APEX_GRAVITY = 0.18;
+  const APEX_THRESHOLD = 3;
   const MAX_HP = 5;
   const WORDS_TO_WIN = 10;
   const HP_REWARD = 2;
@@ -216,9 +218,10 @@ const SpellingGame = (() => {
     // Scroll ground
     groundScroll = (groundScroll + speed) % 40;
 
-    // Character physics
+    // Character physics (apex float: lower gravity near peak for longer hang time)
     if (isJumping) {
-      charVY += GRAVITY;
+      const g = (Math.abs(charVY) < APEX_THRESHOLD) ? APEX_GRAVITY : GRAVITY;
+      charVY += g;
       charY += charVY;
       if (charY >= GROUND_Y) {
         charY = GROUND_Y;
