@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
   MinecraftGame.init();
   RobloxGame.init();
   YoutubeGame.init();
+  SpellingGame.init();
   DailyQuests.init();
 
   // Navigation

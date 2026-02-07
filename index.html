@@ -93,6 +93,7 @@
   <link rel="stylesheet" href="css/minecraft.css">
   <link rel="stylesheet" href="css/roblox.css">
   <link rel="stylesheet" href="css/youtube.css">
+  <link rel="stylesheet" href="css/spelling.css">
 </head>
 <body>
   <!-- Top HUD Bar -->
@@ -132,6 +133,9 @@
     <button class="nav-tab" data-zone="youtube">
       <span class="nav-icon">📺</span><span class="nav-label">看片學英文</span>
     </button>
+    <button class="nav-tab" data-zone="spelling">
+      <span class="nav-icon">🦖</span><span class="nav-label">拼字跑酷</span>
+    </button>
     <button class="nav-tab" data-zone="daily">
       <span class="nav-icon">📋</span><span class="nav-label">每日任務</span>
     </button>
@@ -160,6 +164,12 @@
           <h3>看片學英文</h3>
           <p>看遊戲相關影片，回答問題賺取獎勵！</p>
           <span class="card-tag">Comprehension</span>
+        </div>
+        <div class="hub-card spelling-card" data-zone="spelling">
+          <div class="card-icon">🦖</div>
+          <h3>拼字跑酷</h3>
+          <p>像 Chrome 恐龍一樣跑酷，撞對字母拼出單字！</p>
+          <span class="card-tag">Spelling</span>
         </div>
       </div>
     </div>
@@ -263,6 +273,59 @@
     </div>
   </main>
 
+  <!-- Zone: Spelling Runner -->
+  <main id="zone-spelling" class="zone">
+    <div class="sp-container">
+      <div class="sp-header">
+        <h2>🦖 拼字跑酷</h2>
+        <div class="sp-difficulty">
+          <button class="sp-diff-btn active" data-diff="easy">簡單</button>
+          <button class="sp-diff-btn" data-diff="medium">中等</button>
+          <button class="sp-diff-btn" data-diff="hard">困難</button>
+        </div>
+      </div>
+      <div class="sp-game-wrapper">
+        <div class="sp-hud">
+          <div class="sp-hp" id="sp-hp">❤️❤️❤️❤️❤️</div>
+          <div class="sp-word-display">
+            <div class="sp-word-en" id="sp-word-en"></div>
+            <div class="sp-word-zh" id="sp-word-zh">準備開始跑酷...</div>
+          </div>
+          <div class="sp-score" id="sp-score">0 / 10</div>
+        </div>
+        <div class="sp-canvas-container">
+          <canvas id="sp-canvas"></canvas>
+          <!-- Start Screen Overlay -->
+          <div class="sp-start-screen" id="sp-start-screen">
+            <h3>🦖 拼字跑酷</h3>
+            <p class="sp-start-subtitle">撞對字母，拼出單字！</p>
+            <p class="sp-instructions">✅ 正確字母 → 不要跳，直接撞上去收集</p>
+            <p class="sp-instructions">❌ 錯誤字母 → 按空白鍵跳過去</p>
+            <p class="sp-instructions">❤️ 撞到錯的字母會扣血，拼完單字可回血</p>
+            <p class="sp-start-hint">按空白鍵或點擊螢幕開始</p>
+          </div>
+          <!-- Game Over Overlay -->
+          <div class="sp-gameover-screen" id="sp-gameover-screen" style="display:none">
+            <h3>💀 Game Over</h3>
+            <div class="sp-final-info">
+              完成了 <strong id="sp-final-words">0</strong> 個單字
+            </div>
+            <button class="sp-btn danger" id="sp-restart-btn">🔄 再玩一次</button>
+          </div>
+          <!-- Round Complete Overlay -->
+          <div class="sp-complete-screen" id="sp-complete-screen" style="display:none">
+            <h3>🎉 太厲害了！</h3>
+            <div class="sp-complete-info">
+              完成了 <strong id="sp-complete-words">10</strong> 個單字！
+            </div>
+            <div class="sp-reward-highlight">💎 +<span id="sp-complete-gems">10</span> 鑽石</div>
+            <button class="sp-btn" id="sp-complete-restart">🦖 再玩一輪</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
   <!-- Zone: Daily Quests -->
   <main id="zone-daily" class="zone">
     <div class="daily-container">
@@ -362,6 +425,19 @@
           </ul>
         </div>
         <div class="help-section">
+          <h3>🦖 拼字跑酷</h3>
+          <p>像 Chrome 恐龍遊戲一樣跑酷，在跑動中收集正確字母拼出單字！</p>
+          <ul>
+            <li>螢幕上方會顯示目標單字和中文翻譯</li>
+            <li>地上有帶字母的障礙物不斷出現</li>
+            <li>遇到「正確的下一個字母」→ 不要跳，撞上去收集</li>
+            <li>遇到「錯誤字母」→ 按空白鍵或點擊螢幕跳過</li>
+            <li>撞到錯誤字母會扣 1 格血（共 5 格）</li>
+            <li>成功拼完一個單字可回復 2 格血</li>
+            <li>完成 10 個單字獲得 10 💎 鑽石獎勵！</li>
+          </ul>
+        </div>
+        <div class="help-section">
           <h3>📋 每日任務</h3>
           <p>每天完成三個任務，保持學習連勝！</p>
           <ul>
@@ -393,6 +469,7 @@
   <script src="js/minecraft.js"></script>
   <script src="js/roblox.js"></script>
   <script src="js/youtube.js"></script>
+  <script src="js/spelling.js"></script>
   <script src="js/daily.js"></script>
   <script src="js/app.js"></script>
 </body>

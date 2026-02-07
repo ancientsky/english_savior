@@ -1,0 +1,253 @@
+/* ===== Spelling Runner Zone ===== */
+.sp-container { max-width: 820px; margin: 0 auto; }
+
+.sp-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.sp-header h2 { font-size: 20px; }
+
+.sp-difficulty {
+  display: flex;
+  gap: 6px;
+}
+.sp-diff-btn {
+  padding: 6px 14px;
+  border: 2px solid #555;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-dim);
+  font-family: var(--pixel-font);
+  font-size: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.sp-diff-btn.active {
+  border-color: var(--gold);
+  color: var(--gold);
+  background: rgba(245,197,24,0.1);
+}
+.sp-diff-btn:hover { border-color: var(--gold); }
+
+/* Game wrapper */
+.sp-game-wrapper {
+  border: 2px solid #555;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #111;
+}
+
+/* HUD above canvas */
+.sp-hud {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  background: rgba(0,0,0,0.6);
+  border-bottom: 1px solid #333;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sp-hp {
+  font-size: 18px;
+  letter-spacing: 2px;
+  min-width: 120px;
+}
+
+.sp-word-display {
+  text-align: center;
+  flex: 1;
+  min-width: 200px;
+}
+
+.sp-word-en {
+  font-family: var(--pixel-font);
+  font-size: 16px;
+  letter-spacing: 4px;
+  display: flex;
+  justify-content: center;
+  gap: 2px;
+  flex-wrap: wrap;
+}
+
+.sp-letter {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.05);
+  color: #555;
+  border: 1px solid #333;
+  min-width: 24px;
+  text-align: center;
+  transition: all 0.3s;
+}
+.sp-letter.collected {
+  color: var(--green);
+  background: rgba(78,204,163,0.15);
+  border-color: var(--green);
+  text-shadow: 0 0 8px var(--green);
+}
+.sp-letter.next {
+  color: var(--gold);
+  background: rgba(245,197,24,0.12);
+  border-color: var(--gold);
+  animation: sp-letter-pulse 1s ease-in-out infinite;
+}
+
+@keyframes sp-letter-pulse {
+  0%, 100% { box-shadow: 0 0 4px rgba(245,197,24,0.3); }
+  50% { box-shadow: 0 0 12px rgba(245,197,24,0.6); }
+}
+
+.sp-word-zh {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-top: 4px;
+  font-family: var(--ui-font);
+}
+
+.sp-score {
+  font-family: var(--pixel-font);
+  font-size: 12px;
+  color: var(--gold);
+  min-width: 80px;
+  text-align: right;
+}
+
+/* Canvas area */
+.sp-canvas-container {
+  position: relative;
+  width: 100%;
+  line-height: 0;
+}
+.sp-canvas-container canvas {
+  width: 100%;
+  height: auto;
+  display: block;
+  image-rendering: pixelated;
+}
+
+/* Overlay screens */
+.sp-start-screen,
+.sp-gameover-screen,
+.sp-complete-screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 10, 30, 0.88);
+  z-index: 5;
+  text-align: center;
+  padding: 20px;
+}
+
+.sp-start-screen h3 {
+  font-family: var(--pixel-font);
+  font-size: 22px;
+  color: var(--gold);
+  margin-bottom: 12px;
+  text-shadow: 0 0 20px rgba(245,197,24,0.5);
+}
+.sp-start-screen .sp-start-subtitle {
+  font-size: 15px;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+.sp-start-screen .sp-instructions {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+  line-height: 1.6;
+}
+.sp-start-screen .sp-start-hint {
+  font-family: var(--pixel-font);
+  font-size: 11px;
+  color: var(--green);
+  animation: sp-blink 1.2s ease-in-out infinite;
+}
+
+@keyframes sp-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* Game Over screen */
+.sp-gameover-screen h3 {
+  font-family: var(--pixel-font);
+  font-size: 22px;
+  color: var(--accent);
+  margin-bottom: 12px;
+}
+.sp-gameover-screen .sp-final-info {
+  font-size: 15px;
+  color: var(--text);
+  margin-bottom: 16px;
+  line-height: 1.8;
+}
+
+/* Complete screen */
+.sp-complete-screen h3 {
+  font-family: var(--pixel-font);
+  font-size: 20px;
+  color: var(--gold);
+  margin-bottom: 12px;
+}
+.sp-complete-screen .sp-complete-info {
+  font-size: 15px;
+  color: var(--text);
+  margin-bottom: 16px;
+  line-height: 1.8;
+}
+.sp-reward-highlight {
+  font-family: var(--pixel-font);
+  font-size: 18px;
+  color: var(--green);
+  margin: 8px 0;
+}
+
+/* Buttons */
+.sp-btn {
+  padding: 12px 28px;
+  border: 2px solid var(--gold);
+  border-radius: 8px;
+  background: rgba(245,197,24,0.15);
+  color: var(--gold);
+  font-family: var(--pixel-font);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-top: 8px;
+}
+.sp-btn:hover {
+  background: rgba(245,197,24,0.3);
+  box-shadow: 0 0 15px rgba(245,197,24,0.3);
+}
+.sp-btn.danger {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(233,69,96,0.15);
+}
+.sp-btn.danger:hover {
+  background: rgba(233,69,96,0.3);
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+  .sp-hud {
+    padding: 8px 10px;
+    gap: 4px;
+  }
+  .sp-hp { font-size: 14px; min-width: auto; }
+  .sp-word-en { font-size: 12px; letter-spacing: 2px; }
+  .sp-word-zh { font-size: 11px; }
+  .sp-score { font-size: 10px; min-width: auto; }
+  .sp-header h2 { font-size: 16px; }
+  .sp-diff-btn { padding: 4px 10px; font-size: 9px; }
+  .sp-start-screen h3 { font-size: 16px; }
+  .sp-letter { padding: 1px 4px; min-width: 18px; font-size: 12px; }
+}

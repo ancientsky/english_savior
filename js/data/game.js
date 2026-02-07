@@ -12,6 +12,8 @@ const ACHIEVEMENTS = [
   { id: 'streak7', name: '一週戰士', desc: '連續學習 7 天', icon: '💪', condition: s => s.streak >= 7 },
   { id: 'gems100', name: '百寶收藏家', desc: '累積 100 顆寶石', icon: '💎', condition: s => s.gems >= 100 },
   { id: 'perfect_grammar', name: '完美文法', desc: '一輪文法全部答對', icon: '🏅', condition: s => s.perfectGrammarRun },
+  { id: 'spelling_first', name: '拼字新手', desc: '在拼字跑酷中完成第一個單字', icon: '🦖', condition: s => s.wordsLearned >= 1 },
+  { id: 'hundred_words', name: '百字達人', desc: '學會 100 個單字', icon: '🎓', condition: s => s.wordsLearned >= 100 },
 ];
 
 const DAILY_QUESTS = [
