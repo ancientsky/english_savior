@@ -1,0 +1,445 @@
+/* ===== Listening Game Zone — Magical Card Theme ===== */
+.ls-container { max-width: 820px; margin: 0 auto; }
+
+.ls-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.ls-header h2 { font-size: 20px; }
+
+.ls-difficulty {
+  display: flex;
+  gap: 6px;
+}
+.ls-diff-btn {
+  padding: 6px 14px;
+  border: 2px solid #555;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-dim);
+  font-family: var(--pixel-font);
+  font-size: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.ls-diff-btn.active {
+  border-color: var(--purple);
+  color: var(--purple);
+  background: rgba(123,47,247,0.1);
+}
+.ls-diff-btn:hover { border-color: var(--purple); }
+
+/* Game wrapper */
+.ls-game-wrapper {
+  border: 2px solid #555;
+  border-radius: 12px;
+  overflow: hidden;
+  background: linear-gradient(180deg, #0d0d1a 0%, #1a1030 100%);
+  min-height: 420px;
+  position: relative;
+}
+
+/* HUD bar */
+.ls-hud {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  background: rgba(0,0,0,0.5);
+  border-bottom: 1px solid #333;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ls-lives {
+  font-size: 18px;
+  letter-spacing: 2px;
+  min-width: 80px;
+}
+.ls-round-info {
+  font-family: var(--pixel-font);
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.ls-timer {
+  font-family: var(--pixel-font);
+  font-size: 14px;
+  color: var(--gold);
+  min-width: 60px;
+  text-align: right;
+}
+.ls-timer.urgent {
+  color: var(--accent);
+  animation: ls-timer-pulse 0.5s ease-in-out infinite;
+}
+@keyframes ls-timer-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* Game area */
+.ls-game-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px 16px 24px;
+  gap: 24px;
+}
+
+/* ===== Wizard ===== */
+.ls-wizard-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.ls-wizard {
+  font-size: 56px;
+  filter: drop-shadow(0 0 15px rgba(123,47,247,0.6));
+  transition: transform 0.3s;
+  cursor: pointer;
+}
+.ls-wizard.casting {
+  animation: ls-wizard-cast 0.6s ease-in-out;
+}
+@keyframes ls-wizard-cast {
+  0% { transform: scale(1) rotate(0deg); }
+  25% { transform: scale(1.15) rotate(-5deg); }
+  50% { transform: scale(1.2) rotate(5deg); filter: drop-shadow(0 0 25px rgba(123,47,247,0.9)); }
+  75% { transform: scale(1.1) rotate(-2deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+.ls-wizard-label {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-family: var(--pixel-font);
+}
+.ls-replay-hint {
+  font-size: 11px;
+  color: var(--purple);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.ls-replay-hint.visible {
+  opacity: 1;
+}
+
+/* ===== Cards ===== */
+.ls-cards {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+  perspective: 800px;
+}
+
+.ls-card {
+  width: 160px;
+  min-height: 180px;
+  border: 2px solid rgba(123,47,247,0.4);
+  border-radius: 12px;
+  background: linear-gradient(145deg, #1e1040, #2a1555);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px 12px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.25s, border-color 0.25s, box-shadow 0.25s;
+  /* Start hidden for deal animation */
+  opacity: 0;
+  transform: translateY(40px) rotateY(90deg) scale(0.8);
+}
+
+/* Magical border shimmer */
+.ls-card::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: 12px;
+  background: conic-gradient(from 0deg, transparent 0%, rgba(123,47,247,0.3) 25%, transparent 50%, rgba(78,204,163,0.3) 75%, transparent 100%);
+  z-index: -1;
+  animation: ls-card-shimmer 4s linear infinite;
+}
+@keyframes ls-card-shimmer {
+  to { transform: rotate(360deg); }
+}
+
+/* Card inner glow particles */
+.ls-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  background: radial-gradient(ellipse at 50% 0%, rgba(123,47,247,0.15) 0%, transparent 60%);
+  pointer-events: none;
+}
+
+.ls-card:hover {
+  transform: translateY(-4px) scale(1.03);
+  border-color: rgba(123,47,247,0.7);
+  box-shadow: 0 8px 30px rgba(123,47,247,0.3);
+}
+
+/* Deal animation — staggered per card */
+.ls-card.dealt {
+  opacity: 1;
+  transform: translateY(0) rotateY(0deg) scale(1);
+  transition: opacity 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+              transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.ls-card:nth-child(1).dealt { transition-delay: 0s; }
+.ls-card:nth-child(2).dealt { transition-delay: 0.15s; }
+.ls-card:nth-child(3).dealt { transition-delay: 0.3s; }
+
+/* Card states */
+.ls-card.correct {
+  border-color: var(--green) !important;
+  box-shadow: 0 0 30px rgba(78,204,163,0.5) !important;
+  background: linear-gradient(145deg, #0a2a20, #153530) !important;
+}
+.ls-card.wrong {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 20px rgba(233,69,96,0.4) !important;
+  animation: ls-card-shake 0.4s ease-in-out;
+}
+.ls-card.reveal-correct {
+  border-color: var(--green) !important;
+  box-shadow: 0 0 20px rgba(78,204,163,0.4) !important;
+}
+.ls-card.disabled {
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+@keyframes ls-card-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-8px); }
+  40% { transform: translateX(8px); }
+  60% { transform: translateX(-5px); }
+  80% { transform: translateX(5px); }
+}
+
+/* Card content */
+.ls-card-icon {
+  font-size: 32px;
+  filter: drop-shadow(0 0 8px rgba(123,47,247,0.5));
+}
+.ls-card-word {
+  font-family: var(--pixel-font);
+  font-size: 14px;
+  color: var(--gold);
+  text-shadow: 0 0 10px rgba(245,197,24,0.4);
+  text-align: center;
+  line-height: 1.4;
+}
+.ls-card-zh {
+  font-size: 13px;
+  color: var(--text-dim);
+  text-align: center;
+  line-height: 1.4;
+}
+.ls-card-number {
+  position: absolute;
+  top: 6px;
+  left: 8px;
+  font-family: var(--pixel-font);
+  font-size: 9px;
+  color: rgba(123,47,247,0.5);
+}
+
+/* Sparkle decorations on cards */
+.ls-card-sparkle {
+  position: absolute;
+  font-size: 10px;
+  opacity: 0.4;
+  pointer-events: none;
+}
+.ls-card-sparkle:nth-child(1) { top: 8px; right: 10px; animation: ls-sparkle 2s ease-in-out infinite; }
+.ls-card-sparkle:nth-child(2) { bottom: 8px; left: 10px; animation: ls-sparkle 2s ease-in-out infinite 0.7s; }
+.ls-card-sparkle:nth-child(3) { bottom: 10px; right: 12px; animation: ls-sparkle 2s ease-in-out infinite 1.4s; }
+
+@keyframes ls-sparkle {
+  0%, 100% { opacity: 0.2; transform: scale(0.8); }
+  50% { opacity: 0.7; transform: scale(1.2); }
+}
+
+/* ===== Feedback ===== */
+.ls-feedback {
+  font-family: var(--pixel-font);
+  font-size: 12px;
+  text-align: center;
+  min-height: 20px;
+  transition: opacity 0.3s;
+}
+.ls-feedback.correct { color: var(--green); }
+.ls-feedback.wrong { color: var(--accent); }
+
+/* ===== Start Screen Overlay ===== */
+.ls-start-screen,
+.ls-gameover-screen,
+.ls-complete-screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 10, 30, 0.92);
+  z-index: 5;
+  text-align: center;
+  padding: 20px;
+  gap: 8px;
+}
+
+.ls-start-screen h3 {
+  font-family: var(--pixel-font);
+  font-size: 18px;
+  color: var(--purple);
+  text-shadow: 0 0 20px rgba(123,47,247,0.5);
+  line-height: 1.4;
+}
+.ls-start-screen .ls-start-wizard {
+  font-size: 64px;
+  margin: 8px 0;
+  filter: drop-shadow(0 0 20px rgba(123,47,247,0.6));
+  animation: ls-wizard-idle 2s ease-in-out infinite;
+}
+@keyframes ls-wizard-idle {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+.ls-start-screen .ls-start-subtitle {
+  font-size: 15px;
+  color: var(--text);
+  line-height: 1.5;
+}
+.ls-start-screen .ls-instructions {
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+.ls-start-screen .ls-start-hint {
+  font-family: var(--pixel-font);
+  font-size: 10px;
+  color: var(--purple);
+  margin-top: 8px;
+  animation: ls-blink 1.2s ease-in-out infinite;
+}
+@keyframes ls-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* ===== Game Over Screen ===== */
+.ls-gameover-screen h3 {
+  font-family: var(--pixel-font);
+  font-size: 22px;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+.ls-gameover-screen .ls-final-info {
+  font-size: 15px;
+  color: var(--text);
+  margin-bottom: 8px;
+  line-height: 1.8;
+}
+.ls-gameover-screen .ls-final-reward {
+  font-family: var(--pixel-font);
+  font-size: 14px;
+  color: var(--green);
+  margin-bottom: 12px;
+}
+
+/* ===== Complete Screen ===== */
+.ls-complete-screen h3 {
+  font-family: var(--pixel-font);
+  font-size: 20px;
+  color: var(--gold);
+  margin-bottom: 8px;
+}
+.ls-complete-screen .ls-complete-info {
+  font-size: 15px;
+  color: var(--text);
+  margin-bottom: 8px;
+  line-height: 1.8;
+}
+.ls-reward-highlight {
+  font-family: var(--pixel-font);
+  font-size: 18px;
+  color: var(--green);
+  margin: 8px 0;
+}
+
+/* ===== Buttons ===== */
+.ls-btn {
+  padding: 12px 28px;
+  border: 2px solid var(--purple);
+  border-radius: 8px;
+  background: rgba(123,47,247,0.15);
+  color: var(--purple);
+  font-family: var(--pixel-font);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-top: 8px;
+}
+.ls-btn:hover {
+  background: rgba(123,47,247,0.3);
+  box-shadow: 0 0 15px rgba(123,47,247,0.3);
+}
+.ls-btn.danger {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(233,69,96,0.15);
+}
+.ls-btn.danger:hover {
+  background: rgba(233,69,96,0.3);
+}
+
+/* ===== Timer Bar ===== */
+.ls-timer-bar-container {
+  width: 100%;
+  max-width: 400px;
+  height: 6px;
+  background: #333;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.ls-timer-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--purple), var(--blue));
+  border-radius: 3px;
+  transition: width 0.1s linear;
+}
+.ls-timer-bar.urgent {
+  background: linear-gradient(90deg, var(--accent), #ff6b6b);
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 600px) {
+  .ls-hud {
+    padding: 8px 10px;
+    gap: 4px;
+  }
+  .ls-lives { font-size: 14px; min-width: auto; }
+  .ls-round-info { font-size: 9px; }
+  .ls-timer { font-size: 11px; min-width: auto; }
+  .ls-header h2 { font-size: 16px; }
+  .ls-diff-btn { padding: 4px 10px; font-size: 9px; }
+  .ls-card {
+    width: 130px;
+    min-height: 150px;
+    padding: 12px 8px;
+  }
+  .ls-card-word { font-size: 12px; }
+  .ls-card-icon { font-size: 24px; }
+  .ls-cards { gap: 10px; }
+  .ls-wizard { font-size: 42px; }
+  .ls-start-screen h3 { font-size: 14px; }
+  .ls-start-screen .ls-start-wizard { font-size: 48px; }
+}

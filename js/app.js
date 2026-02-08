@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
   RobloxGame.init();
   YoutubeGame.init();
   SpellingGame.init();
+  ListeningGame.init();
   DailyQuests.init();
 
   // Navigation

@@ -94,6 +94,7 @@
   <link rel="stylesheet" href="css/roblox.css">
   <link rel="stylesheet" href="css/youtube.css">
   <link rel="stylesheet" href="css/spelling.css">
+  <link rel="stylesheet" href="css/listening.css">
 </head>
 <body>
   <!-- Top HUD Bar -->
@@ -136,6 +137,9 @@
     <button class="nav-tab" data-zone="spelling">
       <span class="nav-icon">🦖</span><span class="nav-label">拼字跑酷</span>
     </button>
+    <button class="nav-tab" data-zone="listening">
+      <span class="nav-icon">🔮</span><span class="nav-label">魔法聽力</span>
+    </button>
     <button class="nav-tab" data-zone="daily">
       <span class="nav-icon">📋</span><span class="nav-label">每日任務</span>
     </button>
@@ -170,6 +174,12 @@
           <h3>拼字跑酷</h3>
           <p>像 Chrome 恐龍一樣跑酷，撞對字母拼出單字！</p>
           <span class="card-tag">Spelling</span>
+        </div>
+        <div class="hub-card listening-card" data-zone="listening">
+          <div class="card-icon">🔮</div>
+          <h3>魔法聽力</h3>
+          <p>魔法師唸出咒語，選出正確的魔法卡片來通關！</p>
+          <span class="card-tag">Listening</span>
         </div>
       </div>
     </div>
@@ -326,6 +336,72 @@
     </div>
   </main>
 
+  <!-- Zone: Listening Game -->
+  <main id="zone-listening" class="zone">
+    <div class="ls-container">
+      <div class="ls-header">
+        <h2>🔮 魔法聽力教室</h2>
+        <div class="ls-difficulty">
+          <button class="ls-diff-btn active" data-diff="easy">簡單</button>
+          <button class="ls-diff-btn" data-diff="medium">中等</button>
+          <button class="ls-diff-btn" data-diff="hard">困難</button>
+        </div>
+      </div>
+      <div class="ls-game-wrapper">
+        <div class="ls-hud">
+          <div class="ls-lives" id="ls-lives">❤️❤️❤️</div>
+          <div class="ls-round-info" id="ls-round-info">回合 1 / 10</div>
+          <div class="ls-timer" id="ls-timer">--</div>
+        </div>
+        <div class="ls-game-area" id="ls-game-area">
+          <!-- Wizard -->
+          <div class="ls-wizard-area">
+            <div class="ls-wizard" id="ls-wizard" title="點擊重聽（-2秒）">🧙‍♂️</div>
+            <div class="ls-replay-hint" id="ls-replay-hint">點擊魔法師可重聽（-2s）</div>
+          </div>
+          <!-- Timer bar -->
+          <div class="ls-timer-bar-container">
+            <div class="ls-timer-bar" id="ls-timer-bar" style="width:100%"></div>
+          </div>
+          <!-- Cards -->
+          <div class="ls-cards" id="ls-cards">
+            <!-- Generated dynamically -->
+          </div>
+          <!-- Feedback -->
+          <div class="ls-feedback" id="ls-feedback"></div>
+        </div>
+        <!-- Start Screen -->
+        <div class="ls-start-screen" id="ls-start-screen">
+          <h3>🔮 魔法聽力教室</h3>
+          <div class="ls-start-wizard">🧙‍♂️</div>
+          <p class="ls-start-subtitle">聽魔法師的咒語，選出正確的魔法卡片！</p>
+          <p class="ls-instructions">🃏 每回合發出 3 張魔法卡片</p>
+          <p class="ls-instructions">🔊 魔法師會唸出其中一個英文單字</p>
+          <p class="ls-instructions">👆 在時間內選出正確的卡片</p>
+          <p class="ls-instructions">❤️ 累積 3 次錯誤就 Game Over</p>
+          <p class="ls-instructions">💡 點擊魔法師可重聽，但會扣 2 秒</p>
+          <button class="ls-btn" id="ls-start-btn">✨ 開始挑戰</button>
+        </div>
+        <!-- Game Over -->
+        <div class="ls-gameover-screen" id="ls-gameover-screen" style="display:none">
+          <h3>💀 Game Over</h3>
+          <div class="ls-final-info">
+            答對了 <strong id="ls-final-correct">0</strong> 題
+          </div>
+          <div class="ls-final-reward" id="ls-final-reward"></div>
+          <button class="ls-btn danger" id="ls-restart-btn">🔄 再玩一次</button>
+        </div>
+        <!-- Complete -->
+        <div class="ls-complete-screen" id="ls-complete-screen" style="display:none">
+          <h3>🎉 挑戰成功！</h3>
+          <div class="ls-complete-info">完成了全部 10 個回合！</div>
+          <div class="ls-reward-highlight">💎 +<span id="ls-complete-gems">15</span> 鑽石</div>
+          <button class="ls-btn" id="ls-complete-restart">🔮 再玩一輪</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
   <!-- Zone: Daily Quests -->
   <main id="zone-daily" class="zone">
     <div class="daily-container">
@@ -438,6 +514,20 @@
           </ul>
         </div>
         <div class="help-section">
+          <h3>🔮 魔法聽力</h3>
+          <p>魔法師會唸出英文單字，在限時內選出正確的魔法卡片！</p>
+          <ul>
+            <li>每回合會發出 3 張魔法卡片</li>
+            <li>魔法師唸出一個英文單字後開始倒數</li>
+            <li>點擊魔法師可重聽，但會扣 2 秒</li>
+            <li>簡單：卡片有英文＋中文（7秒）</li>
+            <li>中等：卡片只有中文翻譯（5秒）</li>
+            <li>困難：卡片只有英文拼字（4秒）</li>
+            <li>累積 3 次錯誤就 Game Over</li>
+            <li>每答對得 1 💎，全部通關再 +5 💎</li>
+          </ul>
+        </div>
+        <div class="help-section">
           <h3>📋 每日任務</h3>
           <p>每天完成三個任務，保持學習連勝！</p>
           <ul>
@@ -470,6 +560,7 @@
   <script src="js/roblox.js"></script>
   <script src="js/youtube.js"></script>
   <script src="js/spelling.js"></script>
+  <script src="js/listening.js"></script>
   <script src="js/daily.js"></script>
   <script src="js/app.js"></script>
 </body>

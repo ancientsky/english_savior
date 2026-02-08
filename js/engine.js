@@ -169,6 +169,7 @@ const GameEngine = (() => {
       dailyWords: 0,
       dailyGrammar: 0,
       dailyVideos: 0,
+      dailyListening: 0,
       dailyDate: null,
       // history
       learnedWordsList: [],
@@ -219,6 +220,7 @@ const GameEngine = (() => {
       state.dailyWords = 0;
       state.dailyGrammar = 0;
       state.dailyVideos = 0;
+      state.dailyListening = 0;
       state.dailyDate = today;
     }
     state.lastPlayDate = today;
