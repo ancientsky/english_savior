@@ -10,10 +10,10 @@ const SpellingGame = (() => {
   const GROUND_H = 45;
   const GROUND_Y = CANVAS_H - GROUND_H;
   const CHAR_X = 90;
-  const GRAVITY = 0.28;
-  const JUMP_VEL = -10;
-  const APEX_GRAVITY = 0.12;
-  const APEX_THRESHOLD = 4;
+  const GRAVITY = 0.38;
+  const JUMP_VEL = -8.5;
+  const APEX_GRAVITY = 0.22;
+  const APEX_THRESHOLD = 2.5;
   const MAX_HP = 5;
   const WORDS_TO_WIN = 10;
   const HP_REWARD = 2;
@@ -38,7 +38,7 @@ const SpellingGame = (() => {
   let state = 'idle'; // idle | running | gameover | complete
   let diff = 'easy';
   let hp, wordsCompleted, currentWord, letterIndex;
-  let obstacles, groundScroll, speed, frameCount;
+  let obstacles, groundScroll, mountainScroll, speed, frameCount;
   let usedWords;
   let distSinceCorrect;
   let nextObstacleAt;
@@ -163,6 +163,7 @@ const SpellingGame = (() => {
     particles = [];
     collectEffects = [];
     groundScroll = 0;
+    mountainScroll = 0;
     speed = cfg.speed;
     frameCount = 0;
     usedWords = [];
@@ -229,6 +230,7 @@ const SpellingGame = (() => {
     gameTime += dt;
 
     // Scroll ground
+    mountainScroll += speed * dt;
     groundScroll = (groundScroll + speed * dt) % 40;
 
     // Character physics (apex float: lower gravity near peak for longer hang time)
@@ -523,7 +525,7 @@ const SpellingGame = (() => {
 
     drawSky();
     drawStars();
-    drawMountains(groundScroll);
+    drawMountains(mountainScroll);
     drawCloudsScene();
 
     // Obstacles
@@ -597,9 +599,12 @@ const SpellingGame = (() => {
   }
 
   function drawMountains(scroll) {
+    const totalW = mountains.length * 120;
     for (let i = 0; i < mountains.length; i++) {
       const m = mountains[i];
-      const x = ((m.x - scroll * 0.15) % (CANVAS_W + 200)) - 100;
+      let x = m.x - scroll * 0.15;
+      // Wrap seamlessly using total mountain strip width
+      x = ((x % totalW) + totalW) % totalW - 120;
       ctx.beginPath();
       ctx.moveTo(x, GROUND_Y);
       ctx.lineTo(x + m.w / 2, GROUND_Y - m.h);
