@@ -14,12 +14,15 @@ const ACHIEVEMENTS = [
   { id: 'perfect_grammar', name: '完美文法', desc: '一輪文法全部答對', icon: '🏅', condition: s => s.perfectGrammarRun },
   { id: 'spelling_first', name: '拼字新手', desc: '在拼字跑酷中完成第一個單字', icon: '🦖', condition: s => s.wordsLearned >= 1 },
   { id: 'hundred_words', name: '百字達人', desc: '學會 100 個單字', icon: '🎓', condition: s => s.wordsLearned >= 100 },
+  { id: 'listening_first', name: '聆聽入門', desc: '在魔法聽力中答對第一題', icon: '🔮', condition: s => (s.dailyListening || 0) >= 1 },
+  { id: 'listening_master', name: '聽力大師', desc: '在魔法聽力中一輪全部答對', icon: '🧙‍♂️', condition: s => s.perfectListeningRun },
 ];
 
 const DAILY_QUESTS = [
   { id: 'dq_words', name: '學習 3 個新單字', desc: '在單字合成工坊學習 3 個單字', icon: '⛏️', target: 3, key: 'dailyWords' },
   { id: 'dq_grammar', name: '通過 3 個文法關卡', desc: '在文法跑酷中答對 3 題', icon: '🏃', target: 3, key: 'dailyGrammar' },
   { id: 'dq_video', name: '完成 1 個影片課程', desc: '看完一個影片並通過測驗', icon: '📺', target: 1, key: 'dailyVideos' },
+  { id: 'dq_listening', name: '聽力答對 5 題', desc: '在魔法聽力中答對 5 題', icon: '🔮', target: 5, key: 'dailyListening' },
 ];
 
 const INVENTORY_ITEMS = [
