@@ -42,6 +42,7 @@ const SpellingGame = (() => {
   let usedWords;
   let distSinceCorrect;
   let nextObstacleAt;
+  let lastTime, gameTime;
 
   // Character
   let charY, charVY, isJumping, runFrame;
@@ -174,6 +175,8 @@ const SpellingGame = (() => {
     screenShake = 0;
     damageFlash = 0;
     wordCompleteFlash = 0;
+    lastTime = 0;
+    gameTime = 0;
 
     // Stop idle animation
     if (idleAnimId) { cancelAnimationFrame(idleAnimId); idleAnimId = null; }
@@ -205,25 +208,34 @@ const SpellingGame = (() => {
   }
 
   // ===== MAIN LOOP =====
-  function gameLoop() {
+  const TARGET_FRAME_MS = 1000 / 60; // 60fps baseline
+
+  function gameLoop(timestamp) {
     if (state !== 'running') return;
-    update();
+    if (lastTime === 0) lastTime = timestamp;
+    const rawDt = timestamp - lastTime;
+    lastTime = timestamp;
+    // Normalize to 60fps (dt=1.0 at 60fps, 0.5 at 120fps, 2.0 at 30fps)
+    // Cap to avoid huge jumps when tab regains focus
+    const dt = Math.min(rawDt, 50) / TARGET_FRAME_MS;
+    update(dt);
     render();
     requestAnimationFrame(gameLoop);
   }
 
-  function update() {
+  function update(dt) {
     const cfg = DIFF_CONFIG[diff];
     frameCount++;
+    gameTime += dt;
 
     // Scroll ground
-    groundScroll = (groundScroll + speed) % 40;
+    groundScroll = (groundScroll + speed * dt) % 40;
 
     // Character physics (apex float: lower gravity near peak for longer hang time)
     if (isJumping) {
       const g = (Math.abs(charVY) < APEX_THRESHOLD) ? APEX_GRAVITY : GRAVITY;
-      charVY += g;
-      charY += charVY;
+      charVY += g * dt;
+      charY += charVY * dt;
       if (charY >= GROUND_Y) {
         charY = GROUND_Y;
         charVY = 0;
@@ -231,13 +243,13 @@ const SpellingGame = (() => {
       }
     }
 
-    // Run animation (4 frames)
+    // Run animation (time-based, ~100ms per frame like 6 frames at 60fps)
     if (!isJumping) {
-      runFrame = Math.floor(frameCount / 6) % 4;
+      runFrame = Math.floor(gameTime / 6) % 4;
     }
 
     // Spawn obstacles
-    nextObstacleAt -= speed;
+    nextObstacleAt -= speed * dt;
     if (nextObstacleAt <= 0) {
       spawnObstacle();
       nextObstacleAt = cfg.gapMin + Math.random() * (cfg.gapMax - cfg.gapMin);
@@ -245,7 +257,7 @@ const SpellingGame = (() => {
 
     // Move obstacles
     for (let i = 0; i < obstacles.length; i++) {
-      obstacles[i].x -= speed;
+      obstacles[i].x -= speed * dt;
     }
     obstacles = obstacles.filter(o => o.x + o.w > -60);
 
@@ -262,7 +274,9 @@ const SpellingGame = (() => {
       const oy = GROUND_Y - obs.h;
       if (cx < ox + obs.w && cx + cw > ox && cy < oy + obs.h && cy + ch > oy) {
         obs.hit = true;
-        if (obs.isCorrect) {
+        // Check letter match at collision time (not spawn-time flag)
+        // so that stale obstacles are handled correctly after letterIndex changes
+        if (obs.letter === currentWord.word[letterIndex]) {
           collectLetter(obs);
         } else {
           takeDamage(obs);
@@ -273,23 +287,23 @@ const SpellingGame = (() => {
     // Update particles
     for (let i = particles.length - 1; i >= 0; i--) {
       const p = particles[i];
-      p.x += p.vx;
-      p.y += p.vy;
-      p.vy += 0.1;
-      p.life--;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.vy += 0.1 * dt;
+      p.life -= dt;
       if (p.life <= 0) particles.splice(i, 1);
     }
 
     // Update collect effects
     for (let i = collectEffects.length - 1; i >= 0; i--) {
-      collectEffects[i].y -= 2;
-      collectEffects[i].life--;
+      collectEffects[i].y -= 2 * dt;
+      collectEffects[i].life -= dt;
       if (collectEffects[i].life <= 0) collectEffects.splice(i, 1);
     }
 
     // Clouds
     for (let i = 0; i < clouds.length; i++) {
-      clouds[i].x -= clouds[i].speed;
+      clouds[i].x -= clouds[i].speed * dt;
       if (clouds[i].x + clouds[i].w < 0) {
         clouds[i].x = CANVAS_W + Math.random() * 100;
         clouds[i].y = 15 + Math.random() * 55;
@@ -297,9 +311,9 @@ const SpellingGame = (() => {
     }
 
     // Decay effects
-    if (screenShake > 0) { screenShake *= 0.88; if (screenShake < 0.5) screenShake = 0; }
-    if (damageFlash > 0) damageFlash -= 0.04;
-    if (wordCompleteFlash > 0) wordCompleteFlash -= 0.03;
+    if (screenShake > 0) { screenShake *= Math.pow(0.88, dt); if (screenShake < 0.5) screenShake = 0; }
+    if (damageFlash > 0) damageFlash -= 0.04 * dt;
+    if (wordCompleteFlash > 0) wordCompleteFlash -= 0.03 * dt;
   }
 
   function spawnObstacle() {
