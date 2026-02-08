@@ -10,9 +10,9 @@ const SpellingGame = (() => {
   const GROUND_H = 45;
   const GROUND_Y = CANVAS_H - GROUND_H;
   const CHAR_X = 90;
-  const GRAVITY = 0.317;
+  const GRAVITY = 0.264;
   const JUMP_VEL = -8.5;
-  const APEX_GRAVITY = 0.183;
+  const APEX_GRAVITY = 0.153;
   const APEX_THRESHOLD = 2.5;
   const MAX_HP = 5;
   const WORDS_TO_WIN = 10;
@@ -456,6 +456,10 @@ const SpellingGame = (() => {
           size: 2 + Math.random() * 2,
         });
       }
+      // Clear stale obstacles so old letters aren't evaluated against the new word
+      obstacles = [];
+      const cfg = DIFF_CONFIG[diff];
+      nextObstacleAt = cfg.gapMin;
       pickNewWord();
     }
   }
