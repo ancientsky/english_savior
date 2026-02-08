@@ -1,17 +1,33 @@
 /* ===== YouTube Comprehension Module ===== */
 
 const YoutubeGame = (() => {
-  let currentLessonIndex = 0;
+  let shuffledIndices = [];
+  let currentPosition = 0;
   let selectedAnswers = {};
+
+  function shuffleArray(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function buildShuffledOrder() {
+    shuffledIndices = shuffleArray(Array.from({ length: VIDEO_LESSONS.length }, (_, i) => i));
+    currentPosition = 0;
+  }
 
   function init() {
     document.getElementById('yt-submit-quiz').addEventListener('click', submitQuiz);
     document.getElementById('yt-next-lesson').addEventListener('click', nextLesson);
+    buildShuffledOrder();
     loadLesson();
   }
 
   function loadLesson() {
-    const lesson = VIDEO_LESSONS[currentLessonIndex];
+    const lesson = VIDEO_LESSONS[shuffledIndices[currentPosition]];
     selectedAnswers = {};
 
     // Thumbnail
@@ -141,7 +157,7 @@ const YoutubeGame = (() => {
   }
 
   function submitQuiz() {
-    const lesson = VIDEO_LESSONS[currentLessonIndex];
+    const lesson = VIDEO_LESSONS[shuffledIndices[currentPosition]];
     let correct = 0;
 
     lesson.questions.forEach((q, qi) => {
@@ -181,7 +197,10 @@ const YoutubeGame = (() => {
   }
 
   function nextLesson() {
-    currentLessonIndex = (currentLessonIndex + 1) % VIDEO_LESSONS.length;
+    currentPosition++;
+    if (currentPosition >= shuffledIndices.length) {
+      buildShuffledOrder();
+    }
     loadLesson();
   }
 
