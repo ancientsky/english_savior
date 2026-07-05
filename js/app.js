@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
   ListeningGame.init();
   EmpireGame.init();
   CandyGame.init();
+  SlingGame.init();
   DailyQuests.init();
 
   // Navigation
@@ -23,8 +24,9 @@ document.addEventListener('DOMContentLoaded', () => {
       switchZone(zone);
       // Update daily quests when visiting
       if (zone === 'daily') DailyQuests.render();
-      // Resume the 3D renderer when returning to the empire zone
+      // Resume paused game loops when their zone becomes visible again
       if (zone === 'empire') EmpireGame.onShow();
+      if (zone === 'sling') SlingGame.onShow();
     });
   });
 

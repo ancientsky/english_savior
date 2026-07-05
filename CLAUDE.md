@@ -22,6 +22,7 @@ css/
   listening.css         — Listening game theme
   empire.css            — Empire 3D defense theme
   candy.css             — Candy match-3 theme
+  sling.css             — Word slingshot theme
 js/
   app.js                — Navigation and initialization (DOMContentLoaded entry point)
   engine.js             — Core game engine (XP, levels, gems, inventory, achievements, shop, buff system, daily quest rewards, sound effects, localStorage save)
@@ -32,6 +33,7 @@ js/
   listening.js          — Magical listening card game (Web Speech API)
   empire.js             — Age of Empires-style 3D castle defense (Three.js)
   candy.js              — Candy Crush-style match-3 with vocabulary quizzes
+  sling.js              — Angry Birds-style word slingshot (canvas physics)
   daily.js              — Daily quest tracking and rendering
   tts.js                — Text-to-speech module (Web Speech API)
   vendor/
@@ -41,7 +43,7 @@ js/
     grammar.js          — Grammar questions (GRAMMAR_DATA, 430+ questions, 62 topics)
     video.js            — Video lessons (VIDEO_LESSONS, 42 lessons with 126 quiz questions)
     empire.js           — Empire dialogues (EMPIRE_DIALOGUES) and daily-life English (EMPIRE_LIFE), easy/medium/hard
-    game.js             — Achievements (21), daily quests (6), inventory items, shop items
+    game.js             — Achievements (23), daily quests (7), inventory items, shop items
 reference/
   taiwan_elementary_1000_minecraft_flavor.csv  — Source word list reference
 ```
@@ -58,10 +60,11 @@ All game modules use the IIFE (Immediately Invoked Function Expression) pattern 
 - `ListeningGame` — listening game (listening.js)
 - `EmpireGame` — 3D castle defense (empire.js)
 - `CandyGame` — match-3 vocabulary game (candy.js)
+- `SlingGame` — word slingshot physics game (sling.js)
 - `DailyQuests` — daily quest system (daily.js)
 - `TTSManager` — text-to-speech (tts.js)
 
-Each game module exports `{ init }`. `app.js` calls all `.init()` methods on `DOMContentLoaded`. `EmpireGame` additionally exports `onShow()`, called by app.js when its zone becomes visible to resume the paused 3D renderer.
+Each game module exports `{ init }`. `app.js` calls all `.init()` methods on `DOMContentLoaded`. `EmpireGame` and `SlingGame` additionally export `onShow()`, called by app.js when their zone becomes visible to resume their paused render loops.
 
 ### Adding Content
 - **Vocabulary**: add entries to `VOCAB_DATA` in `js/data/vocab.js` (easy/medium/hard). Each entry needs `word`, `hint` (emoji), `zh` (Chinese explanation), `sentence` (fill-in-the-blank with `___`).
@@ -86,13 +89,14 @@ Each game module exports `{ init }`. `app.js` calls all `.init()` methods on `DO
 | Vocabulary (Minecraft) | 10 XP, 1 gem | 20 XP, 2 gems | 35 XP, 4 gems |
 | Spelling runner | 15 XP + 1 gem/word, +10 gems round bonus | per-word same, +20 gems bonus | per-word same, +30 gems bonus |
 | Listening | 10 XP/correct | 12 XP/correct | 15 XP/correct |
+| Word slingshot | 12 XP + 1 gem/hit, +10 gems round bonus | 16 XP + 1 gem/hit, +15 gems bonus | 20 XP + 1 gem/hit, +20 gems bonus |
 
 Empire (英語帝國) scales by age instead of difficulty: 10/15/20/25 XP + 1 gem per kill in Dark/Feudal/Castle/Imperial age, plus a 5/10/15/20-gem wave-clear bonus. Candy (糖果消消樂) scales by level tier (1-9 easy / 10-19 medium / 20+ hard): level clear grants 30/45/60 XP + 5/8/11 gems, and answering a magic-star vocabulary quiz on the first try grants 15 XP + 1 gem. Every completed daily quest grants 10 XP; completing all of them grants a one-time 50 gems + random item per day.
 
 ### Browser APIs Used
 - **Web Audio API** — synthesized sound effects (SoundManager)
 - **Web Speech API** — text-to-speech pronunciation (TTSManager) and listening game audio
-- **Canvas 2D API** — spelling runner rendering (800×340 px)
+- **Canvas 2D API** — spelling runner rendering (800×340 px) and word slingshot physics (880×420 px)
 - **WebGL via Three.js** — empire 3D battlefield rendering (`js/vendor/three.min.js`, r149)
 - **localStorage** — game state persistence (`english_savior_save` for the engine, `english_savior_empire` for empire campaign progress, `english_savior_candy` for candy level progress)
 

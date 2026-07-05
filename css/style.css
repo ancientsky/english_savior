@@ -179,6 +179,7 @@ body {
 .listening-card { background: linear-gradient(135deg, #2a1050, #4a1d8e); border: 2px solid #7b2ff7; }
 .empire-card { background: linear-gradient(135deg, #4a3510, #8a6237); border: 2px solid #d4af37; }
 .candy-card { background: linear-gradient(135deg, #7a2048, #c44b8c); border: 2px solid #ff7eb9; }
+.sling-card { background: linear-gradient(135deg, #2e5e1e, #5a9c3a); border: 2px solid #a4de7c; }
 
 .card-icon { font-size: 48px; margin-bottom: 12px; }
 .hub-card h3 { font-size: 20px; margin-bottom: 8px; }

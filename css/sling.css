@@ -1,0 +1,158 @@
+/* ===== Word Slingshot (Angry Birds-style) ===== */
+
+.sg-container {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.sg-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sg-header h2 {
+  color: #ffd166;
+  text-shadow: 2px 2px 0 #7a5230;
+}
+
+.sg-difficulty { display: flex; gap: 6px; }
+
+.sg-diff-btn {
+  font-family: inherit;
+  padding: 8px 16px;
+  border: 2px solid #7cb85a;
+  border-radius: 8px;
+  background: transparent;
+  color: #a5d6a0;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.sg-diff-btn:hover { background: rgba(124, 184, 90, 0.15); }
+.sg-diff-btn.active {
+  background: #7cb85a;
+  color: #1c2b14;
+  font-weight: bold;
+}
+
+/* Question prompt bar */
+.sg-prompt {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  background: rgba(30, 45, 22, 0.9);
+  border: 2px solid #7cb85a;
+  border-radius: 10px 10px 0 0;
+  padding: 10px 14px;
+  font-size: 1.1rem;
+  color: #eaf7e2;
+  min-height: 46px;
+  text-align: center;
+}
+
+.sg-hud {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  background: rgba(30, 45, 22, 0.9);
+  border-left: 2px solid #7cb85a;
+  border-right: 2px solid #7cb85a;
+  padding: 6px 14px;
+  font-size: 0.9rem;
+  color: #d6ecc9;
+}
+.sg-ammo { letter-spacing: 1px; font-size: 0.85rem; overflow: hidden; white-space: nowrap; }
+.sg-score { font-weight: bold; color: #ffd166; white-space: nowrap; }
+
+/* Canvas area */
+.sg-canvas-wrap {
+  position: relative;
+  width: 100%;
+  border: 2px solid #7cb85a;
+  border-top: none;
+  border-radius: 0 0 10px 10px;
+  overflow: hidden;
+  line-height: 0;
+  background: #8ed1f5;
+}
+
+#sg-canvas {
+  width: 100%;
+  height: auto;
+  display: block;
+  touch-action: none;
+  cursor: grab;
+}
+#sg-canvas:active { cursor: grabbing; }
+
+.sg-feedback {
+  min-height: 26px;
+  margin-top: 8px;
+  text-align: center;
+  font-size: 1rem;
+  color: #d6ecc9;
+}
+.sg-feedback.correct { color: #4ecca3; }
+.sg-feedback.wrong { color: #ff8fa3; }
+
+/* Overlays: the canvas always has height (fixed aspect from its internal
+   resolution), so absolute overlays are safe here — but they still scroll
+   internally on tiny screens rather than spilling out */
+.sg-start-screen,
+.sg-over-screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: safe center;
+  align-items: center;
+  gap: 10px;
+  background: rgba(20, 34, 14, 0.88);
+  color: #eaf7e2;
+  text-align: center;
+  line-height: 1.6;
+  padding: 16px;
+  z-index: 5;
+  overflow-y: auto;
+}
+
+.sg-start-screen h3, .sg-over-screen h3 {
+  font-size: 1.4rem;
+  color: #ffd166;
+}
+
+.sg-instructions {
+  font-size: 0.85rem;
+  color: #b9d8a8;
+  margin: 0;
+}
+
+.sg-btn {
+  font-family: inherit;
+  font-size: 1.05rem;
+  font-weight: bold;
+  padding: 12px 30px;
+  border: none;
+  border-radius: 24px;
+  cursor: pointer;
+  background: linear-gradient(135deg, #ffd166, #f4a261);
+  color: #4a2c0a;
+  box-shadow: 0 4px 0 #a1611f;
+  transition: transform 0.1s;
+}
+.sg-btn:hover { transform: translateY(-2px); }
+.sg-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #a1611f; }
+
+/* Hub card accent */
+.sling-card .card-icon { filter: drop-shadow(0 0 6px rgba(255, 209, 102, 0.7)); }
+
+@media (max-width: 640px) {
+  .sg-prompt { font-size: 0.95rem; }
+  .sg-ammo { max-width: 55%; text-overflow: ellipsis; }
+}
