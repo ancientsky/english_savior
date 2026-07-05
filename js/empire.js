@@ -139,9 +139,16 @@ const EmpireGame = (() => {
   }
 
   // ===== three.js scene =====
-  function initThree() {
+  // Canvas is 2:1 but never taller than ~55% of the viewport, so the
+  // question panel stays visible in fullscreen / maximized mode
+  function canvasSize() {
     const w = els.wrap.clientWidth || 800;
-    const h = Math.max(300, Math.round(w * 0.5));
+    const h = Math.max(300, Math.min(Math.round(w * 0.5), Math.round(window.innerHeight * 0.55)));
+    return { w, h };
+  }
+
+  function initThree() {
+    const { w, h } = canvasSize();
 
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -984,8 +991,7 @@ const EmpireGame = (() => {
 
   function resizeRenderer() {
     if (!threeReady) return;
-    const w = els.wrap.clientWidth || 800;
-    const h = Math.max(300, Math.round(w * 0.5));
+    const { w, h } = canvasSize();
     renderer.setSize(w, h);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
