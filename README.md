@@ -260,4 +260,3 @@ const GRAMMAR_DATA = [
 **Made with ❤️ for young English learners**
 
 **用 ❤️ 為年輕的英語學習者打造**
-
