@@ -1,0 +1,313 @@
+/* ===== Candy Word Crush (match-3 English game) ===== */
+
+.cd-container {
+  max-width: 620px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.cd-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cd-header h2 {
+  color: #ff7eb9;
+  text-shadow: 2px 2px 0 #7a2048;
+}
+
+.cd-level-display {
+  font-weight: bold;
+  font-size: 1.05rem;
+  color: #fff0f6;
+  background: linear-gradient(135deg, #7a2048, #c44b8c);
+  border: 2px solid #ff7eb9;
+  border-radius: 8px;
+  padding: 6px 14px;
+}
+
+/* HUD: goals + moves */
+.cd-hud {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  background: rgba(60, 20, 40, 0.85);
+  border: 2px solid #c44b8c;
+  border-radius: 10px 10px 0 0;
+  padding: 8px 12px;
+}
+
+.cd-goals {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cd-goal {
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 126, 185, 0.15);
+  border: 1px solid #ff7eb9;
+  border-radius: 20px;
+  padding: 4px 12px;
+  color: #ffd6e8;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.15s;
+}
+.cd-goal:hover { background: rgba(255, 126, 185, 0.3); }
+.cd-goal.done {
+  border-color: #4ecca3;
+  color: #b8f3dd;
+  background: rgba(78, 204, 163, 0.15);
+}
+.cd-goal-emoji { font-size: 1.15rem; }
+.cd-goal-word { font-weight: bold; letter-spacing: 0.5px; }
+.cd-goal-count { font-size: 0.82rem; opacity: 0.9; }
+
+.cd-moves {
+  color: #ffd6e8;
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+.cd-moves b {
+  font-size: 1.3rem;
+  color: #ffd166;
+  margin: 0 2px;
+}
+.cd-moves.low b { color: #e94560; animation: cd-pulse 0.8s infinite; }
+
+@keyframes cd-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* Board */
+.cd-board-wrap {
+  position: relative;
+  background: linear-gradient(180deg, #3c1428, #2b0e1d);
+  border: 2px solid #c44b8c;
+  border-top: none;
+  border-radius: 0 0 10px 10px;
+  padding: 10px;
+}
+
+.cd-board {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 4px;
+  touch-action: none;
+  user-select: none;
+}
+
+.cd-cell {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(18px, 4.5vw, 34px);
+  background: rgba(255, 255, 255, 0.07);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: transform 0.12s, background 0.12s, box-shadow 0.12s;
+}
+.cd-cell:hover { background: rgba(255, 255, 255, 0.14); }
+
+.cd-cell.selected {
+  background: rgba(255, 209, 102, 0.25);
+  box-shadow: 0 0 0 2px #ffd166 inset;
+  transform: scale(1.08);
+}
+
+.cd-cell.star {
+  background: radial-gradient(circle, rgba(255, 209, 102, 0.4), rgba(255, 209, 102, 0.08));
+  box-shadow: 0 0 12px rgba(255, 209, 102, 0.7);
+  animation: cd-star-glow 1.2s infinite;
+}
+
+@keyframes cd-star-glow {
+  0%, 100% { box-shadow: 0 0 8px rgba(255, 209, 102, 0.5); filter: brightness(1); }
+  50% { box-shadow: 0 0 20px rgba(255, 209, 102, 0.95); filter: brightness(1.25); }
+}
+
+.cd-cell.pop { animation: cd-pop 0.24s ease-in forwards; }
+@keyframes cd-pop {
+  0% { transform: scale(1); opacity: 1; }
+  60% { transform: scale(1.25); opacity: 1; }
+  100% { transform: scale(0); opacity: 0; }
+}
+
+.cd-cell.fall { animation: cd-fall 0.22s ease-out; }
+@keyframes cd-fall {
+  0% { transform: translateY(-70%); opacity: 0.3; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+.cd-cell.shake { animation: cd-shake 0.28s; }
+@keyframes cd-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
+.cd-feedback {
+  min-height: 24px;
+  margin-top: 8px;
+  text-align: center;
+  color: #ffd6e8;
+}
+
+/* Overlays (start / clear / fail / quiz) */
+.cd-start-screen,
+.cd-clear-screen,
+.cd-fail-screen,
+.cd-quiz {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  background: rgba(43, 14, 29, 0.93);
+  border-radius: 0 0 10px 10px;
+  color: #ffd6e8;
+  text-align: center;
+  line-height: 1.6;
+  padding: 20px;
+  z-index: 5;
+}
+
+.cd-start-screen h3, .cd-clear-screen h3, .cd-fail-screen h3 {
+  font-size: 1.5rem;
+  color: #ff7eb9;
+}
+
+.cd-instructions {
+  font-size: 0.88rem;
+  color: #d9a3bd;
+  margin: 0;
+}
+
+.cd-start-stats {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.cd-stat {
+  background: rgba(196, 75, 140, 0.25);
+  border: 1px solid #c44b8c;
+  border-radius: 10px;
+  padding: 8px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 84px;
+}
+.cd-stat span { font-size: 1.3rem; line-height: 1.2; }
+.cd-stat b { color: #ffd166; }
+.cd-stat small { color: #d9a3bd; font-size: 0.72rem; }
+
+.cd-btn {
+  font-family: inherit;
+  font-size: 1.05rem;
+  font-weight: bold;
+  padding: 12px 28px;
+  border: none;
+  border-radius: 24px;
+  cursor: pointer;
+  background: linear-gradient(135deg, #ff7eb9, #c44b8c);
+  color: #fff;
+  box-shadow: 0 4px 0 #7a2048;
+  transition: transform 0.1s;
+}
+.cd-btn:hover { transform: translateY(-2px); }
+.cd-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #7a2048; }
+.cd-btn.secondary {
+  background: transparent;
+  color: #d9a3bd;
+  border: 1px solid #c44b8c;
+  box-shadow: none;
+  font-size: 0.85rem;
+  padding: 8px 18px;
+}
+
+/* Quiz overlay */
+.cd-quiz-word {
+  font-size: 1.7rem;
+  font-weight: bold;
+  color: #fff;
+  letter-spacing: 1px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cd-quiz-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  width: 100%;
+  max-width: 440px;
+}
+
+.cd-quiz-option {
+  font-family: inherit;
+  font-size: 1rem;
+  padding: 12px 14px;
+  border: 2px solid #c44b8c;
+  border-radius: 12px;
+  background: rgba(196, 75, 140, 0.2);
+  color: #ffd6e8;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.cd-quiz-option:hover:not(:disabled) {
+  background: rgba(255, 126, 185, 0.35);
+  border-color: #ff7eb9;
+  transform: translateY(-2px);
+}
+.cd-quiz-option:disabled { cursor: default; opacity: 0.85; }
+.cd-quiz-option.correct {
+  background: #1f6f43;
+  border-color: #4ecca3;
+  color: #fff;
+}
+.cd-quiz-option.wrong {
+  background: #7a1f2b;
+  border-color: #e94560;
+  opacity: 0.55;
+}
+.cd-quiz-option.reveal {
+  border-color: #ffd166;
+  animation: cd-reveal 0.8s infinite;
+}
+@keyframes cd-reveal {
+  0%, 100% { box-shadow: 0 0 6px rgba(255, 209, 102, 0.4); }
+  50% { box-shadow: 0 0 16px rgba(255, 209, 102, 0.9); }
+}
+
+.cd-quiz-feedback { min-height: 22px; font-size: 0.95rem; }
+.cd-quiz-feedback.correct { color: #4ecca3; }
+.cd-quiz-feedback.wrong { color: #e94560; }
+.cd-quiz-feedback.hint { color: #ffd166; }
+
+/* Hub card accent */
+.candy-card .card-icon { filter: drop-shadow(0 0 6px rgba(255, 126, 185, 0.7)); }
+
+/* Maximized mode: keep the board a comfortable size, centered */
+body.game-max .cd-container { max-width: min(92vw, 76vh); }
+
+@media (max-width: 480px) {
+  .cd-quiz-options { grid-template-columns: 1fr; }
+  .cd-goal { font-size: 0.78rem; padding: 3px 8px; }
+}

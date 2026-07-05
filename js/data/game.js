@@ -19,6 +19,8 @@ const ACHIEVEMENTS = [
   { id: 'empire_first', name: '帝國新兵', desc: '在英語帝國擊敗第一個敵人', icon: '🏰', condition: s => (s.empireKills || 0) >= 1 },
   { id: 'empire_general', name: '帝國將軍', desc: '在英語帝國擊敗 50 個敵人', icon: '⚔️', condition: s => (s.empireKills || 0) >= 50 },
   { id: 'empire_imperial', name: '帝王時代', desc: '在英語帝國晉升到帝王時代', icon: '👑', condition: s => (s.empireMaxAge || 1) >= 4 },
+  { id: 'candy_first', name: '甜蜜初體驗', desc: '在糖果消消樂通過第一關', icon: '🍬', condition: s => (s.candyLevels || 0) >= 1 },
+  { id: 'candy_master', name: '糖果大師', desc: '在糖果消消樂通過 10 關', icon: '🧁', condition: s => (s.candyLevels || 0) >= 10 },
 ];
 
 const DAILY_QUESTS = [
@@ -27,6 +29,7 @@ const DAILY_QUESTS = [
   { id: 'dq_video', name: '完成 1 個影片課程', desc: '看完一個影片並通過測驗', icon: '📺', target: 1, key: 'dailyVideos' },
   { id: 'dq_listening', name: '聽力答對 5 題', desc: '在魔法聽力中答對 5 題', icon: '🔮', target: 5, key: 'dailyListening' },
   { id: 'dq_empire', name: '守護帝國城堡', desc: '在英語帝國擊敗 5 個敵人', icon: '🏰', target: 5, key: 'dailyEmpire' },
+  { id: 'dq_candy', name: '糖果消消樂過關', desc: '在糖果消消樂通過 1 關', icon: '🍬', target: 1, key: 'dailyCandy' },
 ];
 
 const INVENTORY_ITEMS = [
