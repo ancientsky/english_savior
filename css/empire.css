@@ -86,6 +86,10 @@
   line-height: 1.6;
   padding: 20px;
   z-index: 5;
+  /* On small phones the content can be taller than the canvas box —
+     scroll inside the overlay instead of spilling over the page */
+  overflow-y: auto;
+  justify-content: safe center;
 }
 
 .emp-start-screen h3, .emp-defeat-screen h3 {

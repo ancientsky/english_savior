@@ -65,6 +65,9 @@ const CandyGame = (() => {
 
     loadProgress();
     renderStartStats();
+    els.level.textContent = `第 ${progress.level} 關`;
+    // Screens are normal-flow panels; the board grid is hidden while one shows
+    els.board.style.display = 'none';
 
     els.startBtn.addEventListener('click', () => startLevel(progress.level));
     els.nextBtn.addEventListener('click', () => startLevel(progress.level));
@@ -119,6 +122,7 @@ const CandyGame = (() => {
     els.clearScreen.style.display = 'none';
     els.failScreen.style.display = 'none';
     els.quiz.style.display = 'none';
+    els.board.style.display = 'grid';
     els.feedback.textContent = '';
 
     // Goals: 2 candy types (3 from level 6), counts grow with level
@@ -164,6 +168,7 @@ const CandyGame = (() => {
     saveProgress();
     renderStartStats();
     els.nextBtn.textContent = `🍬 挑戰第 ${progress.level} 關`;
+    els.board.style.display = 'none';
     els.clearScreen.style.display = 'flex';
   }
 
@@ -171,6 +176,7 @@ const CandyGame = (() => {
     playing = false;
     const done = goals.filter(g => g.got >= g.need).length;
     els.failInfo.innerHTML = `步數用完了！完成了 ${done} / ${goals.length} 個目標。<br><small>小提醒：一次消 4 顆會出現 ⭐ 魔法糖果，點它答題可以大爆炸！</small>`;
+    els.board.style.display = 'none';
     els.failScreen.style.display = 'flex';
   }
 
@@ -579,6 +585,7 @@ const CandyGame = (() => {
       els.quizOptions.appendChild(btn);
     });
 
+    els.board.style.display = 'none';
     els.quiz.style.display = 'flex';
   }
 
@@ -622,6 +629,7 @@ const CandyGame = (() => {
 
       setTimeout(() => {
         els.quiz.style.display = 'none';
+        els.board.style.display = 'grid';
         explodeAt(quizStarPos);
       }, 900);
     } else {
