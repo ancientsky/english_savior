@@ -21,6 +21,8 @@ const ACHIEVEMENTS = [
   { id: 'empire_imperial', name: '帝王時代', desc: '在英語帝國晉升到帝王時代', icon: '👑', condition: s => (s.empireMaxAge || 1) >= 4 },
   { id: 'candy_first', name: '甜蜜初體驗', desc: '在糖果消消樂通過第一關', icon: '🍬', condition: s => (s.candyLevels || 0) >= 1 },
   { id: 'candy_master', name: '糖果大師', desc: '在糖果消消樂通過 10 關', icon: '🧁', condition: s => (s.candyLevels || 0) >= 10 },
+  { id: 'sling_first', name: '初試彈弓', desc: '在單字彈弓打中第一個單字箱', icon: '🐤', condition: s => (s.slingHits || 0) >= 1 },
+  { id: 'sling_sharpshooter', name: '神射手', desc: '在單字彈弓打中 50 個單字箱', icon: '🎯', condition: s => (s.slingHits || 0) >= 50 },
 ];
 
 const DAILY_QUESTS = [
@@ -30,6 +32,7 @@ const DAILY_QUESTS = [
   { id: 'dq_listening', name: '聽力答對 5 題', desc: '在魔法聽力中答對 5 題', icon: '🔮', target: 5, key: 'dailyListening' },
   { id: 'dq_empire', name: '守護帝國城堡', desc: '在英語帝國擊敗 5 個敵人', icon: '🏰', target: 5, key: 'dailyEmpire' },
   { id: 'dq_candy', name: '糖果消消樂過關', desc: '在糖果消消樂通過 1 關', icon: '🍬', target: 1, key: 'dailyCandy' },
+  { id: 'dq_sling', name: '彈弓神射手', desc: '在單字彈弓打中 5 個單字箱', icon: '🐤', target: 5, key: 'dailySling' },
 ];
 
 const INVENTORY_ITEMS = [

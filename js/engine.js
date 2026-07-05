@@ -172,6 +172,7 @@ const GameEngine = (() => {
       dailyListening: 0,
       dailyEmpire: 0,
       dailyCandy: 0,
+      dailySling: 0,
       dailyDate: null,
       dailyClaimed: [],
       dailyBonusClaimed: false,
@@ -181,6 +182,7 @@ const GameEngine = (() => {
       empireKills: 0,
       empireMaxAge: 1,
       candyLevels: 0,
+      slingHits: 0,
       // history
       learnedWordsList: [],
       // shop system
@@ -233,6 +235,7 @@ const GameEngine = (() => {
       state.dailyListening = 0;
       state.dailyEmpire = 0;
       state.dailyCandy = 0;
+      state.dailySling = 0;
       state.dailyClaimed = [];
       state.dailyBonusClaimed = false;
       state.dailyDate = today;
@@ -322,6 +325,14 @@ const GameEngine = (() => {
   function recordEmpire() {
     state.empireKills = (state.empireKills || 0) + 1;
     state.dailyEmpire = (state.dailyEmpire || 0) + 1;
+    save();
+    checkAchievements();
+    checkDailyQuests();
+  }
+
+  function recordSling() {
+    state.slingHits = (state.slingHits || 0) + 1;
+    state.dailySling = (state.dailySling || 0) + 1;
     save();
     checkAchievements();
     checkDailyQuests();
@@ -840,7 +851,7 @@ const GameEngine = (() => {
     addXP, addGems,
     recordWord, recordGrammar, recordVideo,
     recordSpelling, recordListening,
-    recordEmpire, recordEmpireAge, recordCandy,
+    recordEmpire, recordEmpireAge, recordCandy, recordSling,
     recordPerfectGrammar, recordStreak,
     updateHUD, updateStats,
     showInventory, showAchievements, showToast,
