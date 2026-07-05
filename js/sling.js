@@ -210,8 +210,6 @@ const SlingGame = (() => {
 
   // ===== Structure building =====
   function buildStructure(options, correctWord) {
-    crates = [];
-    platforms = [];
     const cw = 108, ch = 52;
     const G = GROUND_Y;
     // Layout templates: [x, y] anchor spots (y = crate top).
@@ -227,27 +225,90 @@ const SlingGame = (() => {
       // Elevated platforms
       [[550, G - ch], [690, G - ch], [620, G - ch * 2 - 24], [745, G - ch * 2 - 8]],
     ];
-    const spots = shuffleArr(templates[Math.floor(Math.random() * templates.length)]);
+    // Guaranteed-solvable fallback: a flat row, every top face exposed
+    const flatRow = [[490, G - ch], [615, G - ch], [740, G - ch], [560, G - ch * 2 - 8]];
 
-    options.forEach((opt, i) => {
-      const [x, y] = spots[i];
-      crates.push({
-        x, y, w: cw, h: ch,
-        word: opt.word,
-        correct: opt.word === correctWord,
-        state: 'alive',
-        vx: 0, vy: 0, vr: 0, rot: 0, fade: 1,
-        reveal: false,
+    const order = shuffleArr(templates);
+    order.push(flatRow);
+
+    for (const template of order) {
+      const spots = shuffleArr(template);
+      crates = [];
+      platforms = [];
+      options.forEach((opt, i) => {
+        const [x, y] = spots[i];
+        crates.push({
+          x, y, w: cw, h: ch,
+          word: opt.word,
+          correct: opt.word === correctWord,
+          state: 'alive',
+          vx: 0, vy: 0, vr: 0, rot: 0, fade: 1,
+          reveal: false,
+        });
       });
+
+      // Verify which crates are actually hittable given the FULL structure
+      // (other crates block shots — a rear-bottom crate can be in complete
+      // shadow even though its spot alone is reachable)
+      const reachable = crates.map((_, i) => canHitCrate(i));
+      const correctIdx = crates.findIndex(c => c.correct);
+      if (!reachable[correctIdx]) {
+        // Move the correct answer onto a hittable crate by swapping words
+        const okIdx = reachable.findIndex(ok => ok);
+        if (okIdx === -1) continue; // no hittable spot at all — next template
+        const a = crates[correctIdx], b = crates[okIdx];
+        [a.word, b.word] = [b.word, a.word];
+        a.correct = false;
+        b.correct = true;
+      }
+
       // Wooden platform under crates that would otherwise float mid-air
       // (elevated spots that aren't sitting right on another crate)
-      const bottom = y + ch;
-      const restsOnCrate = spots.some(([sx, sy]) =>
-        sy === bottom + 8 && Math.abs(sx - x) < cw * 0.8);
-      if (bottom < G - 4 && !restsOnCrate) {
-        platforms.push({ x: x - 10, y: bottom, w: cw + 20, h: 10 });
+      crates.forEach(c => {
+        const bottom = c.y + c.h;
+        const restsOnCrate = crates.some(o =>
+          o !== c && Math.abs(o.y - (bottom + 8)) < 2 && Math.abs(o.x - c.x) < cw * 0.8);
+        if (bottom < G - 4 && !restsOnCrate) {
+          platforms.push({ x: c.x - 10, y: bottom, w: cw + 20, h: 10 });
+        }
+      });
+      return;
+    }
+  }
+
+  // Simulate every pull angle/strength with the game's own physics and
+  // check whether crate `idx` can be hit FIRST, with an 8px safety inset
+  // so borderline grazes don't count. Runs in a few ms per structure.
+  function canHitCrate(idx) {
+    const target = crates[idx];
+    const INSET = 8;
+    const dt = 1 / 60;
+    for (let ang = 8; ang < 88; ang += 2) {
+      for (let pull = 24; pull <= DRAG_RADIUS; pull += 3) {
+        const rad = ang * Math.PI / 180;
+        let x = SLING_X - Math.cos(rad) * pull;
+        let y = SLING_Y + Math.sin(rad) * pull;
+        let vx = (SLING_X - x) * POWER;
+        let vy = (SLING_Y - y) * POWER;
+        let outcome = null;
+        for (let t = 0; t < 3 && !outcome; t += dt) {
+          vy += GRAVITY * dt; x += vx * dt; y += vy * dt;
+          for (const c of crates) {
+            if (x + BIRD_R > c.x && x - BIRD_R < c.x + c.w &&
+                y + BIRD_R > c.y && y - BIRD_R < c.y + c.h) {
+              outcome = (c === target &&
+                x + BIRD_R > c.x + INSET && x - BIRD_R < c.x + c.w - INSET &&
+                y + BIRD_R > c.y + INSET && y - BIRD_R < c.y + c.h - INSET)
+                ? 'hit' : 'blocked';
+              break;
+            }
+          }
+          if (!outcome && (y + BIRD_R >= GROUND_Y || x > W + 40)) outcome = 'miss';
+        }
+        if (outcome === 'hit') return true;
       }
-    });
+    }
+    return false;
   }
 
   function resetBird() {
