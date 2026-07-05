@@ -177,6 +177,7 @@ body {
 .youtube-card { background: linear-gradient(135deg, #1a1a4e, #2d2d8e); border: 2px solid #5555ee; }
 .spelling-card { background: linear-gradient(135deg, #1a3a2e, #2d6b4e); border: 2px solid #4ecca3; }
 .listening-card { background: linear-gradient(135deg, #2a1050, #4a1d8e); border: 2px solid #7b2ff7; }
+.empire-card { background: linear-gradient(135deg, #4a3510, #8a6237); border: 2px solid #d4af37; }
 
 .card-icon { font-size: 48px; margin-bottom: 12px; }
 .hub-card h3 { font-size: 20px; margin-bottom: 8px; }
@@ -866,4 +867,37 @@ body {
   .shop-card-desc { font-size: 10px; }
   .shop-tabs { flex-wrap: wrap; }
   .shop-tab { padding: 8px 10px; font-size: 11px; }
+}
+
+/* ===== Game Fullscreen (畫面最大化) ===== */
+.zone-fs-btn {
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 1;
+  /* Sits right after the zone title; auto margin pushes the rest to the right */
+  margin-left: 10px;
+  margin-right: auto;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text, #fff);
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+  flex-shrink: 0;
+}
+.zone-fs-btn:hover { background: rgba(255, 255, 255, 0.2); transform: scale(1.08); }
+
+/* Maximized mode: hide the HUD and nav so the active game fills the screen */
+body.game-max #hud,
+body.game-max #main-nav {
+  display: none;
+}
+body.game-max .zone.active {
+  max-width: none;
+  padding: 10px 16px;
+}
+body.game-max .zone-fs-btn {
+  border-color: var(--gold, #f5c518);
+  color: var(--gold, #f5c518);
 }

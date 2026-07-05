@@ -63,6 +63,13 @@
 
 .emp-canvas { width: 100% !important; height: auto !important; display: block; }
 
+/* Once the canvas exists, the wrap follows the canvas height instead of
+   the placeholder ratio (the renderer caps height to fit the viewport) */
+.emp-canvas-wrap:has(.emp-canvas) {
+  aspect-ratio: auto;
+  min-height: 0;
+}
+
 /* Overlays */
 .emp-start-screen,
 .emp-defeat-screen {

@@ -2,6 +2,8 @@
 .yt-container { max-width: 800px; margin: 0 auto; }
 
 .yt-header {
+  display: flex;
+  align-items: center;
   margin-bottom: 20px;
 }
 .yt-header h2 { font-size: 20px; }
