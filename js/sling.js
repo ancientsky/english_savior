@@ -12,9 +12,11 @@ const SlingGame = (() => {
   const GRAVITY = 1350;          // px/s²
   const SLING_X = 115, SLING_Y = 305;
   const DRAG_RADIUS = 78;        // max pull distance
-  // Launch velocity per pulled px. At max pull this gives ~1000 px/s,
-  // a projectile range of ~760 px — enough to reach the farthest crates
-  const POWER = 13;
+  // Launch velocity per pulled px. At max pull this gives ~1170 px/s.
+  // Reachability check for the templates below: at distance d the max
+  // height above launch is v²/2g − g·d²/2v²; with v=1170 that is ~256 px
+  // at d=700 — comfortably above the highest crate spot (~+120 px)
+  const POWER = 15;
   const BIRD_R = 15;
   const QUESTIONS_PER_ROUND = 10;
 
@@ -34,6 +36,7 @@ const SlingGame = (() => {
   let ammo = 0, qIndex = 0, correctCount = 0, missesThisQ = 0;
   let question = null;   // { word, zh, hint, mode }
   let crates = [];       // { x,y,w,h, word, correct, state:'alive'|'used'|'flying', vx,vy,vr,rot, fade, reveal }
+  let platforms = [];    // decorative wooden planks under elevated crates
   let bird = null;       // { x,y,vx,vy, mode:'ready'|'aiming'|'flying'|'spent', spentT, bounces }
   let particles = [];
   let aimPos = null;
@@ -76,6 +79,9 @@ const SlingGame = (() => {
     canvas.addEventListener('pointermove', onPointerMove);
     canvas.addEventListener('pointerup', onPointerUp);
     canvas.addEventListener('pointerleave', onPointerUp);
+
+    // Read-only hook for automated tests (crate layout is canvas-only)
+    window.__slingTest = { crates: () => crates.map(c => ({ ...c })) };
   }
 
   // ===== Round lifecycle =====
@@ -205,17 +211,21 @@ const SlingGame = (() => {
   // ===== Structure building =====
   function buildStructure(options, correctWord) {
     crates = [];
+    platforms = [];
     const cw = 108, ch = 52;
-    // Layout templates: [x, y] anchor spots (y = crate top)
+    const G = GROUND_Y;
+    // Layout templates: [x, y] anchor spots (y = crate top).
+    // Kept at most 2 tiers high and x ≤ 745 so every spot is reachable
+    // with the sling's max launch velocity (see POWER note above)
     const templates = [
       // Ground row with one stacked
-      [[520, GROUND_Y - ch], [680, GROUND_Y - ch], [600, GROUND_Y - ch * 2 - 8], [760, GROUND_Y - ch]],
+      [[520, G - ch], [660, G - ch], [590, G - ch * 2 - 8], [745, G - ch]],
       // Two towers
-      [[540, GROUND_Y - ch], [540, GROUND_Y - ch * 2 - 8], [730, GROUND_Y - ch], [730, GROUND_Y - ch * 2 - 8]],
-      // Steps
-      [[500, GROUND_Y - ch], [640, GROUND_Y - ch * 2 - 8], [770, GROUND_Y - ch * 3 - 16], [640, GROUND_Y - ch]],
-      // Elevated platform pair
-      [[560, GROUND_Y - ch], [700, GROUND_Y - ch], [630, GROUND_Y - ch * 3 - 30], [770, GROUND_Y - ch * 2 - 8]],
+      [[540, G - ch], [540, G - ch * 2 - 8], [720, G - ch], [720, G - ch * 2 - 8]],
+      // Low steps
+      [[500, G - ch], [620, G - ch], [620, G - ch * 2 - 8], [745, G - ch]],
+      // Elevated platforms
+      [[550, G - ch], [690, G - ch], [620, G - ch * 2 - 24], [745, G - ch * 2 - 8]],
     ];
     const spots = shuffleArr(templates[Math.floor(Math.random() * templates.length)]);
 
@@ -229,6 +239,14 @@ const SlingGame = (() => {
         vx: 0, vy: 0, vr: 0, rot: 0, fade: 1,
         reveal: false,
       });
+      // Wooden platform under crates that would otherwise float mid-air
+      // (elevated spots that aren't sitting right on another crate)
+      const bottom = y + ch;
+      const restsOnCrate = spots.some(([sx, sy]) =>
+        sy === bottom + 8 && Math.abs(sx - x) < cw * 0.8);
+      if (bottom < G - 4 && !restsOnCrate) {
+        platforms.push({ x: x - 10, y: bottom, w: cw + 20, h: 10 });
+      }
     });
   }
 
@@ -525,7 +543,7 @@ const SlingGame = (() => {
       let vy = (SLING_Y - pull.y) * POWER;
       ctx.fillStyle = 'rgba(255,255,255,0.75)';
       const step = 0.055;
-      for (let i = 0; i < 16; i++) {
+      for (let i = 0; i < 22; i++) {
         vy += GRAVITY * step;
         px += vx * step;
         py += vy * step;
@@ -538,6 +556,18 @@ const SlingGame = (() => {
 
     // Slingshot (behind band drawn later)
     drawSlingshot();
+
+    // Platforms under elevated crates
+    platforms.forEach(p => {
+      ctx.fillStyle = '#8b5a2b';
+      ctx.fillRect(p.x, p.y, p.w, p.h);
+      ctx.fillStyle = '#6e4520';
+      ctx.fillRect(p.x, p.y + p.h - 3, p.w, 3);
+      // Support legs
+      ctx.fillStyle = '#7a5230';
+      ctx.fillRect(p.x + 8, p.y + p.h, 7, GROUND_Y - p.y - p.h);
+      ctx.fillRect(p.x + p.w - 15, p.y + p.h, 7, GROUND_Y - p.y - p.h);
+    });
 
     // Crates
     crates.forEach(drawCrate);
