@@ -16,6 +16,7 @@ const DailyQuests = (() => {
     const state = GameEngine.getState();
 
     let allDone = true;
+    const claimed = state.dailyClaimed || [];
     DAILY_QUESTS.forEach(quest => {
       const progress = state[quest.key] || 0;
       const done = progress >= quest.target;
@@ -29,14 +30,14 @@ const DailyQuests = (() => {
           <h4>${quest.icon} ${quest.name}</h4>
           <p>${quest.desc}（${Math.min(progress, quest.target)} / ${quest.target}）</p>
         </div>
-        <span class="daily-reward">+10 XP</span>
+        <span class="daily-reward">${claimed.includes(quest.id) ? '✅ 已領取 +10 XP' : '+10 XP'}</span>
       `;
       list.appendChild(item);
     });
 
     const bonus = document.getElementById('daily-bonus');
     if (allDone) {
-      bonus.innerHTML = `<h3>🎁 全部完成！</h3><p style="color:var(--green)">恭喜你完成今天的所有任務！明天再來挑戰吧！</p>`;
+      bonus.innerHTML = `<h3>🎁 全部完成！</h3><p style="color:var(--green)">恭喜你完成今天的所有任務！獎勵 50 💎 和神秘寶箱已發送！明天再來挑戰吧！</p>`;
       // Play sound only when transitioning from not-all-done to all-done
       if (!wasAllDone) {
         SoundManager.playQuestComplete();

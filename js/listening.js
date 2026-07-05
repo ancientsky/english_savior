@@ -396,6 +396,10 @@ const ListeningGame = (() => {
     // Calculate rewards
     const totalGems = correctCount * GEMS_PER_CORRECT;
 
+    // Record listening BEFORE achievement checks so lifetime/daily counters
+    // are up to date when conditions are evaluated
+    GameEngine.recordListening(correctCount);
+
     if (completed) {
       // Completed all rounds — bonus gems
       GameEngine.addGems(GEMS_BONUS_COMPLETE);
@@ -415,13 +419,6 @@ const ListeningGame = (() => {
       els.gameoverWords.textContent = correctCount;
       els.gameoverReward.textContent = totalGems > 0 ? `已獲得 ${totalGems} 💎` : '';
       els.gameoverScreen.style.display = 'flex';
-    }
-
-    // Record listening for daily quest
-    if (correctCount > 0) {
-      const state = GameEngine.getState();
-      state.dailyListening = (state.dailyListening || 0) + correctCount;
-      GameEngine.save();
     }
   }
 

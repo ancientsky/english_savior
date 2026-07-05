@@ -12,10 +12,13 @@ const ACHIEVEMENTS = [
   { id: 'streak7', name: '一週戰士', desc: '連續學習 7 天', icon: '💪', condition: s => s.streak >= 7 },
   { id: 'gems100', name: '百寶收藏家', desc: '累積 100 顆寶石', icon: '💎', condition: s => s.gems >= 100 },
   { id: 'perfect_grammar', name: '完美文法', desc: '一輪文法全部答對', icon: '🏅', condition: s => s.perfectGrammarRun },
-  { id: 'spelling_first', name: '拼字新手', desc: '在拼字跑酷中完成第一個單字', icon: '🦖', condition: s => s.wordsLearned >= 1 },
+  { id: 'spelling_first', name: '拼字新手', desc: '在拼字跑酷中完成第一個單字', icon: '🦖', condition: s => (s.spellingWords || 0) >= 1 },
   { id: 'hundred_words', name: '百字達人', desc: '學會 100 個單字', icon: '🎓', condition: s => s.wordsLearned >= 100 },
-  { id: 'listening_first', name: '聆聽入門', desc: '在魔法聽力中答對第一題', icon: '🔮', condition: s => (s.dailyListening || 0) >= 1 },
+  { id: 'listening_first', name: '聆聽入門', desc: '在魔法聽力中答對第一題', icon: '🔮', condition: s => (s.listeningCorrect || 0) >= 1 },
   { id: 'listening_master', name: '聽力大師', desc: '在魔法聽力中一輪全部答對', icon: '🧙‍♂️', condition: s => s.perfectListeningRun },
+  { id: 'empire_first', name: '帝國新兵', desc: '在英語帝國擊敗第一個敵人', icon: '🏰', condition: s => (s.empireKills || 0) >= 1 },
+  { id: 'empire_general', name: '帝國將軍', desc: '在英語帝國擊敗 50 個敵人', icon: '⚔️', condition: s => (s.empireKills || 0) >= 50 },
+  { id: 'empire_imperial', name: '帝王時代', desc: '在英語帝國晉升到帝王時代', icon: '👑', condition: s => (s.empireMaxAge || 1) >= 4 },
 ];
 
 const DAILY_QUESTS = [
@@ -23,6 +26,7 @@ const DAILY_QUESTS = [
   { id: 'dq_grammar', name: '通過 3 個文法關卡', desc: '在文法跑酷中答對 3 題', icon: '🏃', target: 3, key: 'dailyGrammar' },
   { id: 'dq_video', name: '完成 1 個影片課程', desc: '看完一個影片並通過測驗', icon: '📺', target: 1, key: 'dailyVideos' },
   { id: 'dq_listening', name: '聽力答對 5 題', desc: '在魔法聽力中答對 5 題', icon: '🔮', target: 5, key: 'dailyListening' },
+  { id: 'dq_empire', name: '守護帝國城堡', desc: '在英語帝國擊敗 5 個敵人', icon: '🏰', target: 5, key: 'dailyEmpire' },
 ];
 
 const INVENTORY_ITEMS = [

@@ -160,6 +160,16 @@ const YoutubeGame = (() => {
     const lesson = VIDEO_LESSONS[shuffledIndices[currentPosition]];
     let correct = 0;
 
+    // Require every question to be answered before grading,
+    // otherwise the quiz could be farmed by mashing submit
+    const total0 = lesson.questions.length;
+    if (Object.keys(selectedAnswers).length < total0) {
+      const fb0 = document.getElementById('yt-feedback');
+      fb0.textContent = '⚠️ 還有題目沒作答，全部作答後再提交！';
+      fb0.style.color = 'var(--gold)';
+      return;
+    }
+
     lesson.questions.forEach((q, qi) => {
       const questionDiv = document.querySelectorAll('.yt-question')[qi];
       const options = questionDiv.querySelectorAll('.yt-q-option');
@@ -174,25 +184,41 @@ const YoutubeGame = (() => {
     const total = lesson.questions.length;
     const fb = document.getElementById('yt-feedback');
 
+    // Base rewards, then honor the same buffs as the other zones
+    let xpReward = correct === total ? 30 : correct * 10;
+    let gemReward = correct === total ? 5 : correct;
+
+    if (xpReward > 0 && GameEngine.hasBuff('double_xp')) {
+      xpReward *= 2;
+      GameEngine.consumeBuff('double_xp');
+      GameEngine.showToast('📜 雙倍經驗卷軸生效！', 'achievement');
+    }
+    if (gemReward > 0 && GameEngine.hasBuff('gem_bonus')) {
+      gemReward += 2;
+      GameEngine.consumeBuff('gem_bonus');
+      GameEngine.showToast('💠 寶石探測器生效！+2 額外寶石', 'gem');
+    }
+
     if (correct === total) {
-      fb.textContent = `🎉 全部正確！太厲害了！獲得 30 XP 和 5 💎`;
+      fb.textContent = `🎉 全部正確！太厲害了！獲得 ${xpReward} XP 和 ${gemReward} 💎`;
       fb.style.color = 'var(--green)';
       SoundManager.playQuestComplete();
-      GameEngine.addXP(30);
-      GameEngine.addGems(5);
     } else {
-      fb.textContent = `答對 ${correct}/${total} 題。獲得 ${correct * 10} XP`;
+      fb.textContent = `答對 ${correct}/${total} 題。獲得 ${xpReward} XP`;
       fb.style.color = 'var(--gold)';
       if (correct > 0) {
         SoundManager.playCorrect();
       } else {
         SoundManager.playWrong();
       }
-      GameEngine.addXP(correct * 10);
-      GameEngine.addGems(correct);
     }
+    if (xpReward > 0) GameEngine.addXP(xpReward);
+    if (gemReward > 0) GameEngine.addGems(gemReward);
 
-    GameEngine.recordVideo();
+    // Only count the video as completed when the quiz was actually passed
+    if (correct === total) {
+      GameEngine.recordVideo();
+    }
     document.getElementById('yt-submit-quiz').style.display = 'none';
   }
 

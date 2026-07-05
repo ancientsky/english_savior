@@ -170,7 +170,15 @@ const GameEngine = (() => {
       dailyGrammar: 0,
       dailyVideos: 0,
       dailyListening: 0,
+      dailyEmpire: 0,
       dailyDate: null,
+      dailyClaimed: [],
+      dailyBonusClaimed: false,
+      // per-game lifetime counters
+      spellingWords: 0,
+      listeningCorrect: 0,
+      empireKills: 0,
+      empireMaxAge: 1,
       // history
       learnedWordsList: [],
       // shop system
@@ -221,9 +229,13 @@ const GameEngine = (() => {
       state.dailyGrammar = 0;
       state.dailyVideos = 0;
       state.dailyListening = 0;
+      state.dailyEmpire = 0;
+      state.dailyClaimed = [];
+      state.dailyBonusClaimed = false;
       state.dailyDate = today;
     }
-    state.lastPlayDate = today;
+    // NOTE: lastPlayDate is updated by recordStreak(), not here —
+    // stamping it during load would make the streak check always a no-op.
     save();
     updateHUD();
   }
@@ -232,9 +244,10 @@ const GameEngine = (() => {
 
   function addXP(amount) {
     state.xp += amount;
-    const needed = XP_PER_LEVEL(state.level);
     let leveled = false;
-    while (state.xp >= needed) {
+    // Re-read the requirement each iteration: it grows with the level,
+    // otherwise multi-level gains hand out free levels and negative XP
+    while (state.xp >= XP_PER_LEVEL(state.level)) {
       state.xp -= XP_PER_LEVEL(state.level);
       state.level++;
       leveled = true;
@@ -246,6 +259,7 @@ const GameEngine = (() => {
     save();
     updateHUD();
     showToast(`+${amount} XP`, 'xp');
+    checkAchievements();
     return leveled;
   }
 
@@ -254,6 +268,7 @@ const GameEngine = (() => {
     save();
     updateHUD();
     showToast(`+${amount} 💎`, 'gem');
+    checkAchievements();
   }
 
   function recordWord(word) {
@@ -264,6 +279,7 @@ const GameEngine = (() => {
     }
     save();
     checkAchievements();
+    checkDailyQuests();
     updateStats();
   }
 
@@ -272,6 +288,7 @@ const GameEngine = (() => {
     state.dailyGrammar++;
     save();
     checkAchievements();
+    checkDailyQuests();
     updateStats();
   }
 
@@ -280,7 +297,39 @@ const GameEngine = (() => {
     state.dailyVideos++;
     save();
     checkAchievements();
+    checkDailyQuests();
     updateStats();
+  }
+
+  function recordSpelling() {
+    state.spellingWords = (state.spellingWords || 0) + 1;
+    save();
+    checkAchievements();
+  }
+
+  function recordListening(count) {
+    if (!count || count <= 0) return;
+    state.listeningCorrect = (state.listeningCorrect || 0) + count;
+    state.dailyListening = (state.dailyListening || 0) + count;
+    save();
+    checkAchievements();
+    checkDailyQuests();
+  }
+
+  function recordEmpire() {
+    state.empireKills = (state.empireKills || 0) + 1;
+    state.dailyEmpire = (state.dailyEmpire || 0) + 1;
+    save();
+    checkAchievements();
+    checkDailyQuests();
+  }
+
+  function recordEmpireAge(age) {
+    if (age > (state.empireMaxAge || 1)) {
+      state.empireMaxAge = age;
+      save();
+      checkAchievements();
+    }
   }
 
   function recordPerfectGrammar() {
@@ -351,15 +400,44 @@ const GameEngine = (() => {
   }
 
   function checkAchievements() {
+    let unlocked = false;
     ACHIEVEMENTS.forEach(ach => {
       if (!state.achievements.includes(ach.id) && ach.condition(state)) {
         state.achievements.push(ach.id);
-        showToast(`🏆 成就解鎖：${ach.name}`, 'achievement');
+        showToast(`🏆 成就解鎖：${ach.name} +15💎`, 'achievement');
         SoundManager.playAchievement();
-        addGems(15);
+        // Grant gems directly (not via addGems) to avoid re-entering this check
+        state.gems += 15;
+        unlocked = true;
       }
     });
     save();
+    if (unlocked) updateHUD();
+  }
+
+  // Grant daily quest rewards the moment a quest crosses its target
+  function checkDailyQuests() {
+    if (typeof DAILY_QUESTS === 'undefined') return;
+    if (!Array.isArray(state.dailyClaimed)) state.dailyClaimed = [];
+    DAILY_QUESTS.forEach(quest => {
+      const progress = state[quest.key] || 0;
+      if (progress >= quest.target && !state.dailyClaimed.includes(quest.id)) {
+        state.dailyClaimed.push(quest.id);
+        save();
+        showToast(`📋 任務完成：${quest.name}`, 'achievement');
+        SoundManager.playQuestComplete();
+        addXP(10);
+      }
+    });
+    // All quests done today → one-time bonus: 50 gems + mystery chest
+    if (!state.dailyBonusClaimed &&
+        DAILY_QUESTS.every(q => state.dailyClaimed.includes(q.id))) {
+      state.dailyBonusClaimed = true;
+      save();
+      showToast('🎁 每日任務全部完成！神秘寶箱開啟！', 'achievement');
+      addGems(50);
+      grantRandomItem();
+    }
   }
 
   // ===== UI Updates =====
@@ -750,10 +828,12 @@ const GameEngine = (() => {
     load, save, getState,
     addXP, addGems,
     recordWord, recordGrammar, recordVideo,
+    recordSpelling, recordListening,
+    recordEmpire, recordEmpireAge,
     recordPerfectGrammar, recordStreak,
     updateHUD, updateStats,
     showInventory, showAchievements, showToast,
-    checkAchievements,
+    checkAchievements, checkDailyQuests,
     // Shop functions
     showShop, switchShopTab, buyItem, equipItem,
     useConsumable, hasBuff, consumeBuff,

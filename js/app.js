@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
   YoutubeGame.init();
   SpellingGame.init();
   ListeningGame.init();
+  EmpireGame.init();
   DailyQuests.init();
 
   // Navigation
@@ -21,6 +22,8 @@ document.addEventListener('DOMContentLoaded', () => {
       switchZone(zone);
       // Update daily quests when visiting
       if (zone === 'daily') DailyQuests.render();
+      // Resume the 3D renderer when returning to the empire zone
+      if (zone === 'empire') EmpireGame.onShow();
     });
   });
 
