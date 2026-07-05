@@ -95,6 +95,7 @@
   <link rel="stylesheet" href="css/youtube.css">
   <link rel="stylesheet" href="css/spelling.css">
   <link rel="stylesheet" href="css/listening.css">
+  <link rel="stylesheet" href="css/empire.css">
 </head>
 <body>
   <!-- Top HUD Bar -->
@@ -140,6 +141,9 @@
     <button class="nav-tab" data-zone="listening">
       <span class="nav-icon">🔮</span><span class="nav-label">魔法聽力</span>
     </button>
+    <button class="nav-tab" data-zone="empire">
+      <span class="nav-icon">🏰</span><span class="nav-label">英語帝國</span>
+    </button>
     <button class="nav-tab" data-zone="daily">
       <span class="nav-icon">📋</span><span class="nav-label">每日任務</span>
     </button>
@@ -180,6 +184,12 @@
           <h3>魔法聽力</h3>
           <p>魔法師唸出咒語，選出正確的魔法卡片來通關！</p>
           <span class="card-tag">Listening</span>
+        </div>
+        <div class="hub-card empire-card" data-zone="empire">
+          <div class="card-icon">🏰</div>
+          <h3>英語帝國</h3>
+          <p>世紀帝國風格 3D 戰場！答對英文擊退敵軍，守護你的城堡！</p>
+          <span class="card-tag">3D Defense</span>
         </div>
       </div>
     </div>
@@ -402,6 +412,48 @@
     </div>
   </main>
 
+  <!-- Zone: Empire English (3D defense) -->
+  <main id="zone-empire" class="zone">
+    <div class="emp-container">
+      <div class="emp-header">
+        <h2>🏰 英語帝國</h2>
+        <div class="emp-age-display" id="emp-age-display">🌑 黑暗時代</div>
+      </div>
+      <div class="emp-hud">
+        <div class="emp-hp" id="emp-hp">❤️❤️❤️❤️❤️❤️❤️❤️❤️❤️</div>
+        <div class="emp-wave" id="emp-wave">第 1 波</div>
+        <div class="emp-kills" id="emp-kills">⚔️ 0</div>
+        <div class="emp-accuracy" id="emp-accuracy">🎯 0%</div>
+      </div>
+      <div class="emp-canvas-wrap" id="emp-canvas-wrap">
+        <!-- three.js canvas is injected here -->
+        <div class="emp-start-screen" id="emp-start-screen">
+          <h3>🏰 英語帝國保衛戰</h3>
+          <p class="emp-start-sub">敵軍正朝你的城堡進攻！答對英文題目，城堡的投石機就會發射，擊退敵人！</p>
+          <p class="emp-instructions">📖 單字 ｜ 💬 常見對話 ｜ ✏️ 基本文法 ｜ 🌏 生活英文</p>
+          <p class="emp-instructions">❌ 答錯敵人會加速衝鋒 ｜ 💥 敵人抵達城堡會扣血 ｜ 🪵 攻城槌要答對 3 題才會倒</p>
+          <p class="emp-instructions">🌑 → 🏘️ → 🏰 → 👑 每守住 3 波就晉升新時代，城堡升級、題目變難！</p>
+          <div class="emp-start-stats" id="emp-start-stats"></div>
+          <button class="emp-btn" id="emp-start-btn">⚔️ 開始戰役</button>
+          <button class="emp-btn secondary" id="emp-reset-btn">🔄 重置戰役進度</button>
+        </div>
+        <div class="emp-defeat-screen" id="emp-defeat-screen" style="display:none">
+          <h3>💥 城堡淪陷</h3>
+          <div id="emp-defeat-stats"></div>
+          <button class="emp-btn" id="emp-retry-btn">⚔️ 重整旗鼓，再戰！</button>
+        </div>
+        <div class="emp-ageup-banner" id="emp-ageup-banner" style="display:none"></div>
+        <div class="emp-damage-flash" id="emp-damage-flash"></div>
+      </div>
+      <div class="emp-question" id="emp-question" style="display:none">
+        <div class="emp-q-target" id="emp-q-target"></div>
+        <div class="emp-q-prompt" id="emp-q-prompt"></div>
+        <div class="emp-q-options" id="emp-q-options"></div>
+        <div class="emp-q-feedback" id="emp-q-feedback"></div>
+      </div>
+    </div>
+  </main>
+
   <!-- Zone: Daily Quests -->
   <main id="zone-daily" class="zone">
     <div class="daily-container">
@@ -528,12 +580,27 @@
           </ul>
         </div>
         <div class="help-section">
+          <h3>🏰 英語帝國</h3>
+          <p>世紀帝國風格的 3D 城堡保衛戰！敵軍會排隊進攻你的城堡，答對英文題目就能發射投石機擊退他們！</p>
+          <ul>
+            <li>題目混合：單字、常見對話、基本文法、生活英文</li>
+            <li>答錯敵人會加速衝鋒；連錯兩次會顯示正確答案讓你學習</li>
+            <li>敵人抵達城堡會扣血（民兵 -1、騎士 -2、攻城槌 -3）</li>
+            <li>攻城槌是 Boss，要答對 3 題才能摧毀</li>
+            <li>每守住 3 波晉升新時代：黑暗 → 封建 → 城堡 → 帝王，題目越來越難</li>
+            <li>每擊敗一個敵人獲得 XP 與寶石，守住一波再加碼寶石獎勵</li>
+            <li>戰役進度自動儲存，隨時可以繼續挑戰</li>
+          </ul>
+        </div>
+        <div class="help-section">
           <h3>📋 每日任務</h3>
-          <p>每天完成三個任務，保持學習連勝！</p>
+          <p>每天完成任務可各獲得 10 XP，全部完成再送 50 💎 和神秘寶箱！</p>
           <ul>
             <li>學習 3 個新單字</li>
             <li>通過 3 個文法關卡</li>
             <li>完成 1 個影片課程</li>
+            <li>聽力答對 5 題</li>
+            <li>英語帝國擊敗 5 個敵人</li>
           </ul>
         </div>
         <div class="help-section">
@@ -550,17 +617,20 @@
   <!-- Toast notifications -->
   <div id="toast-container"></div>
 
+  <script src="js/vendor/three.min.js"></script>
   <script src="js/tts.js"></script>
   <script src="js/data/vocab.js"></script>
   <script src="js/data/grammar.js"></script>
   <script src="js/data/video.js"></script>
   <script src="js/data/game.js"></script>
+  <script src="js/data/empire.js"></script>
   <script src="js/engine.js"></script>
   <script src="js/minecraft.js"></script>
   <script src="js/roblox.js"></script>
   <script src="js/youtube.js"></script>
   <script src="js/spelling.js"></script>
   <script src="js/listening.js"></script>
+  <script src="js/empire.js"></script>
   <script src="js/daily.js"></script>
   <script src="js/app.js"></script>
 </body>

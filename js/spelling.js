@@ -38,6 +38,7 @@ const SpellingGame = (() => {
   let state = 'idle'; // idle | running | gameover | complete
   let diff = 'easy';
   let hp, wordsCompleted, currentWord, letterIndex;
+  let gemsEarnedThisRound = 0;
   let obstacles, groundScroll, mountainScroll, speed, frameCount;
   let usedWords;
   let distSinceCorrect;
@@ -158,6 +159,7 @@ const SpellingGame = (() => {
     const cfg = DIFF_CONFIG[diff];
     hp = MAX_HP;
     wordsCompleted = 0;
+    gemsEarnedThisRound = 0;
     letterIndex = 0;
     obstacles = [];
     particles = [];
@@ -432,6 +434,7 @@ const SpellingGame = (() => {
     }
     GameEngine.addXP(xp);
     GameEngine.recordWord(currentWord.word);
+    GameEngine.recordSpelling();
 
     // Gem bonus per word
     let gemPerWord = 1;
@@ -440,6 +443,7 @@ const SpellingGame = (() => {
       GameEngine.consumeBuff('gem_bonus');
     }
     GameEngine.addGems(gemPerWord);
+    gemsEarnedThisRound += gemPerWord;
 
     updateHUD();
 
@@ -473,10 +477,12 @@ const SpellingGame = (() => {
       GameEngine.consumeBuff('gem_bonus');
     }
     GameEngine.addGems(gems);
+    gemsEarnedThisRound += gems;
     SoundManager.playQuestComplete();
 
     document.getElementById('sp-complete-words').textContent = wordsCompleted;
-    document.getElementById('sp-complete-gems').textContent = gems;
+    // Show the true payout for the round (per-word gems + round bonus)
+    document.getElementById('sp-complete-gems').textContent = gemsEarnedThisRound;
     completeScreen.style.display = 'flex';
 
     GameEngine.setDeferLevelUp(false);

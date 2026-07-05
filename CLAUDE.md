@@ -20,21 +20,26 @@ css/
   youtube.css           — YouTube video theme
   spelling.css          — Spelling runner theme
   listening.css         — Listening game theme
+  empire.css            — Empire 3D defense theme
 js/
   app.js                — Navigation and initialization (DOMContentLoaded entry point)
-  engine.js             — Core game engine (XP, levels, gems, inventory, achievements, shop, buff system, sound effects, localStorage save)
+  engine.js             — Core game engine (XP, levels, gems, inventory, achievements, shop, buff system, daily quest rewards, sound effects, localStorage save)
   minecraft.js          — Minecraft-themed vocabulary crafting game
   roblox.js             — Roblox-themed grammar obstacle course
   youtube.js            — YouTube-themed reading comprehension with quizzes
   spelling.js           — Chrome Dino-style spelling runner game (canvas-based)
   listening.js          — Magical listening card game (Web Speech API)
+  empire.js             — Age of Empires-style 3D castle defense (Three.js)
   daily.js              — Daily quest tracking and rendering
   tts.js                — Text-to-speech module (Web Speech API)
+  vendor/
+    three.min.js        — Three.js r149 (vendored UMD build, no CDN)
   data/
     vocab.js            — Vocabulary words (VOCAB_DATA, easy/medium/hard, 1,270+ words)
     grammar.js          — Grammar questions (GRAMMAR_DATA, 430+ questions, 62 topics)
     video.js            — Video lessons (VIDEO_LESSONS, 42 lessons with 126 quiz questions)
-    game.js             — Achievements (16), daily quests (4), inventory items, shop items
+    empire.js           — Empire dialogues (EMPIRE_DIALOGUES) and daily-life English (EMPIRE_LIFE), easy/medium/hard
+    game.js             — Achievements (19), daily quests (5), inventory items, shop items
 reference/
   taiwan_elementary_1000_minecraft_flavor.csv  — Source word list reference
 ```
@@ -49,15 +54,18 @@ All game modules use the IIFE (Immediately Invoked Function Expression) pattern 
 - `YoutubeGame` — video comprehension (youtube.js)
 - `SpellingGame` — spelling runner (spelling.js)
 - `ListeningGame` — listening game (listening.js)
+- `EmpireGame` — 3D castle defense (empire.js)
 - `DailyQuests` — daily quest system (daily.js)
 - `TTSManager` — text-to-speech (tts.js)
 
-Each game module exports `{ init }`. `app.js` calls all `.init()` methods on `DOMContentLoaded`.
+Each game module exports `{ init }`. `app.js` calls all `.init()` methods on `DOMContentLoaded`. `EmpireGame` additionally exports `onShow()`, called by app.js when its zone becomes visible to resume the paused 3D renderer.
 
 ### Adding Content
 - **Vocabulary**: add entries to `VOCAB_DATA` in `js/data/vocab.js` (easy/medium/hard). Each entry needs `word`, `hint` (emoji), `zh` (Chinese explanation), `sentence` (fill-in-the-blank with `___`).
 - **Grammar**: add entries to `GRAMMAR_DATA` in `js/data/grammar.js`. Each entry needs `sentence`, `blank`, `options` (4 choices), `explain`, `topic`.
 - **Video lessons**: add entries to `VIDEO_LESSONS` in `js/data/video.js`. Each entry needs `title`, `titleZh`, `thumbnail`, `script`, `vocab`, and quiz `questions`.
+- **Empire dialogues**: add entries to `EMPIRE_DIALOGUES` in `js/data/empire.js` (easy/medium/hard). Each entry needs `q` (line spoken to the player), `qZh` (Chinese meaning), `a` (correct response), `wrong` (3 distractors).
+- **Empire life English**: add entries to `EMPIRE_LIFE` in `js/data/empire.js` (easy/medium/hard). Each entry needs `scene` (Chinese scenario), `q` (English question), `a`, `wrong` (3 distractors). Empire also reuses `VOCAB_DATA` and `GRAMMAR_DATA` for vocabulary/grammar questions.
 - **Achievements/quests/items/shop**: edit `js/data/game.js`.
 
 ### Key Systems
@@ -73,14 +81,17 @@ Each game module exports `{ init }`. `app.js` calls all `.init()` methods on `DO
 | Game | Easy | Medium | Hard |
 |------|------|--------|------|
 | Vocabulary (Minecraft) | 10 XP, 1 gem | 20 XP, 2 gems | 35 XP, 4 gems |
-| Spelling runner | 10 gems/round | 20 gems/round | 30 gems/round |
+| Spelling runner | 15 XP + 1 gem/word, +10 gems round bonus | per-word same, +20 gems bonus | per-word same, +30 gems bonus |
 | Listening | 10 XP/correct | 12 XP/correct | 15 XP/correct |
+
+Empire (英語帝國) scales by age instead of difficulty: 10/15/20/25 XP + 1 gem per kill in Dark/Feudal/Castle/Imperial age, plus a 5/10/15/20-gem wave-clear bonus. Every completed daily quest grants 10 XP; completing all of them grants a one-time 50 gems + random item per day.
 
 ### Browser APIs Used
 - **Web Audio API** — synthesized sound effects (SoundManager)
 - **Web Speech API** — text-to-speech pronunciation (TTSManager) and listening game audio
 - **Canvas 2D API** — spelling runner rendering (800×340 px)
-- **localStorage** — game state persistence
+- **WebGL via Three.js** — empire 3D battlefield rendering (`js/vendor/three.min.js`, r149)
+- **localStorage** — game state persistence (`english_savior_save` for the engine, `english_savior_empire` for empire campaign progress)
 
 ## Naming Conventions
 - **CSS classes**: kebab-case with module prefix (`mc-block`, `rb-platform`, `yt-card`, `sp-canvas`, `ls-card`)
@@ -103,4 +114,5 @@ There is no automated test suite. Manual testing in a browser is the current wor
 
 ### External Resources
 - **Google Fonts**: Press Start 2P (pixel game font), Noto Sans TC (Chinese text)
+- **Three.js r149**: vendored at `js/vendor/three.min.js`, loaded via plain script tag
 - No CDN libraries or npm packages — fully self-contained

@@ -5,6 +5,7 @@ const MinecraftGame = (() => {
   let currentWord = null;
   let currentSlotIndex = 0;
   let usedWords = [];
+  let hintShownThisWord = false;
 
   const blockStyles = ['', 'stone', 'diamond', 'gold', 'emerald'];
 
@@ -34,7 +35,8 @@ const MinecraftGame = (() => {
     currentSlotIndex = 0;
 
     // Check if hint crystal buff is active - show first letter
-    if (GameEngine.hasBuff('hint')) {
+    hintShownThisWord = GameEngine.hasBuff('hint');
+    if (hintShownThisWord) {
       document.getElementById('mc-hint-img').textContent = currentWord.hint + ` 💡 提示：第一個字母是「${currentWord.word[0].toUpperCase()}」`;
     } else {
       document.getElementById('mc-hint-img').textContent = currentWord.hint;
@@ -153,9 +155,10 @@ const MinecraftGame = (() => {
       GameEngine.showToast('📜 雙倍經驗卷軸生效！', 'achievement');
     }
 
-    // Hint crystal consumed after successful word
-    if (GameEngine.hasBuff('hint')) {
+    // Hint crystal consumed only if the hint was actually shown for this word
+    if (hintShownThisWord && GameEngine.hasBuff('hint')) {
       GameEngine.consumeBuff('hint');
+      hintShownThisWord = false;
     }
 
     // Gem bonus buff
