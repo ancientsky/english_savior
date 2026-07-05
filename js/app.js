@@ -13,6 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
   SpellingGame.init();
   ListeningGame.init();
   EmpireGame.init();
+  CandyGame.init();
   DailyQuests.init();
 
   // Navigation

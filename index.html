@@ -96,6 +96,7 @@
   <link rel="stylesheet" href="css/spelling.css">
   <link rel="stylesheet" href="css/listening.css">
   <link rel="stylesheet" href="css/empire.css">
+  <link rel="stylesheet" href="css/candy.css">
 </head>
 <body>
   <!-- Top HUD Bar -->
@@ -144,6 +145,9 @@
     <button class="nav-tab" data-zone="empire">
       <span class="nav-icon">🏰</span><span class="nav-label">英語帝國</span>
     </button>
+    <button class="nav-tab" data-zone="candy">
+      <span class="nav-icon">🍬</span><span class="nav-label">糖果消消樂</span>
+    </button>
     <button class="nav-tab" data-zone="daily">
       <span class="nav-icon">📋</span><span class="nav-label">每日任務</span>
     </button>
@@ -190,6 +194,12 @@
           <h3>英語帝國</h3>
           <p>世紀帝國風格 3D 戰場！答對英文擊退敵軍，守護你的城堡！</p>
           <span class="card-tag">3D Defense</span>
+        </div>
+        <div class="hub-card candy-card" data-zone="candy">
+          <div class="card-icon">🍬</div>
+          <h3>糖果消消樂</h3>
+          <p>三消配對收集糖果，⭐魔法糖果考驗你的英文單字力！</p>
+          <span class="card-tag">Match-3</span>
         </div>
       </div>
     </div>
@@ -460,6 +470,55 @@
     </div>
   </main>
 
+  <!-- Zone: Candy Word Crush (match-3) -->
+  <main id="zone-candy" class="zone">
+    <div class="cd-container">
+      <div class="cd-header">
+        <h2>🍬 糖果消消樂</h2>
+        <button class="zone-fs-btn" title="遊戲畫面最大化">⛶</button>
+        <div class="cd-level-display" id="cd-level">第 1 關</div>
+      </div>
+      <div class="cd-hud">
+        <div class="cd-goals" id="cd-goals"></div>
+        <div class="cd-moves">剩餘步數 <b id="cd-moves">24</b></div>
+      </div>
+      <div class="cd-board-wrap" id="cd-board-wrap">
+        <div class="cd-board" id="cd-board"></div>
+        <!-- Start Screen -->
+        <div class="cd-start-screen" id="cd-start-screen">
+          <h3>🍬 糖果消消樂</h3>
+          <p class="cd-instructions">👆 點選或滑動交換相鄰糖果，連成 3 個以上就會消除</p>
+          <p class="cd-instructions">🎯 收集目標糖果過關——目標都是英文單字，點一下聽發音！</p>
+          <p class="cd-instructions">⭐ 一次消 4 顆會出現魔法糖果，點它回答單字題，答對引爆 3×3 大爆炸！</p>
+          <p class="cd-instructions">📈 關卡越高，單字越難（國小 → 國中）</p>
+          <div class="cd-start-stats" id="cd-start-stats"></div>
+          <button class="cd-btn" id="cd-start-btn">🍬 開始遊戲</button>
+          <button class="cd-btn secondary" id="cd-reset-btn">🔄 從第 1 關重新開始</button>
+        </div>
+        <!-- Level Clear -->
+        <div class="cd-clear-screen" id="cd-clear-screen" style="display:none">
+          <h3>🎉 過關！</h3>
+          <div id="cd-clear-info"></div>
+          <button class="cd-btn" id="cd-next-btn">🍬 下一關</button>
+        </div>
+        <!-- Level Fail -->
+        <div class="cd-fail-screen" id="cd-fail-screen" style="display:none">
+          <h3>😢 差一點點！</h3>
+          <div id="cd-fail-info"></div>
+          <button class="cd-btn" id="cd-retry-btn">🔄 再挑戰一次</button>
+        </div>
+        <!-- Vocabulary Quiz -->
+        <div class="cd-quiz" id="cd-quiz" style="display:none">
+          <h3>⭐ 魔法糖果單字題</h3>
+          <div class="cd-quiz-word" id="cd-quiz-word"></div>
+          <div class="cd-quiz-feedback" id="cd-quiz-feedback"></div>
+          <div class="cd-quiz-options" id="cd-quiz-options"></div>
+        </div>
+      </div>
+      <div class="cd-feedback" id="cd-feedback"></div>
+    </div>
+  </main>
+
   <!-- Zone: Daily Quests -->
   <main id="zone-daily" class="zone">
     <div class="daily-container">
@@ -599,6 +658,19 @@
           </ul>
         </div>
         <div class="help-section">
+          <h3>🍬 糖果消消樂</h3>
+          <p>Candy Crush 風格的三消遊戲！交換相鄰糖果，連成 3 個以上就消除。</p>
+          <ul>
+            <li>每關有收集目標，目標以英文單字顯示，點一下可以聽發音</li>
+            <li>一次消 4 顆以上會出現 ⭐ 魔法糖果</li>
+            <li>點魔法糖果回答單字題：答對引爆 3×3 大爆炸＋額外 XP 和寶石</li>
+            <li>連錯兩次會亮出正確答案讓你學起來</li>
+            <li>在步數用完前完成所有目標就過關</li>
+            <li>關卡越高，出題單字越難（第 10 關中等、第 20 關困難）</li>
+            <li>關卡進度自動儲存，隨時可以繼續</li>
+          </ul>
+        </div>
+        <div class="help-section">
           <h3>📋 每日任務</h3>
           <p>每天完成任務可各獲得 10 XP，全部完成再送 50 💎 和神秘寶箱！</p>
           <ul>
@@ -607,6 +679,7 @@
             <li>完成 1 個影片課程</li>
             <li>聽力答對 5 題</li>
             <li>英語帝國擊敗 5 個敵人</li>
+            <li>糖果消消樂通過 1 關</li>
           </ul>
         </div>
         <div class="help-section">
@@ -637,6 +710,7 @@
   <script src="js/spelling.js"></script>
   <script src="js/listening.js"></script>
   <script src="js/empire.js"></script>
+  <script src="js/candy.js"></script>
   <script src="js/daily.js"></script>
   <script src="js/app.js"></script>
 </body>
