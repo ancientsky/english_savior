@@ -164,13 +164,17 @@
   color: #ffd6e8;
 }
 
-/* Overlays (start / clear / fail / quiz) */
+/* Screens (start / clear / fail / quiz) — normal-flow panels that size
+   the wrap themselves. They must NOT be absolute overlays: before a level
+   starts the board is empty (height 0), so an inset-0 overlay has no room
+   and its content spills over the page nav on phones. The board grid is
+   hidden while a screen is shown (candy.js toggles it). */
 .cd-start-screen,
 .cd-clear-screen,
 .cd-fail-screen,
 .cd-quiz {
-  position: absolute;
-  inset: 0;
+  width: 100%;
+  min-height: 320px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -182,7 +186,6 @@
   text-align: center;
   line-height: 1.6;
   padding: 20px;
-  z-index: 5;
 }
 
 .cd-start-screen h3, .cd-clear-screen h3, .cd-fail-screen h3 {
