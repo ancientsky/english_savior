@@ -230,6 +230,10 @@
       <div class="mc-header">
         <h2>⛏️ 單字合成工坊</h2>
         <button class="zone-fs-btn" title="遊戲畫面最大化">⛶</button>
+        <div class="mc-stats">
+          <span id="mc-streak" title="連續無失誤合成">🔥 0</span>
+          <span id="mc-mined" title="本次合成單字數">⛏️ 0</span>
+        </div>
         <div class="mc-difficulty">
           <button class="mc-diff-btn active" data-diff="easy">簡單</button>
           <button class="mc-diff-btn" data-diff="medium">中等</button>
@@ -237,6 +241,8 @@
         </div>
       </div>
       <div class="mc-game-area">
+        <span class="mc-torch" style="left:10px">🔥</span>
+        <span class="mc-torch" style="right:10px">🔥</span>
         <div class="mc-hint-area">
           <div class="mc-hint-img" id="mc-hint-img">🖼️</div>
           <div class="mc-hint-text" id="mc-hint-text">準備開始挖礦...</div>
