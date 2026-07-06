@@ -6,6 +6,9 @@ const MinecraftGame = (() => {
   let currentSlotIndex = 0;
   let usedWords = [];
   let hintShownThisWord = false;
+  let streak = 0;       // consecutive words without a wrong block
+  let minedCount = 0;   // words crafted this session
+  let missedThisWord = false;
 
   const blockStyles = ['', 'stone', 'diamond', 'gold', 'emerald'];
 
@@ -33,6 +36,7 @@ const MinecraftGame = (() => {
 
     currentWord = pool[Math.floor(Math.random() * pool.length)];
     currentSlotIndex = 0;
+    missedThisWord = false;
 
     // Check if hint crystal buff is active - show first letter
     hintShownThisWord = GameEngine.hasBuff('hint');
@@ -52,12 +56,12 @@ const MinecraftGame = (() => {
       hintTextEl.appendChild(ttsBtn);
     }
 
-    // Add TTS button for Chinese translation
+    // Chinese hint: render the **關鍵字** marker as a gold highlight
     const hintZhEl = document.getElementById('mc-hint-zh');
-    hintZhEl.innerHTML = '';
-    hintZhEl.textContent = currentWord.zh;
+    const zhClean = currentWord.zh.replace(/\*\*/g, '');
+    hintZhEl.innerHTML = currentWord.zh.replace(/\*\*(.+?)\*\*/g, '<b class="mc-zh-key">$1</b>');
     if (TTSManager.isSupported()) {
-      const ttsBtnZh = TTSManager.createButton(currentWord.zh, 'zh-TW');
+      const ttsBtnZh = TTSManager.createButton(zhClean, 'zh-TW');
       hintZhEl.appendChild(ttsBtnZh);
     }
 
@@ -105,10 +109,16 @@ const MinecraftGame = (() => {
     const slot = document.querySelector(`.mc-slot[data-index="${currentSlotIndex}"]`);
 
     if (letter === expected) {
-      // Correct letter
+      // Correct letter — "mine" the block: crack, then shatter into bits
+      block.classList.add('used', 'mining');
+      setTimeout(() => {
+        block.classList.add('mined');
+        spawnBlockParticles(block);
+      }, 150);
+
       slot.textContent = letter;
-      slot.classList.add('filled');
-      block.classList.add('used');
+      slot.classList.add('filled', 'pop');
+      setTimeout(() => slot.classList.remove('pop'), 350);
       currentSlotIndex++;
 
       // Check if complete
@@ -116,7 +126,10 @@ const MinecraftGame = (() => {
         wordComplete();
       }
     } else {
-      // Wrong letter — shake
+      // Wrong letter — the block wobbles, slot shakes
+      missedThisWord = true;
+      block.classList.add('wobble');
+      setTimeout(() => block.classList.remove('wobble'), 450);
       slot.classList.add('wrong');
       setTimeout(() => slot.classList.remove('wrong'), 400);
       document.getElementById('mc-feedback').textContent = `❌ 不是 ${letter}，再試試看！`;
@@ -125,13 +138,81 @@ const MinecraftGame = (() => {
     }
   }
 
+  // Debris particles where a block was mined
+  function spawnBlockParticles(block) {
+    const rect = block.getBoundingClientRect();
+    const colors = ['#c9a84c', '#8b6914', '#6b4f0e', '#a87b1a'];
+    for (let i = 0; i < 10; i++) {
+      const p = document.createElement('span');
+      p.className = 'mc-particle';
+      p.style.left = (rect.left + rect.width / 2) + 'px';
+      p.style.top = (rect.top + rect.height / 2) + 'px';
+      p.style.background = colors[i % colors.length];
+      p.style.setProperty('--dx', (Math.random() * 120 - 60) + 'px');
+      p.style.setProperty('--dy', (Math.random() * -90 - 25) + 'px');
+      document.body.appendChild(p);
+      setTimeout(() => p.remove(), 750);
+    }
+  }
+
+  // Minecraft-style XP orbs flying from the crafted item to the XP bar
+  function flyXpOrbs(fromEl, count) {
+    const from = fromEl.getBoundingClientRect();
+    const bar = document.getElementById('xp-bar');
+    if (!bar) return;
+    const target = bar.getBoundingClientRect();
+    for (let i = 0; i < count; i++) {
+      setTimeout(() => {
+        const orb = document.createElement('span');
+        orb.className = 'mc-orb';
+        const sx = from.left + from.width / 2 + (Math.random() * 44 - 22);
+        const sy = from.top + from.height / 2 + (Math.random() * 30 - 15);
+        orb.style.left = sx + 'px';
+        orb.style.top = sy + 'px';
+        document.body.appendChild(orb);
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          orb.style.transform =
+            `translate(${target.left + target.width / 2 - sx}px, ${target.top + target.height / 2 - sy}px) scale(0.4)`;
+          orb.style.opacity = '0.15';
+        }));
+        setTimeout(() => orb.remove(), 900);
+      }, i * 80);
+    }
+  }
+
+  function updateStats() {
+    const streakEl = document.getElementById('mc-streak');
+    const minedEl = document.getElementById('mc-mined');
+    if (streakEl) streakEl.textContent = `🔥 ${streak}`;
+    if (minedEl) minedEl.textContent = `⛏️ ${minedCount}`;
+  }
+
   function wordComplete() {
     usedWords.push(currentWord.word);
-    document.getElementById('mc-result-word').textContent = currentWord.word;
-    document.getElementById('mc-result').classList.add('success');
+    minedCount++;
+    streak = missedThisWord ? 0 : streak + 1;
+    updateStats();
 
-    // Play correct sound
+    const result = document.getElementById('mc-result');
+    document.getElementById('mc-result-word').textContent = currentWord.word;
+    result.classList.add('success', 'crafting');
+    setTimeout(() => result.classList.remove('crafting'), 1200);
+
+    // Crafted! Sparkles + XP orbs flying to the HUD bar
+    spawnBlockParticles(result);
+    flyXpOrbs(result, 6);
+
+    // Play correct sound + hear the word
     SoundManager.playCorrect();
+    if (TTSManager.isSupported()) {
+      setTimeout(() => TTSManager.speak(currentWord.word.toLowerCase(), 'en-US', 0.85), 400);
+    }
+
+    // Vein bonus every 5-word streak
+    if (streak > 0 && streak % 5 === 0) {
+      GameEngine.addGems(3);
+      GameEngine.showToast(`💎 挖到鑽石礦脈！連續 ${streak} 個單字 +3 💎`, 'achievement');
+    }
 
     // Add feedback with TTS button for the completed word
     const feedbackEl = document.getElementById('mc-feedback');
