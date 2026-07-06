@@ -27,6 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // Resume paused game loops when their zone becomes visible again
       if (zone === 'empire') EmpireGame.onShow();
       if (zone === 'sling') SlingGame.onShow();
+      if (zone === 'spelling') SpellingGame.onShow();
     });
   });
 

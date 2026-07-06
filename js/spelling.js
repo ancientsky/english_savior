@@ -47,6 +47,16 @@ const SpellingGame = (() => {
 
   // Character
   let charY, charVY, isJumping, runFrame;
+  let jumpsUsed = 0;      // double jump support
+  let landSquash = 0;     // squash & stretch timer
+
+  // Fun systems
+  let combo = 0;              // consecutive correct letters
+  let damageThisWord = false; // PERFECT word bonus tracking
+  let gemCoins = [];          // floating collectible gems
+  let gemCoinsCollected = 0;
+  let nextGemAt = 0;
+  let skyPhase = 0;           // 0 day → 1 sunset → 2 night → 3 dawn
 
   // Effects
   let particles = [];
@@ -54,6 +64,18 @@ const SpellingGame = (() => {
   let damageFlash = 0;
   let collectEffects = [];
   let wordCompleteFlash = 0;
+
+  // Cached ground gradient (rebuilding gradients every frame costs perf)
+  let groundGrad = null;
+  let skyGradCache = { phase: -1, grad: null };
+
+  // Sky palettes for the day cycle (top, mid, bottom)
+  const SKY_PHASES = [
+    { top: [74, 144, 217], mid: [125, 184, 232], bot: [168, 216, 240], night: 0 },   // day
+    { top: [116, 78, 130], mid: [217, 117, 90],  bot: [240, 201, 135], night: 0.15 }, // sunset
+    { top: [15, 12, 41],   mid: [26, 26, 78],    bot: [48, 43, 99],    night: 1 },    // night
+    { top: [43, 45, 94],   mid: [122, 92, 138],  bot: [217, 138, 106], night: 0.35 }, // dawn
+  ];
 
   // Scenery
   let clouds = [];
@@ -73,8 +95,12 @@ const SpellingGame = (() => {
     canvas = document.getElementById('sp-canvas');
     if (!canvas) return;
     ctx = canvas.getContext('2d');
-    canvas.width = CANVAS_W;
-    canvas.height = CANVAS_H;
+    // Render at device-pixel resolution (capped 2×) so the game is crisp
+    // on phones/retina instead of blurry upscaled 1×
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = CANVAS_W * dpr;
+    canvas.height = CANVAS_H * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     hpEl = document.getElementById('sp-hp');
     wordEl = document.getElementById('sp-word-en');
@@ -98,6 +124,9 @@ const SpellingGame = (() => {
     document.addEventListener('keydown', onKey);
     canvas.addEventListener('click', onTap);
     canvas.addEventListener('touchstart', e => { e.preventDefault(); onTap(e); });
+    // The start overlay sits on top of the canvas, so "tap to start"
+    // must listen on the overlay itself
+    startScreen.addEventListener('click', onTap);
 
     // Restart buttons
     document.getElementById('sp-restart-btn').addEventListener('click', backToStart);
@@ -149,8 +178,12 @@ const SpellingGame = (() => {
   function handleInput() {
     if (state === 'idle') {
       startGame();
-    } else if (state === 'running' && !isJumping) {
-      jump();
+    } else if (state === 'running') {
+      if (!isJumping) {
+        jump(false);
+      } else if (jumpsUsed < 2) {
+        jump(true); // double jump!
+      }
     }
   }
 
@@ -174,7 +207,16 @@ const SpellingGame = (() => {
     charY = GROUND_Y;
     charVY = 0;
     isJumping = false;
+    jumpsUsed = 0;
+    landSquash = 0;
     runFrame = 0;
+    combo = 0;
+    damageThisWord = false;
+    gemCoins = [];
+    gemCoinsCollected = 0;
+    nextGemAt = 500 + Math.random() * 300;
+    skyPhase = 0;
+    skyGradCache = { phase: -1, grad: null };
     screenShake = 0;
     damageFlash = 0;
     wordCompleteFlash = 0;
@@ -207,7 +249,20 @@ const SpellingGame = (() => {
     usedWords.push(currentWord.word);
     letterIndex = 0;
     distSinceCorrect = 0;
+    damageThisWord = false;
     updateWordDisplay();
+    // Hearing the word helps kids connect spelling to sound
+    if (TTSManager.isSupported()) {
+      TTSManager.speak(currentWord.word.toLowerCase(), 'en-US', 0.85);
+    }
+  }
+
+  // Extract the concise meaning from either VOCAB_DATA zh format
+  function shortZh(zh) {
+    const bold = zh.match(/\*\*(.+?)\*\*/);
+    if (bold) return bold[1].trim();
+    if (zh.includes('—')) return zh.split('—')[0].trim();
+    return zh.trim();
   }
 
   // ===== MAIN LOOP =====
@@ -215,6 +270,12 @@ const SpellingGame = (() => {
 
   function gameLoop(timestamp) {
     if (state !== 'running') return;
+    // Pause (and stop burning CPU) while another zone is open
+    if (!zoneActive()) {
+      lastTime = 0;
+      paused = true;
+      return;
+    }
     if (lastTime === 0) lastTime = timestamp;
     const rawDt = timestamp - lastTime;
     lastTime = timestamp;
@@ -224,6 +285,24 @@ const SpellingGame = (() => {
     update(dt);
     render();
     requestAnimationFrame(gameLoop);
+  }
+
+  let paused = false;
+
+  function zoneActive() {
+    const zone = document.getElementById('zone-spelling');
+    return zone && zone.classList.contains('active');
+  }
+
+  // Called by app.js when the zone becomes visible again
+  function onShow() {
+    if (state === 'running' && paused) {
+      paused = false;
+      lastTime = 0;
+      requestAnimationFrame(gameLoop);
+    } else if (state !== 'running' && !idleAnimId) {
+      renderIdle();
+    }
   }
 
   function update(dt) {
@@ -244,7 +323,25 @@ const SpellingGame = (() => {
         charY = GROUND_Y;
         charVY = 0;
         isJumping = false;
+        jumpsUsed = 0;
+        landSquash = 6; // squash on landing
       }
+    }
+    if (landSquash > 0) landSquash -= dt;
+
+    // Sky day-cycle eases toward the phase for the current progress
+    const targetPhase = Math.min(3, (wordsCompleted / WORDS_TO_WIN) * 3.6);
+    skyPhase += (targetPhase - skyPhase) * 0.015 * dt;
+
+    // Fever trail once the combo is hot
+    if (combo >= 5 && frameCount % 3 === 0) {
+      particles.push({
+        x: CHAR_X + Math.random() * 10, y: charY - 20 - Math.random() * 20,
+        vx: -2 - Math.random(), vy: (Math.random() - 0.5) * 1.5,
+        life: 14 + Math.random() * 8,
+        color: ['#f5c518', '#ff6b81', '#4ecca3', '#00b4d8'][frameCount % 4],
+        size: 2 + Math.random() * 2,
+      });
     }
 
     // Run animation (time-based, ~100ms per frame like 6 frames at 60fps)
@@ -264,6 +361,42 @@ const SpellingGame = (() => {
       obstacles[i].x -= speed * dt;
     }
     obstacles = obstacles.filter(o => o.x + o.w > -60);
+
+    // Floating gem coins: jump to collect (capped per round)
+    nextGemAt -= speed * dt;
+    if (nextGemAt <= 0) {
+      if (gemCoinsCollected + gemCoins.length < 5) {
+        gemCoins.push({
+          x: CANVAS_W + 20,
+          y: GROUND_Y - 78 - Math.random() * 28,
+          bob: Math.random() * Math.PI * 2,
+          hit: false,
+        });
+      }
+      nextGemAt = 550 + Math.random() * 450;
+    }
+    for (let i = gemCoins.length - 1; i >= 0; i--) {
+      const g = gemCoins[i];
+      g.x -= speed * dt;
+      g.bob += 0.08 * dt;
+      if (!g.hit &&
+          Math.abs(g.x - (CHAR_X + 16)) < 24 &&
+          Math.abs((g.y + Math.sin(g.bob) * 5) - (charY - 30)) < 32) {
+        g.hit = true;
+        gemCoinsCollected++;
+        GameEngine.addGems(1);
+        gemsEarnedThisRound += 1;
+        SoundManager.playCorrect();
+        for (let j = 0; j < 8; j++) {
+          particles.push({
+            x: g.x, y: g.y,
+            vx: -2 + Math.random() * 4, vy: -2 - Math.random() * 2,
+            life: 16 + Math.random() * 8, color: '#7db8ff', size: 2 + Math.random() * 2,
+          });
+        }
+      }
+      if (g.hit || g.x < -30) gemCoins.splice(i, 1);
+    }
 
     // Collision detection
     const cx = CHAR_X + 2;
@@ -359,22 +492,44 @@ const SpellingGame = (() => {
     obstacles.push({ x: CANVAS_W + 20, w, h, letter, isCorrect, shapeType, color, hit: false });
   }
 
-  function jump() {
+  function jump(isDouble) {
     isJumping = true;
-    charVY = JUMP_VEL;
-    // Dust particles
-    for (let i = 0; i < 5; i++) {
-      particles.push({
-        x: CHAR_X + 10, y: GROUND_Y,
-        vx: -1 + Math.random() * 2, vy: -1 - Math.random() * 2,
-        life: 12 + Math.random() * 8, color: '#8d7b68', size: 2 + Math.random() * 2,
-      });
+    jumpsUsed++;
+    charVY = isDouble ? JUMP_VEL * 0.88 : JUMP_VEL;
+    if (isDouble) {
+      // Air-ring puff for the double jump
+      for (let i = 0; i < 10; i++) {
+        const a = (Math.PI * 2 * i) / 10;
+        particles.push({
+          x: CHAR_X + 16, y: charY - 10,
+          vx: Math.cos(a) * 2.2, vy: Math.sin(a) * 1.2 + 0.5,
+          life: 12 + Math.random() * 6, color: '#9adcff', size: 2.2,
+        });
+      }
+    } else {
+      // Ground dust
+      for (let i = 0; i < 5; i++) {
+        particles.push({
+          x: CHAR_X + 10, y: GROUND_Y,
+          vx: -1 + Math.random() * 2, vy: -1 - Math.random() * 2,
+          life: 12 + Math.random() * 8, color: '#8d7b68', size: 2 + Math.random() * 2,
+        });
+      }
     }
   }
 
   function collectLetter(obs) {
     letterIndex++;
+    combo++;
     SoundManager.playCorrect();
+
+    // Combo popup from ×2 up
+    if (combo >= 2) {
+      collectEffects.push({
+        letter: `COMBO ×${combo}`, small: true,
+        x: CHAR_X + 60, y: charY - 70, life: 30,
+      });
+    }
 
     // Gold sparkle particles
     for (let i = 0; i < 14; i++) {
@@ -400,6 +555,8 @@ const SpellingGame = (() => {
 
   function takeDamage(obs) {
     hp--;
+    combo = 0;
+    damageThisWord = true;
     SoundManager.playWrong();
     screenShake = 10;
     damageFlash = 1;
@@ -442,8 +599,25 @@ const SpellingGame = (() => {
       gemPerWord += 2;
       GameEngine.consumeBuff('gem_bonus');
     }
+    // PERFECT word: spelled without taking any damage → +2 bonus gems
+    if (!damageThisWord) {
+      gemPerWord += 2;
+      collectEffects.push({
+        letter: 'PERFECT! ⭐', small: true,
+        x: CHAR_X + 80, y: charY - 85, life: 45,
+      });
+    }
     GameEngine.addGems(gemPerWord);
     gemsEarnedThisRound += gemPerWord;
+
+    // Hear the completed word once more
+    if (TTSManager.isSupported()) {
+      TTSManager.speak(currentWord.word.toLowerCase(), 'en-US', 0.85);
+    }
+
+    // Speed ramps up a little with each word — builds excitement
+    const cfgSpeed = DIFF_CONFIG[diff].speed;
+    speed = Math.min(cfgSpeed + wordsCompleted * 0.07, cfgSpeed * 1.55);
 
     updateHUD();
 
@@ -513,6 +687,11 @@ const SpellingGame = (() => {
 
   function idleLoop() {
     if (state === 'running') return;
+    // Don't burn CPU rendering the idle scene while another zone is open
+    if (!zoneActive()) {
+      idleAnimId = null;
+      return;
+    }
     idleFrame++;
     // Slow gentle bounce: period ~180 frames (~3 seconds at 60fps)
     const bounce = Math.sin(idleFrame * 0.035) * 6;
@@ -543,6 +722,15 @@ const SpellingGame = (() => {
       if (!obstacles[i].hit) drawObstacle(obstacles[i]);
     }
 
+    // Floating gem coins
+    ctx.font = '22px serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (let i = 0; i < gemCoins.length; i++) {
+      const g = gemCoins[i];
+      ctx.fillText('💎', g.x, g.y + Math.sin(g.bob) * 5);
+    }
+
     // Character
     drawCharacterAt(CHAR_X, charY, runFrame, isJumping);
 
@@ -560,15 +748,17 @@ const SpellingGame = (() => {
     }
     ctx.globalAlpha = 1;
 
-    // Collect letter effects (float up)
+    // Collect letter effects & popups (float up)
     for (let i = 0; i < collectEffects.length; i++) {
       const e = collectEffects[i];
       ctx.globalAlpha = Math.max(0, e.life / 35);
-      ctx.font = 'bold 22px "Press Start 2P", monospace';
+      ctx.font = e.small
+        ? 'bold 13px "Press Start 2P", monospace'
+        : 'bold 22px "Press Start 2P", monospace';
       ctx.textAlign = 'center';
       ctx.fillStyle = 'rgba(0,0,0,0.4)';
       ctx.fillText(e.letter, e.x + 2, e.y + 2);
-      ctx.fillStyle = '#f5c518';
+      ctx.fillStyle = e.small ? '#4ecca3' : '#f5c518';
       ctx.fillText(e.letter, e.x, e.y);
     }
     ctx.globalAlpha = 1;
@@ -588,20 +778,66 @@ const SpellingGame = (() => {
     ctx.restore();
   }
 
+  // Interpolated sky palette for the current phase of the day cycle
+  function skyColors() {
+    const p = Math.min(3, Math.max(0, skyPhase));
+    const a = SKY_PHASES[Math.floor(p)];
+    const b = SKY_PHASES[Math.min(3, Math.ceil(p))];
+    const t = p - Math.floor(p);
+    const mix = (c1, c2) => c1.map((v, i) => Math.round(v + (c2[i] - v) * t));
+    return {
+      top: mix(a.top, b.top),
+      mid: mix(a.mid, b.mid),
+      bot: mix(a.bot, b.bot),
+      night: a.night + (b.night - a.night) * t,
+    };
+  }
+
   function drawSky() {
-    const grad = ctx.createLinearGradient(0, 0, 0, GROUND_Y);
-    grad.addColorStop(0, '#0f0c29');
-    grad.addColorStop(0.5, '#1a1a4e');
-    grad.addColorStop(1, '#302b63');
-    ctx.fillStyle = grad;
+    // Rebuild the gradient only when the sky actually changes
+    if (Math.abs(skyGradCache.phase - skyPhase) > 0.004 || !skyGradCache.grad) {
+      const c = skyColors();
+      const grad = ctx.createLinearGradient(0, 0, 0, GROUND_Y);
+      grad.addColorStop(0, `rgb(${c.top.join(',')})`);
+      grad.addColorStop(0.5, `rgb(${c.mid.join(',')})`);
+      grad.addColorStop(1, `rgb(${c.bot.join(',')})`);
+      skyGradCache = { phase: skyPhase, grad };
+    }
+    ctx.fillStyle = skyGradCache.grad;
     ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+    // Sun (day/sunset) fades into moon (night)
+    const night = skyColors().night;
+    if (night < 0.6) {
+      ctx.globalAlpha = 1 - night;
+      ctx.fillStyle = skyPhase > 0.5 ? '#ffb25e' : '#ffe28a';
+      ctx.beginPath();
+      ctx.arc(690, 55 + skyPhase * 30, 24, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    if (night > 0.5) {
+      ctx.globalAlpha = (night - 0.5) * 2;
+      ctx.fillStyle = '#f4f1de';
+      ctx.beginPath();
+      ctx.arc(700, 55, 18, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = skyGradCache.grad ? `rgb(${skyColors().top.join(',')})` : '#0f0c29';
+      ctx.beginPath();
+      ctx.arc(707, 50, 15, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
   }
 
   function drawStars() {
+    // Stars only show at night; fade with the day cycle
+    const night = skyColors().night;
+    if (night <= 0.05) return;
     for (let i = 0; i < starSeed.length; i++) {
       const s = starSeed[i];
       const twinkle = Math.sin(frameCount * 0.04 + i * 1.7) * 0.3 + 0.6;
-      ctx.globalAlpha = twinkle * 0.6;
+      ctx.globalAlpha = twinkle * 0.6 * night;
       ctx.fillStyle = '#fff';
       ctx.fillRect(s.x, s.y, s.s, s.s);
     }
@@ -626,9 +862,11 @@ const SpellingGame = (() => {
   }
 
   function drawCloudsScene() {
+    // Clouds read brighter in daylight, faint at night
+    const alpha = 0.1 + (1 - skyColors().night) * 0.35;
     for (let i = 0; i < clouds.length; i++) {
       const c = clouds[i];
-      ctx.fillStyle = 'rgba(255,255,255,0.1)';
+      ctx.fillStyle = `rgba(255,255,255,${alpha.toFixed(2)})`;
       ctx.beginPath(); ctx.ellipse(c.x, c.y, c.w / 2, 10, 0, 0, Math.PI * 2); ctx.fill();
       ctx.beginPath(); ctx.ellipse(c.x - c.w * 0.2, c.y + 5, c.w * 0.3, 7, 0, 0, Math.PI * 2); ctx.fill();
       ctx.beginPath(); ctx.ellipse(c.x + c.w * 0.25, c.y + 3, c.w * 0.25, 8, 0, 0, Math.PI * 2); ctx.fill();
@@ -640,12 +878,14 @@ const SpellingGame = (() => {
     ctx.fillStyle = '#3d6b1f';
     ctx.fillRect(0, GROUND_Y - 2, CANVAS_W, 5);
 
-    // Dirt
-    const grad = ctx.createLinearGradient(0, GROUND_Y, 0, CANVAS_H);
-    grad.addColorStop(0, '#4a3628');
-    grad.addColorStop(0.4, '#362518');
-    grad.addColorStop(1, '#1f1510');
-    ctx.fillStyle = grad;
+    // Dirt (gradient cached — building it per frame is wasted work)
+    if (!groundGrad) {
+      groundGrad = ctx.createLinearGradient(0, GROUND_Y, 0, CANVAS_H);
+      groundGrad.addColorStop(0, '#4a3628');
+      groundGrad.addColorStop(0.4, '#362518');
+      groundGrad.addColorStop(1, '#1f1510');
+    }
+    ctx.fillStyle = groundGrad;
     ctx.fillRect(0, GROUND_Y + 3, CANVAS_W, GROUND_H);
 
     // Scrolling ground details
@@ -715,6 +955,16 @@ const SpellingGame = (() => {
 
   function drawCharacterAt(x, y, frame, jumping) {
     ctx.save();
+
+    // Squash & stretch around the feet for lively motion
+    let sxScale = 1, syScale = 1;
+    if (landSquash > 0) { sxScale = 1.12; syScale = 0.85; }
+    else if (jumping && charVY < -2.5) { sxScale = 0.94; syScale = 1.08; }
+    if (sxScale !== 1 || syScale !== 1) {
+      ctx.translate(x + 16, y);
+      ctx.scale(sxScale, syScale);
+      ctx.translate(-(x + 16), -y);
+    }
 
     // Pixel-art T-Rex dinosaur (like Chrome dino)
     const dino = '#4ecca3';       // main body green
@@ -841,8 +1091,9 @@ const SpellingGame = (() => {
       }
     }
     wordEl.innerHTML = html;
-    zhEl.textContent = currentWord.zh;
+    // Concise meaning + emoji hint (raw zh can be a full sentence with ** markers)
+    zhEl.textContent = `${currentWord.hint} ${shortZh(currentWord.zh)}`;
   }
 
-  return { init };
+  return { init, onShow };
 })();
