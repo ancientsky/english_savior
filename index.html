@@ -100,6 +100,7 @@
   <link rel="stylesheet" href="css/sling.css">
   <link rel="stylesheet" href="css/builder.css">
   <link rel="stylesheet" href="css/speak.css">
+  <link rel="stylesheet" href="css/tower.css">
 </head>
 <body>
   <!-- Top HUD Bar -->
@@ -159,6 +160,9 @@
     </button>
     <button class="nav-tab" data-zone="speak">
       <span class="nav-icon">🎤</span><span class="nav-label">魔法咒語學院</span>
+    </button>
+    <button class="nav-tab" data-zone="tower">
+      <span class="nav-icon">🧿</span><span class="nav-label">單字魔王塔</span>
     </button>
     <button class="nav-tab" data-zone="daily">
       <span class="nav-icon">📋</span><span class="nav-label">每日任務</span>
@@ -230,6 +234,12 @@
           <h3>魔法咒語學院</h3>
           <p>大聲唸出英文咒語，用你的聲音施展魔法擊退怪物！</p>
           <span class="card-tag">Speaking</span>
+        </div>
+        <div class="hub-card tower-card" data-zone="tower">
+          <div class="card-icon">🧿</div>
+          <h3>單字魔王塔</h3>
+          <p>神魔之塔風格轉珠！滑動字母珠拼出單字，字越長攻擊越強！</p>
+          <span class="card-tag">Word Battle</span>
         </div>
       </div>
     </div>
@@ -737,6 +747,69 @@
     </div>
   </main>
 
+  <!-- Zone: Word Boss Tower (單字魔王塔) -->
+  <main id="zone-tower" class="zone">
+    <div class="tw-container">
+      <div class="tw-header">
+        <h2>🧿 單字魔王塔</h2>
+        <button class="zone-fs-btn" title="遊戲畫面最大化">⛶</button>
+        <div class="tw-floor" id="tw-floor">🗼 第 1 層</div>
+      </div>
+
+      <!-- Start Screen (normal flow — mobile safe) -->
+      <div class="tw-screen" id="tw-start-screen">
+        <h3>🧿 單字魔王塔</h3>
+        <p class="tw-instructions">👆 像神魔之塔一樣，在字母珠上滑動連線，拼出英文單字攻擊魔王！</p>
+        <p class="tw-instructions">⚔️ 單字越長傷害越大，連續拼對還有 COMBO 加成！</p>
+        <p class="tw-instructions">⭐ 拼出「任務單字」＝雙倍傷害＋回血＋額外獎勵</p>
+        <p class="tw-instructions">⏳ 每拼一個字魔王的攻擊倒數就少 1，歸零他就會反擊——出手要又快又狠！</p>
+        <p class="tw-instructions">🗼 每打倒一隻魔王往上爬一層，魔王會越來越強（進度自動儲存）</p>
+        <p class="tw-instructions" id="tw-start-floor">目前塔層：第 1 層</p>
+        <button class="tw-btn" id="tw-start-btn">⚔️ 開始挑戰</button>
+      </div>
+
+      <!-- Victory Screen -->
+      <div class="tw-screen" id="tw-win-screen" style="display:none">
+        <h3>🎉 魔王被擊倒了！</h3>
+        <div id="tw-win-info"></div>
+        <button class="tw-btn" id="tw-win-btn">🗼 挑戰下一層</button>
+      </div>
+
+      <!-- Defeat Screen -->
+      <div class="tw-screen" id="tw-lose-screen" style="display:none">
+        <h3>💥 被魔王打敗了……</h3>
+        <div id="tw-lose-info"></div>
+        <button class="tw-btn" id="tw-lose-btn">⚔️ 再挑戰一次</button>
+      </div>
+
+      <!-- Game Area -->
+      <div id="tw-game" style="display:none">
+        <div class="tw-stage" id="tw-stage">
+          <div class="tw-boss idle" id="tw-boss">🟢</div>
+          <div class="tw-boss-name" id="tw-boss-name">史萊姆王</div>
+          <div class="tw-bar-row">
+            <div class="tw-bar">
+              <div class="tw-bar-fill" id="tw-boss-hp-bar"></div>
+              <div class="tw-bar-text" id="tw-boss-hp-text"></div>
+            </div>
+            <div class="tw-boss-cd" id="tw-boss-cd">⏳ 5</div>
+          </div>
+          <div class="tw-player-row">
+            <span class="tw-player-icon" id="tw-player-icon">🧑‍🎓</span>
+            <div class="tw-bar">
+              <div class="tw-bar-fill" id="tw-player-hp-bar"></div>
+              <div class="tw-bar-text" id="tw-player-hp-text"></div>
+            </div>
+            <div class="tw-combo" id="tw-combo"></div>
+          </div>
+        </div>
+        <div class="tw-quest" id="tw-quest"></div>
+        <div class="tw-trace" id="tw-trace"></div>
+        <div class="tw-board" id="tw-board"></div>
+      </div>
+    </div>
+  </main>
+
   <!-- Zone: Daily Quests -->
   <main id="zone-daily" class="zone">
     <div class="daily-container">
@@ -941,6 +1014,21 @@
           </ul>
         </div>
         <div class="help-section">
+          <h3>🧿 單字魔王塔</h3>
+          <p>神魔之塔風格的轉珠戰鬥！在字母珠盤上滑動連線拼出英文單字，攻擊魔王！</p>
+          <ul>
+            <li>手指（或滑鼠）在相鄰的字母珠上滑動連線，放開就出招</li>
+            <li>只要是課綱單字表裡 3 個字母以上的單字都算數——你會的單字越多越強！</li>
+            <li>單字越長傷害越大（3 字母 48 點、5 字母 160 點、8 字母 448 點）</li>
+            <li>連續拼對累積 COMBO，每層加 15% 傷害；拼錯 COMBO 歸零</li>
+            <li>⭐ 任務單字（有中文提示）＝雙倍傷害＋回血 15＋額外 XP 寶石</li>
+            <li>每拼出一個單字，魔王的 ⏳ 攻擊倒數少 1，歸零就會被反擊</li>
+            <li>12 種魔王輪番上陣，每爬一層越來越強；塔層進度自動儲存</li>
+            <li>簡單層會直接告訴你任務單字怎麼拼；第 10 層起只給字首、第 20 層起只給中文意思</li>
+            <li>提示水晶會亮出任務單字的路徑、復活羽毛可以擋下致命一擊</li>
+          </ul>
+        </div>
+        <div class="help-section">
           <h3>📋 每日任務</h3>
           <p>每天完成任務可各獲得 10 XP，全部完成再送 50 💎 和神秘寶箱！</p>
           <ul>
@@ -953,6 +1041,7 @@
             <li>單字彈弓打中 5 個單字箱</li>
             <li>句子建築工地組對 3 個句子</li>
             <li>魔法咒語學院唸對 3 個咒語</li>
+            <li>單字魔王塔拼出 5 個單字</li>
           </ul>
         </div>
         <div class="help-section">
@@ -987,6 +1076,7 @@
   <script src="js/sling.js"></script>
   <script src="js/builder.js"></script>
   <script src="js/speak.js"></script>
+  <script src="js/tower.js"></script>
   <script src="js/daily.js"></script>
   <script src="js/app.js"></script>
 </body>

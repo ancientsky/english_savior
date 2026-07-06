@@ -175,6 +175,7 @@ const GameEngine = (() => {
       dailySling: 0,
       dailyBuilder: 0,
       dailySpeak: 0,
+      dailyTower: 0,
       dailyDate: null,
       dailyClaimed: [],
       dailyBonusClaimed: false,
@@ -188,6 +189,8 @@ const GameEngine = (() => {
       builderSentences: 0,
       builderLandmarks: 0,
       speakCasts: 0,
+      towerWords: 0,
+      towerBosses: 0,
       // history
       learnedWordsList: [],
       // shop system
@@ -243,6 +246,7 @@ const GameEngine = (() => {
       state.dailySling = 0;
       state.dailyBuilder = 0;
       state.dailySpeak = 0;
+      state.dailyTower = 0;
       state.dailyClaimed = [];
       state.dailyBonusClaimed = false;
       state.dailyDate = today;
@@ -357,6 +361,20 @@ const GameEngine = (() => {
     save();
     checkAchievements();
     checkDailyQuests();
+  }
+
+  function recordTowerWord() {
+    state.towerWords = (state.towerWords || 0) + 1;
+    state.dailyTower = (state.dailyTower || 0) + 1;
+    save();
+    checkAchievements();
+    checkDailyQuests();
+  }
+
+  function recordTowerBoss() {
+    state.towerBosses = (state.towerBosses || 0) + 1;
+    save();
+    checkAchievements();
   }
 
   function recordSling() {
@@ -882,6 +900,7 @@ const GameEngine = (() => {
     recordSpelling, recordListening,
     recordEmpire, recordEmpireAge, recordCandy, recordSling,
     recordBuilder, recordBuilderLandmark, recordSpeak,
+    recordTowerWord, recordTowerBoss,
     recordPerfectGrammar, recordStreak,
     updateHUD, updateStats,
     showInventory, showAchievements, showToast,
