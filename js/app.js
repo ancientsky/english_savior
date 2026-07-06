@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
   SlingGame.init();
   BuilderGame.init();
   SpeakGame.init();
+  TowerGame.init();
   DailyQuests.init();
 
   // Navigation

@@ -28,6 +28,8 @@ const ACHIEVEMENTS = [
   { id: 'builder_master', name: '建築大師', desc: '在句子建築工地組對 80 個句子', icon: '🏘️', condition: s => (s.builderSentences || 0) >= 80 },
   { id: 'speak_first', name: '開口第一咒', desc: '在魔法咒語學院唸對第一個咒語', icon: '🎤', condition: s => (s.speakCasts || 0) >= 1 },
   { id: 'speak_master', name: '咒語大師', desc: '在魔法咒語學院唸對 50 個咒語', icon: '🧙', condition: s => (s.speakCasts || 0) >= 50 },
+  { id: 'tower_first', name: '初入魔王塔', desc: '在單字魔王塔打倒第一隻魔王', icon: '🗡️', condition: s => (s.towerBosses || 0) >= 1 },
+  { id: 'tower_slayer', name: '屠魔勇者', desc: '在單字魔王塔打倒 10 隻魔王', icon: '👹', condition: s => (s.towerBosses || 0) >= 10 },
 ];
 
 const DAILY_QUESTS = [
@@ -40,6 +42,7 @@ const DAILY_QUESTS = [
   { id: 'dq_sling', name: '彈弓神射手', desc: '在單字彈弓打中 5 個單字箱', icon: '🐤', target: 5, key: 'dailySling' },
   { id: 'dq_builder', name: '句子建築師', desc: '在句子建築工地組對 3 個句子', icon: '🧱', target: 3, key: 'dailyBuilder' },
   { id: 'dq_speak', name: '大聲唸咒語', desc: '在魔法咒語學院唸對 3 個咒語', icon: '🎤', target: 3, key: 'dailySpeak' },
+  { id: 'dq_tower', name: '轉珠打魔王', desc: '在單字魔王塔拼出 5 個單字', icon: '🧿', target: 5, key: 'dailyTower' },
 ];
 
 const INVENTORY_ITEMS = [

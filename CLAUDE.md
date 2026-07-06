@@ -25,6 +25,7 @@ css/
   sling.css             — Word slingshot theme
   builder.css           — Sentence builder theme
   speak.css             — Spell academy (speaking) theme
+  tower.css             — Word boss tower (orb battle) theme
 js/
   app.js                — Navigation and initialization (DOMContentLoaded entry point)
   engine.js             — Core game engine (XP, levels, gems, inventory, achievements, shop, buff system, daily quest rewards, sound effects, localStorage save)
@@ -38,6 +39,7 @@ js/
   sling.js              — Angry Birds-style word slingshot (canvas physics)
   builder.js            — Duolingo-style sentence builder (word-order game building 33 world landmarks with cultural facts)
   speak.js              — Spell academy speaking game (Web Speech Recognition, honor-mode fallback)
+  tower.js              — Tower of Saviors-style word boss battle (drag letter orbs to spell words; 12 bosses scale endlessly by floor)
   daily.js              — Daily quest tracking and rendering
   tts.js                — Text-to-speech module (Web Speech API)
   vendor/
@@ -47,7 +49,7 @@ js/
     grammar.js          — Grammar questions (GRAMMAR_DATA, 480 questions, 68 topics covering the 國中基礎文法句構參考表)
     video.js            — Video lessons (VIDEO_LESSONS, 42 lessons with 126 quiz questions)
     empire.js           — Empire dialogues (EMPIRE_DIALOGUES) and daily-life English (EMPIRE_LIFE), easy/medium/hard
-    game.js             — Achievements (28), daily quests (9), inventory items, shop items
+    game.js             — Achievements (30), daily quests (10), inventory items, shop items
 reference/
   taiwan_elementary_1000_minecraft_flavor.csv  — Source word list reference
 ```
@@ -67,6 +69,7 @@ All game modules use the IIFE (Immediately Invoked Function Expression) pattern 
 - `SlingGame` — word slingshot physics game (sling.js)
 - `BuilderGame` — sentence builder word-order game (builder.js)
 - `SpeakGame` — spell academy speaking game (speak.js)
+- `TowerGame` — word boss tower orb battle (tower.js)
 - `DailyQuests` — daily quest system (daily.js)
 - `TTSManager` — text-to-speech (tts.js)
 
@@ -99,14 +102,14 @@ Each game module exports `{ init }`. `app.js` calls all `.init()` methods on `DO
 | Sentence builder | 15 XP + 1 gem/sentence, +10 gems house bonus | 20 XP + 1 gem, +15 gems bonus | 25 XP + 1 gem, +20 gems bonus |
 | Spell academy | 12 XP + 1 gem/monster, +10 gems round bonus | 16 XP + 1 gem, +15 gems bonus | 20 XP + 1 gem, +20 gems bonus (honor mode halves XP and bonus) |
 
-Empire (英語帝國) scales by age instead of difficulty: 10/15/20/25 XP + 1 gem per kill in Dark/Feudal/Castle/Imperial age, plus a 5/10/15/20-gem wave-clear bonus. Candy (糖果消消樂) scales by level tier (1-9 easy / 10-19 medium / 20+ hard): level clear grants 30/45/60 XP + 5/8/11 gems, and answering a magic-star vocabulary quiz on the first try grants 15 XP + 1 gem. Every completed daily quest grants 10 XP; completing all of them grants a one-time 50 gems + random item per day.
+Tower (單字魔王塔) scales by floor tier (1-9 easy / 10-19 medium / 20+ hard): boss kill grants 30/45/60 XP + 5/8/11 gems, spelling the quest word grants 10 XP + 1 gem (plus double damage and +15 HP in-game). Empire (英語帝國) scales by age instead of difficulty: 10/15/20/25 XP + 1 gem per kill in Dark/Feudal/Castle/Imperial age, plus a 5/10/15/20-gem wave-clear bonus. Candy (糖果消消樂) scales by level tier (1-9 easy / 10-19 medium / 20+ hard): level clear grants 30/45/60 XP + 5/8/11 gems, and answering a magic-star vocabulary quiz on the first try grants 15 XP + 1 gem. Every completed daily quest grants 10 XP; completing all of them grants a one-time 50 gems + random item per day.
 
 ### Browser APIs Used
 - **Web Audio API** — synthesized sound effects (SoundManager)
 - **Web Speech API** — text-to-speech pronunciation (TTSManager), listening game audio, and speech recognition for the spell academy (with self-graded "honor mode" fallback where unavailable, e.g. iOS Safari)
 - **Canvas 2D API** — spelling runner rendering (800×340 px) and word slingshot physics (880×420 px)
 - **WebGL via Three.js** — empire 3D battlefield rendering (`js/vendor/three.min.js`, r149)
-- **localStorage** — game state persistence (`english_savior_save` for the engine, `english_savior_empire` for empire campaign progress, `english_savior_candy` for candy level progress, `english_savior_builder` for the landmark collection)
+- **localStorage** — game state persistence (`english_savior_save` for the engine, `english_savior_empire` for empire campaign progress, `english_savior_candy` for candy level progress, `english_savior_builder` for the landmark collection, `english_savior_tower` for the tower floor)
 
 ## Naming Conventions
 - **CSS classes**: kebab-case with module prefix (`mc-block`, `rb-platform`, `yt-card`, `sp-canvas`, `ls-card`)
