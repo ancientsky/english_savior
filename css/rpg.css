@@ -1,0 +1,325 @@
+/* ===== English Adventure RPG (英語冒險物語) — Undertale style ===== */
+
+.rpg-container {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.rpg-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.rpg-header h2 {
+  color: #ffdf6e;
+  text-shadow: 2px 2px 0 #3a3a3a;
+}
+
+/* ===== Chapter select ===== */
+.rpg-select-intro {
+  text-align: center;
+  color: #d8d8d8;
+  font-size: 0.9rem;
+  line-height: 1.7;
+  margin-bottom: 14px;
+}
+
+.rpg-chapters {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 12px;
+}
+
+.rpg-ch-card {
+  font-family: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  text-align: center;
+  padding: 16px 12px;
+  background: #000;
+  border: 3px solid #fff;
+  border-radius: 6px;
+  color: #fff;
+  cursor: pointer;
+  transition: transform 0.12s, box-shadow 0.12s;
+}
+.rpg-ch-card:hover { transform: translateY(-3px); box-shadow: 0 6px 16px rgba(255, 223, 110, 0.25); }
+.rpg-ch-card.locked { opacity: 0.45; cursor: default; border-color: #666; }
+.rpg-ch-card.locked:hover { transform: none; box-shadow: none; }
+.rpg-ch-card.cleared { border-color: #ffdf6e; }
+
+.rpg-ch-icon { font-size: 2.2rem; }
+.rpg-ch-name { font-weight: bold; font-size: 0.95rem; color: #ffdf6e; }
+.rpg-ch-theme { font-size: 0.78rem; color: #bbb; }
+.rpg-ch-stars { font-size: 0.85rem; color: #ffce54; }
+
+/* ===== World ===== */
+.rpg-topbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.rpg-topbar h3 { color: #ffdf6e; font-size: 1.05rem; }
+.rpg-objective { font-size: 0.8rem; color: #cfcfcf; flex: 1; }
+
+.rpg-exit-btn {
+  font-family: inherit;
+  font-size: 0.8rem;
+  padding: 6px 12px;
+  background: #000;
+  color: #fff;
+  border: 2px solid #fff;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.rpg-exit-btn:hover { background: #222; }
+
+.rpg-stage {
+  position: relative;
+  border: 4px solid #fff;
+  border-radius: 4px;
+  background: #000;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.rpg-map {
+  display: grid;
+  width: 100%;
+  aspect-ratio: 13 / 9;
+}
+
+.rpg-tile { display: flex; align-items: center; justify-content: center; }
+.rpg-tile.floor { background: var(--rpg-floor, #223); }
+.rpg-tile.path { background: var(--rpg-path, #665); box-shadow: inset 0 0 4px rgba(0, 0, 0, 0.3); }
+.rpg-tile.wall,
+.rpg-tile.deco {
+  background: var(--rpg-floor, #223);
+  font-size: clamp(0.85rem, 3.4vw, 1.5rem);
+  line-height: 1;
+}
+
+/* Sprites overlay */
+#rpg-sprites {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.rpg-sprite {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(0.95rem, 3.8vw, 1.7rem);
+  line-height: 1;
+  transition: left 0.16s linear, top 0.16s linear;
+  z-index: 2;
+}
+
+.rpg-sprite.player { z-index: 3; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.7)); }
+.rpg-sprite.player.hop { animation: rpg-hop 0.16s; }
+.rpg-sprite.player.bump { animation: rpg-bump 0.2s; }
+@keyframes rpg-hop { 50% { margin-top: -5px; } }
+@keyframes rpg-bump { 50% { margin-left: 3px; } }
+
+.rpg-sprite.npc { animation: rpg-idle 2.2s ease-in-out infinite alternate; }
+.rpg-sprite.boss { animation: rpg-idle 1.4s ease-in-out infinite alternate; filter: drop-shadow(0 0 6px rgba(255, 90, 90, 0.7)); }
+.rpg-sprite.boss.ready { filter: drop-shadow(0 0 10px rgba(255, 223, 110, 0.95)); }
+@keyframes rpg-idle { from { margin-top: 0; } to { margin-top: -3px; } }
+
+.rpg-marker {
+  position: absolute;
+  top: -0.85em;
+  font-size: 0.55em;
+  animation: rpg-marker 1s ease-in-out infinite alternate;
+}
+@keyframes rpg-marker { from { transform: translateY(0); } to { transform: translateY(-3px); } }
+
+/* ===== Undertale dialogue box ===== */
+.rpg-dialog {
+  position: absolute;
+  left: 2%;
+  right: 2%;
+  bottom: 2%;
+  min-height: 44%;
+  display: flex;
+  gap: 12px;
+  background: #000;
+  border: 4px solid #fff;
+  border-radius: 4px;
+  padding: 12px 14px;
+  z-index: 6;
+  cursor: pointer;
+  align-items: flex-start;
+}
+
+.rpg-dlg-face {
+  font-size: 2.4rem;
+  line-height: 1.2;
+  flex-shrink: 0;
+  animation: rpg-idle 1.6s ease-in-out infinite alternate;
+}
+
+.rpg-dlg-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+
+.rpg-dlg-name {
+  font-size: 0.72rem;
+  color: #ffdf6e;
+  letter-spacing: 1px;
+}
+
+.rpg-dlg-text {
+  font-family: 'Press Start 2P', 'Noto Sans TC', monospace;
+  font-size: clamp(0.62rem, 2.4vw, 0.85rem);
+  color: #fff;
+  line-height: 1.8;
+  min-height: 2.2em;
+  word-break: break-word;
+}
+
+.rpg-dlg-zh {
+  font-size: 0.78rem;
+  color: #9fd0ff;
+  line-height: 1.6;
+}
+
+.rpg-dlg-more {
+  align-self: flex-end;
+  font-size: 0.7rem;
+  color: #ffdf6e;
+  animation: rpg-marker 0.7s ease-in-out infinite alternate;
+}
+
+.rpg-dlg-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.rpg-opt {
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  font-size: clamp(0.72rem, 2.6vw, 0.88rem);
+  padding: 7px 10px;
+  background: #000;
+  color: #fff;
+  border: 2px solid #555;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: border-color 0.1s, background 0.1s;
+}
+.rpg-opt .rpg-heart { opacity: 0; font-size: 0.8em; transition: opacity 0.1s; }
+.rpg-opt:hover:not(:disabled) { border-color: #ffdf6e; background: #151515; }
+.rpg-opt:hover:not(:disabled) .rpg-heart { opacity: 1; }
+.rpg-opt.correct { border-color: #6ee7a0; background: #0c2b18; }
+.rpg-opt.correct .rpg-heart { opacity: 1; }
+.rpg-opt.wrong { border-color: #ff6b6b; background: #2b0c0c; opacity: 0.55; }
+.rpg-opt.eliminated { opacity: 0.25; text-decoration: line-through; }
+
+.rpg-hint-btn {
+  font-family: inherit;
+  font-size: 0.72rem;
+  padding: 6px 10px;
+  border: 2px solid #b48ae8;
+  border-radius: 14px;
+  background: rgba(120, 70, 190, 0.3);
+  color: #dcc6f7;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+/* ===== D-pad (touch) ===== */
+.rpg-dpad {
+  position: absolute;
+  right: 3%;
+  bottom: 3%;
+  display: grid;
+  grid-template-columns: repeat(3, 44px);
+  grid-template-rows: repeat(3, 44px);
+  gap: 2px;
+  z-index: 5;
+  opacity: 0.85;
+}
+.rpg-dpad.hidden { display: none; }
+.rpg-dpad button {
+  font-family: inherit;
+  font-size: 1rem;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  border: 2px solid rgba(255, 255, 255, 0.7);
+  border-radius: 8px;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.rpg-dpad button:active { background: rgba(255, 223, 110, 0.4); }
+.rpg-dpad .up { grid-area: 1 / 2; }
+.rpg-dpad .left { grid-area: 2 / 1; }
+.rpg-dpad .right { grid-area: 2 / 3; }
+.rpg-dpad .down { grid-area: 3 / 2; }
+
+.rpg-controls-hint {
+  margin-top: 8px;
+  font-size: 0.75rem;
+  color: #999;
+  text-align: center;
+  line-height: 1.6;
+}
+
+/* ===== Chapter clear ===== */
+.rpg-clear {
+  display: flex;
+  flex-direction: column;
+  justify-content: safe center;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+  line-height: 1.8;
+  color: #fff;
+  background: #000;
+  border: 4px solid #ffdf6e;
+  border-radius: 6px;
+  padding: 30px 16px;
+}
+.rpg-clear h3 { color: #ffdf6e; font-size: 1.3rem; }
+.rpg-clear-stars { font-size: 1.8rem; letter-spacing: 6px; }
+
+.rpg-btn {
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: bold;
+  padding: 12px 28px;
+  border: 3px solid #fff;
+  border-radius: 4px;
+  cursor: pointer;
+  background: #000;
+  color: #ffdf6e;
+  transition: transform 0.1s, background 0.1s;
+}
+.rpg-btn:hover { transform: translateY(-2px); background: #1a1a1a; }
+
+/* Hub card accent */
+.rpg-card .card-icon { filter: drop-shadow(0 0 6px rgba(255, 223, 110, 0.85)); }
+
+@media (max-width: 640px) {
+  .rpg-container { padding: 10px; }
+  .rpg-chapters { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  .rpg-dialog { min-height: 52%; gap: 8px; padding: 10px; }
+  .rpg-dlg-face { font-size: 1.8rem; }
+  .rpg-dpad { grid-template-columns: repeat(3, 38px); grid-template-rows: repeat(3, 38px); }
+}
