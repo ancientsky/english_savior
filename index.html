@@ -222,7 +222,7 @@
         <div class="hub-card builder-card" data-zone="builder">
           <div class="card-icon">🧱</div>
           <h3>句子建築工地</h3>
-          <p>把打亂的單字方塊排成正確句子，每組對一句就蓋一層房子！</p>
+          <p>把打亂的單字方塊排成正確句子，蓋出 33 座世界知名建築！</p>
           <span class="card-tag">Sentence</span>
         </div>
         <div class="hub-card speak-card" data-zone="speak">
@@ -636,7 +636,7 @@
         <h2>🧱 句子建築工地</h2>
         <button class="zone-fs-btn" title="遊戲畫面最大化">⛶</button>
         <div class="bd-stats">
-          <span id="bd-houses" title="本次蓋好的房子">🏘️ 0</span>
+          <span id="bd-houses" title="已收藏的世界地標">🗼 0 / 33</span>
         </div>
         <div class="bd-difficulty">
           <button class="bd-diff-btn active" data-diff="easy">簡單</button>
@@ -648,18 +648,19 @@
       <!-- Start Screen (normal flow — mobile safe) -->
       <div class="bd-panel bd-screen" id="bd-start-screen">
         <h3>🧱 句子建築工地</h3>
+        <p class="bd-instructions">🌍 每一輪蓋一座「世界知名建築」：艾菲爾鐵塔、金字塔、台北 101……共 33 座等你收藏！</p>
         <p class="bd-instructions">📐 看中文藍圖，把打亂的單字方塊照正確順序排好</p>
         <p class="bd-instructions">👆 點方塊放上去，點錯了可以點放好的方塊拿回來</p>
-        <p class="bd-instructions">🏠 每組對一句就蓋一層，8 句蓋好一棟房子拿完工獎勵！</p>
-        <p class="bd-instructions">💡 放錯有 2 次機會，第 3 次會示範正確順序（房子照蓋）</p>
-        <button class="bd-btn" id="bd-start-btn">🚧 開工蓋房子</button>
+        <p class="bd-instructions">🏗️ 每組對一句建築就長高一層，完工還會告訴你這座建築的祕密！</p>
+        <p class="bd-instructions">💡 放錯有 2 次機會，第 3 次會示範正確順序（建築照蓋）</p>
+        <button class="bd-btn" id="bd-start-btn">🚧 開工蓋地標</button>
       </div>
 
       <!-- House Complete Screen -->
       <div class="bd-panel bd-screen" id="bd-done-screen" style="display:none">
-        <h3>🎉 房子完工！</h3>
+        <h3>🎉 地標完工！</h3>
         <div id="bd-done-info"></div>
-        <button class="bd-btn" id="bd-done-btn">🚧 再蓋一棟</button>
+        <button class="bd-btn" id="bd-done-btn">🚧 蓋下一座</button>
       </div>
 
       <!-- Game Area -->
@@ -913,13 +914,15 @@
         </div>
         <div class="help-section">
           <h3>🧱 句子建築工地</h3>
-          <p>把打亂的英文單字方塊排成正確的句子，蓋出你的房子！</p>
+          <p>把打亂的英文單字方塊排成正確的句子，蓋出 33 座世界知名建築！</p>
           <ul>
+            <li>每一輪隨機蓋一座世界地標：艾菲爾鐵塔、金字塔、台北 101、雪梨歌劇院……</li>
             <li>看中文藍圖，點單字方塊照正確順序放上去</li>
             <li>放錯了？點放好的方塊可以拿回來重排</li>
-            <li>全部放完會自動檢查：對了就蓋一層＋唸整句給你聽</li>
-            <li>放錯有 2 次機會，第 3 次會示範正確順序（房子照蓋，但沒有獎勵）</li>
-            <li>每組對一句獲得 XP＋寶石；8 句蓋好一棟房子再拿完工寶石</li>
+            <li>全部放完會自動檢查：對了建築就長高一層＋唸整句給你聽</li>
+            <li>放錯有 2 次機會，第 3 次會示範正確順序（建築照蓋，但沒有獎勵）</li>
+            <li>完工會顯示建築的國家和文化小知識，還會存進你的地標收藏（沒收集過的優先出現）</li>
+            <li>每組對一句獲得 XP＋寶石；蓋好一座地標再拿完工寶石</li>
             <li>難度決定句子長度：簡單 4-6 字、中等 6-8 字、困難 8-11 字</li>
             <li>提示水晶可自動放一塊、復活羽毛多一次機會，雙倍經驗、寶石探測器都有效</li>
           </ul>

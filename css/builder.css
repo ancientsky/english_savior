@@ -235,6 +235,56 @@
   100% { transform: translateY(0); }
 }
 
+/* Landmark completion screen */
+.bd-done-house {
+  display: flex;
+  flex-direction: column-reverse; /* layers are stored bottom-up */
+  align-items: center;
+  background: linear-gradient(180deg, #8ec9ef, #bfe3f7);
+  border: 3px solid #b8802f;
+  border-radius: 12px;
+  padding: 14px 26px 10px;
+  animation: bd-reveal 0.7s ease-out;
+}
+@keyframes bd-reveal {
+  0% { transform: scale(0.6); opacity: 0; }
+  70% { transform: scale(1.06); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
+.bd-done-name {
+  font-size: 1.15rem;
+  font-weight: bold;
+  color: #ffce54;
+  line-height: 1.5;
+}
+
+.bd-new-badge {
+  font-size: 0.9rem;
+  font-weight: bold;
+  color: #17300b;
+  background: linear-gradient(135deg, #8ecf6a, #5f9c3f);
+  border-radius: 16px;
+  padding: 6px 16px;
+  animation: bd-badge-pop 0.5s ease-out;
+}
+@keyframes bd-badge-pop {
+  0% { transform: scale(0); }
+  70% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+.bd-fact {
+  font-size: 0.9rem;
+  color: #dceafc;
+  background: rgba(38, 66, 110, 0.7);
+  border: 2px dashed #7fb3e8;
+  border-radius: 10px;
+  padding: 10px 14px;
+  max-width: 460px;
+  line-height: 1.7;
+}
+
 /* Hub card accent */
 .builder-card .card-icon { filter: drop-shadow(0 0 6px rgba(255, 206, 84, 0.75)); }
 
