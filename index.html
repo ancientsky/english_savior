@@ -307,6 +307,7 @@
       <div class="yt-header">
         <h2>📺 遊戲影片教室</h2>
         <button class="zone-fs-btn" title="遊戲畫面最大化">⛶</button>
+        <span class="yt-counter" id="yt-counter">第 1 課</span>
       </div>
       <div class="yt-video-area">
         <div class="yt-player" id="yt-player">
@@ -314,16 +315,25 @@
             <span class="yt-play-btn">▶</span>
           </div>
           <div class="yt-script" id="yt-script"></div>
+          <div class="yt-controls">
+            <button class="yt-ctrl-btn" id="yt-play-toggle">▶ 播放影片</button>
+            <button class="yt-ctrl-btn small" id="yt-replay" title="從頭播放">⏮</button>
+            <div class="yt-progress"><div class="yt-progress-fill" id="yt-progress-bar"></div></div>
+            <div class="yt-eq" id="yt-eq"><span></span><span></span><span></span><span></span><span></span></div>
+          </div>
         </div>
         <div class="yt-vocab-sidebar" id="yt-vocab-sidebar">
-          <h3>📝 重點單字</h3>
+          <h3>📝 重點單字（點一下聽發音）</h3>
           <div id="yt-vocab-list"></div>
         </div>
       </div>
       <div class="yt-quiz-area" id="yt-quiz-area">
-        <h3>🎯 理解測驗</h3>
+        <div class="yt-quiz-head">
+          <h3>🎯 理解測驗</h3>
+          <div class="yt-quiz-dots" id="yt-quiz-dots"></div>
+        </div>
+        <div class="yt-quiz-lock" id="yt-quiz-lock">🎬 先按 ▶ 看影片，測驗就會解鎖！</div>
         <div id="yt-quiz-questions"></div>
-        <button class="yt-submit-btn" id="yt-submit-quiz">提交答案</button>
       </div>
       <div class="yt-feedback" id="yt-feedback"></div>
       <button class="yt-next-btn" id="yt-next-lesson">📺 下一課</button>
@@ -684,12 +694,13 @@
         </div>
         <div class="help-section">
           <h3>📺 看片學英文</h3>
-          <p>觀看遊戲相關的英文影片，學習重點單字，完成理解測驗！</p>
+          <p>像看影片一樣的英文課！按 ▶ 後會逐句朗讀，跟著字幕一起聽。</p>
           <ul>
-            <li>點擊播放按鈕觀看影片腳本</li>
-            <li>查看側邊欄的重點單字解釋</li>
-            <li>完成下方的理解測驗題</li>
-            <li>全對可獲得最高獎勵</li>
+            <li>按 ▶ 播放：逐句唸出內容，目前唸到的句子會亮起來（卡拉OK式字幕）</li>
+            <li>點任何一句可以從那句重播；點金色的重點單字會唸給你聽＋顯示意思</li>
+            <li>側邊欄的單字卡點一下也會發音</li>
+            <li>測驗要先看影片才會解鎖；一次一題、立即回饋</li>
+            <li>全對獲得最高獎勵＋彩帶慶祝！</li>
           </ul>
         </div>
         <div class="help-section">
