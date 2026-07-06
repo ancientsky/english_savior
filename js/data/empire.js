@@ -25,6 +25,8 @@ const EMPIRE_DIALOGUES = {
     { q: 'Who is that girl?', qZh: '那個女孩是誰？', a: 'She is my sister.', wrong: ['He is my brother.', 'It is a cat.', 'I am a girl.'] },
     { q: 'What is this?', qZh: '這是什麼？', a: 'It is an eraser.', wrong: ['Yes, it is.', 'I am fine.', 'She is Amy.'] },
     { q: 'Let\'s play basketball!', qZh: '我們去打籃球吧！', a: 'Good idea!', wrong: ['You are welcome.', 'Nice to meet you.', 'It is a ball.'] },
+    { q: 'What time do we meet tomorrow?', qZh: '我們明天幾點見面？', a: 'At three o\'clock.', wrong: ['On the table.', 'By bus.', 'Three dollars.'] },
+    { q: 'Do you like pop music?', qZh: '你喜歡流行音樂嗎？', a: 'Yes, it\'s my favorite!', wrong: ['Yes, I can sing it a book.', 'No, I like music.', 'The radio is loud yesterday.'] },
   ],
   medium: [
     { q: 'What do you do on weekends?', qZh: '你週末都做什麼？', a: 'I usually play basketball.', wrong: ['I am playing now.', 'Yes, I do.', 'It was fun yesterday.'] },
@@ -47,6 +49,8 @@ const EMPIRE_DIALOGUES = {
     { q: 'Excuse me, where is the restroom?', qZh: '不好意思，請問洗手間在哪裡？', a: 'It is down the hall, on your left.', wrong: ['You can rest here.', 'The room is clean.', 'At nine o\'clock.'] },
     { q: 'How was your trip to Tainan?', qZh: '你的台南之旅如何？', a: 'It was wonderful!', wrong: ['It is next week.', 'I will go there.', 'Tainan is in Taiwan.'] },
     { q: 'Watch out! A car is coming!', qZh: '小心！有車來了！', a: 'Thanks for the warning!', wrong: ['I am watching TV.', 'The car is red.', 'I want to buy a watch.'] },
+    { q: 'Do you want to play table tennis after school?', qZh: '放學後要不要打桌球？', a: 'Sure! Meet me at the gym.', wrong: ['The table is made of wood.', 'I played tennis on the table.', 'School is over at four.'] },
+    { q: 'May I help you, ma\'am?', qZh: '（店員）女士，需要幫忙嗎？', a: 'Yes, I\'m looking for a gift for my son.', wrong: ['No, you can\'t help it rain.', 'Yes, you are a good clerk person.', 'The store helps me look.'] },
   ],
   hard: [
     { q: 'Have you finished your report yet?', qZh: '你的報告完成了嗎？', a: 'Not yet. I am still working on it.', wrong: ['Yes, I am finishing it tomorrow.', 'I have finished since two days.', 'No, I finished it already.'] },
@@ -88,6 +92,9 @@ const EMPIRE_LIFE = {
     { scene: '你在公園裡迷路了，想找警察幫忙', q: 'What do you say?', a: 'Can you help me? I am lost.', wrong: ['I can help you lose.', 'The park is lost.', 'Help is a police.'] },
     { scene: '同學生病沒來上學，你想關心他', q: 'What do you say to him later?', a: 'Are you OK now?', wrong: ['You are sick, good!', 'I am OK, thanks!', 'The school is sick.'] },
     { scene: '你想看電視，先問爸爸', q: 'What do you ask?', a: 'May I watch TV?', wrong: ['TV watches me?', 'May TV watch you?', 'I am watching you!'] },
+    { scene: '天氣好熱，你想買冰淇淋', q: 'What do you say to the clerk?', a: 'One ice cream, please.', wrong: ['The ice is creaming.', 'I am an ice cream.', 'Cream the ice, please.'] },
+    { scene: '在夜市，你想買一份熱狗', q: 'What do you say?', a: 'A hot dog, please.', wrong: ['The dog is hot today.', 'Please pet the hot dog.', 'My dog wants a menu.'] },
+    { scene: '客人來家裡，你請他到客廳坐', q: 'What do you say?', a: 'Please have a seat in the living room.', wrong: ['The room is living well.', 'Please live in my seat.', 'My seat rooms the living.'] },
   ],
   medium: [
     { scene: '在文具店，你想知道筆記本的價格', q: 'What do you ask the clerk?', a: 'Excuse me, how much is this notebook?', wrong: ['How many is this notebook?', 'How old is this notebook?', 'How long is this notebook cost?'] },
@@ -106,6 +113,11 @@ const EMPIRE_LIFE = {
     { scene: '在超商結帳，店員問你需不需要袋子', q: '"Do you need a bag?"', a: 'No, thanks. I brought my own.', wrong: ['The bag needs me, yes.', 'I am my own bag.', 'No, the bag is shopping.'] },
     { scene: '你想邀請朋友來家裡玩', q: 'What do you say?', a: 'Would you like to come over to my house this weekend?', wrong: ['My house would like to come to you.', 'Come my house over the weekend to like.', 'Are you my house this weekend?'] },
     { scene: '運動會你的班級得了第一名', q: 'What do you shout?', a: 'We did it! We are the champions!', wrong: ['We are sorry for winning!', 'The first place lost us!', 'Champions did we not!'] },
+    { scene: '同學想買飲料，你建議去便利商店', q: 'What do you say?', a: 'Let\'s go to the convenience store.', wrong: ['The store is convenient to drink.', 'Let\'s store the convenience.', 'The drink buys a store.'] },
+    { scene: '在速食店，店員問你要喝什麼', q: '"What would you like to drink?"', a: 'A soft drink, please.', wrong: ['The drink is very soft to me.', 'I would like to drink the menu.', 'Soft is my favorite cup.'] },
+    { scene: '你要寄包裹，向路人問路', q: 'What do you ask?', a: 'Excuse me, where is the post office?', wrong: ['Excuse me, where does the mail live?', 'Is the office posting me?', 'When is the post office where?'] },
+    { scene: '體育課老師宣布今天的活動', q: 'What does the teacher say?', a: 'We are going to play dodge ball today.', wrong: ['The ball will dodge us today.', 'Today plays us a ball.', 'We are dodging the class.'] },
+    { scene: '教室好熱，你想請老師開冷氣', q: 'What do you say politely?', a: 'Could you turn on the air conditioner, please?', wrong: ['Could the air please turn us on?', 'The conditioner airs the room hot.', 'Please cold the room machine.'] },
   ],
   hard: [
     { scene: '在機場櫃檯辦理登機手續', q: 'What does the staff ask you first?', a: 'May I see your passport, please?', wrong: ['May your passport see me?', 'Has the airplane seen your ticket?', 'Do you fly the passport often?'] },
@@ -120,5 +132,9 @@ const EMPIRE_LIFE = {
     { scene: '討論環保議題時，你想表達意見', q: 'How do you share your opinion?', a: 'In my opinion, we should use fewer plastic bags.', wrong: ['My opinion uses plastic bags less than me.', 'Fewer opinions should plastic the bags.', 'In the plastic bag, my opinion should we.'] },
     { scene: '你的手機掉在公車上，打電話到客運公司', q: 'What do you say?', a: 'I think I left my phone on the bus this morning.', wrong: ['The bus left my phone thinking.', 'My phone thinks the bus is left.', 'I left the morning on my phone.'] },
     { scene: '同學想放棄比賽，你想鼓勵他', q: 'What do you say?', a: 'Don\'t give up. You have come so far already!', wrong: ['Give up early to save time.', 'You have far to give up so come.', 'Quitting is coming so far for you.'] },
+    { scene: '在百貨公司結帳，店員問你付款方式', q: '"How would you like to pay?"', a: 'By credit card, please.', wrong: ['The card credits me kindly.', 'Pay the way I like, please.', 'My money is a card of credit.'] },
+    { scene: '開車的叔叔找不到地方停車，你幫忙看到了指標', q: 'What do you tell him?', a: 'The parking lot is behind the building.', wrong: ['The building parks behind the lot.', 'A lot of parks are building.', 'Park the building in the car.'] },
+    { scene: '你的腳踏車爆胎了，向修車行求助', q: 'What do you say?', a: 'My bike has a flat tire. Can you fix it?', wrong: ['My tire flattened the bike shop.', 'The bike is tired and flat, sleep it.', 'Can the flat fix my tire bike?'] },
+    { scene: '爸媽晚上要出門，安排人照顧弟弟', q: 'How do you explain it to your friend?', a: 'My parents hired a baby sitter for my little brother.', wrong: ['My brother sits the baby parents.', 'The sitter babies my parents tonight.', 'My parents baby the sitter little.'] },
   ],
 };

@@ -3575,4 +3575,404 @@ const GRAMMAR_DATA = [
     topic: '被動語態',
     translation: '狙擊步槍經常被專業玩家使用。'
   },
+  {
+    sentence: 'This is my _____ time playing Minecraft.',
+    blank: 'first',
+    options: ['first', 'one', 'once', 'firstly'],
+    explain: '序數 first（第一）用來表示順序，one 是基數不能表示第幾次。',
+    topic: '序數',
+    translation: '這是我第一次玩 Minecraft。'
+  },
+  {
+    sentence: 'Steve won _____ place in the building contest.',
+    blank: 'second',
+    options: ['second', 'two', 'twice', 'seconds'],
+    explain: '表示名次要用序數 second（第二），不能用基數 two。',
+    topic: '序數',
+    translation: 'Steve 在建築比賽中得到第二名。'
+  },
+  {
+    sentence: 'My birthday is on the _____ of May.',
+    blank: 'third',
+    options: ['third', 'three', 'threeth', 'thirds'],
+    explain: '日期要用序數，three 的序數是 third。',
+    topic: '序數',
+    translation: '我的生日是五月三日。'
+  },
+  {
+    sentence: 'The _____ level of the obby is the hardest.',
+    blank: 'ninth',
+    options: ['ninth', 'nine', 'nineth', 'nines'],
+    explain: 'nine 的序數拼法是 ninth，要去掉 e 再加 th。',
+    topic: '序數',
+    translation: '這個跑酷關卡的第九關是最難的。'
+  },
+  {
+    sentence: 'Today is our _____ day at the new school.',
+    blank: 'fifth',
+    options: ['fifth', 'five', 'fiveth', 'fifthly'],
+    explain: 'five 的序數是 fifth，拼法會變化，不是 fiveth。',
+    topic: '序數',
+    translation: '今天是我們在新學校的第五天。'
+  },
+  {
+    sentence: '_____ time do you play Roblox every day?',
+    blank: 'What',
+    options: ['What', 'When', 'How', 'Which'],
+    explain: '詢問「幾點」要用 What time 開頭的疑問句。',
+    topic: '疑問句',
+    translation: '你每天幾點玩 Roblox？'
+  },
+  {
+    sentence: 'What time _____ the Minecraft server open?',
+    blank: 'does',
+    options: ['does', 'do', 'is', 'are'],
+    explain: '主詞 the server 是第三人稱單數，疑問句助動詞用 does。',
+    topic: '疑問句',
+    translation: 'Minecraft 伺服器幾點開放？'
+  },
+  {
+    sentence: 'What _____ do you get up on school days?',
+    blank: 'time',
+    options: ['time', 'hour', 'clock', 'o\'clock'],
+    explain: '詢問幾點起床用固定片語 What time。',
+    topic: '疑問句',
+    translation: '上學日你幾點起床？'
+  },
+  {
+    sentence: 'What time _____ you go to bed last night?',
+    blank: 'did',
+    options: ['did', 'do', 'does', 'was'],
+    explain: 'last night 是過去時間，疑問句助動詞要用 did。',
+    topic: '疑問句',
+    translation: '你昨晚幾點上床睡覺？'
+  },
+  {
+    sentence: '_____ old is your Roblox avatar?',
+    blank: 'How',
+    options: ['How', 'What', 'Which', 'Who'],
+    explain: '詢問年齡用 How old 開頭的疑問句。',
+    topic: '疑問句',
+    translation: '你的 Roblox 角色幾歲了？'
+  },
+  {
+    sentence: 'How _____ diamonds do you have?',
+    blank: 'many',
+    options: ['many', 'much', 'old', 'long'],
+    explain: 'diamonds 是可數名詞複數，問數量要用 How many。',
+    topic: '疑問句',
+    translation: '你有幾顆鑽石？'
+  },
+  {
+    sentence: 'How _____ is this pet in the shop?',
+    blank: 'much',
+    options: ['much', 'many', 'old', 'tall'],
+    explain: '詢問價錢多少要用 How much。',
+    topic: '疑問句',
+    translation: '商店裡這隻寵物多少錢？'
+  },
+  {
+    sentence: 'How _____ are you? I\'m twelve.',
+    blank: 'old',
+    options: ['old', 'many', 'much', 'age'],
+    explain: '詢問年齡的固定問法是 How old are you?',
+    topic: '疑問句',
+    translation: '你幾歲？我十二歲。'
+  },
+  {
+    sentence: 'How much _____ do you need to buy the skin?',
+    blank: 'money',
+    options: ['money', 'moneys', 'coin', 'dollars'],
+    explain: 'How much 後面接不可數名詞，money 是不可數名詞。',
+    topic: '疑問句',
+    translation: '買這個造型你需要多少錢？'
+  },
+  {
+    sentence: 'How many _____ are there in your village?',
+    blank: 'villagers',
+    options: ['villagers', 'villager', 'wood', 'sand'],
+    explain: 'How many 後面要接可數名詞複數形 villagers。',
+    topic: '疑問句',
+    translation: '你的村莊裡有幾個村民？'
+  },
+  {
+    sentence: 'I don\'t know _____ to craft a sword.',
+    blank: 'how',
+    options: ['how', 'what', 'when', 'where'],
+    explain: '「如何做某事」用 how + 不定詞，how to craft 表示怎麼合成。',
+    topic: 'wh-不定詞',
+    translation: '我不知道怎麼合成一把劍。'
+  },
+  {
+    sentence: 'Can you tell me _____ to find diamonds?',
+    blank: 'where',
+    options: ['where', 'what', 'who', 'which'],
+    explain: '問「在哪裡」用 where + 不定詞，where to find 表示去哪裡找。',
+    topic: 'wh-不定詞',
+    translation: '你可以告訴我去哪裡找鑽石嗎？'
+  },
+  {
+    sentence: 'She doesn\'t know _____ to say to the teacher.',
+    blank: 'what',
+    options: ['what', 'how', 'where', 'who'],
+    explain: 'say 缺少受詞，用 what + 不定詞表示「該說什麼」。',
+    topic: 'wh-不定詞',
+    translation: '她不知道該對老師說什麼。'
+  },
+  {
+    sentence: 'We are learning how _____ an obby in Roblox.',
+    blank: 'to build',
+    options: ['to build', 'build', 'building', 'builds'],
+    explain: '疑問詞 how 後面要接不定詞 to + 原形動詞。',
+    topic: 'wh-不定詞',
+    translation: '我們正在學怎麼在 Roblox 蓋跑酷關卡。'
+  },
+  {
+    sentence: 'Tom can\'t decide _____ to do first, mining or building.',
+    blank: 'what',
+    options: ['what', 'how', 'where', 'when'],
+    explain: '「該做什麼」用 what + 不定詞，what to do first 表示先做什麼。',
+    topic: 'wh-不定詞',
+    translation: 'Tom 無法決定要先做什麼，挖礦還是蓋房子。'
+  },
+  {
+    sentence: 'The creeper looks _____.',
+    blank: 'scary',
+    options: ['scary', 'scarily', 'scare', 'fear'],
+    explain: '連綴動詞 look 後面要接形容詞，不能接副詞。',
+    topic: '連綴動詞',
+    translation: '這隻苦力怕看起來很可怕。'
+  },
+  {
+    sentence: 'It gets _____ at night in Minecraft.',
+    blank: 'dark',
+    options: ['dark', 'darkly', 'darkness', 'night'],
+    explain: '連綴動詞 get 表示「變得」，後面接形容詞。',
+    topic: '連綴動詞',
+    translation: '在 Minecraft 裡晚上天色會變暗。'
+  },
+  {
+    sentence: 'My avatar became _____ after the update.',
+    blank: 'famous',
+    options: ['famous', 'fame', 'famously', 'famousness'],
+    explain: '連綴動詞 become 後面接形容詞，表示「變得有名」。',
+    topic: '連綴動詞',
+    translation: '更新之後我的角色變得很有名。'
+  },
+  {
+    sentence: 'Dad looked _____ when I broke the window.',
+    blank: 'angry',
+    options: ['angry', 'angrily', 'anger', 'angryly'],
+    explain: 'look 當連綴動詞是「看起來」，後面要接形容詞 angry。',
+    topic: '連綴動詞',
+    translation: '我打破窗戶時，爸爸看起來很生氣。'
+  },
+  {
+    sentence: 'The weather is getting _____ in summer.',
+    blank: 'hot',
+    options: ['hot', 'hotly', 'heat', 'hots'],
+    explain: 'get + 形容詞表示「變得」，天氣變熱用 get hot。',
+    topic: '連綴動詞',
+    translation: '夏天天氣越來越熱了。'
+  },
+  {
+    sentence: 'After eating the golden apple, Steve got _____.',
+    blank: 'strong',
+    options: ['strong', 'strongly', 'strength', 'strongth'],
+    explain: '連綴動詞 get 後面接形容詞 strong，不能接副詞或名詞。',
+    topic: '連綴動詞',
+    translation: '吃了金蘋果之後，Steve 變強壯了。'
+  },
+  {
+    sentence: 'Please give _____ the diamond sword.',
+    blank: 'me',
+    options: ['me', 'I', 'my', 'mine'],
+    explain: 'give + 人 + 物，人要用受格代名詞 me。',
+    topic: '雙賓語',
+    translation: '請把鑽石劍給我。'
+  },
+  {
+    sentence: 'Mom bought a new mouse _____ me.',
+    blank: 'for',
+    options: ['for', 'to', 'at', 'with'],
+    explain: 'buy + 物 + for + 人，buy 的介系詞要用 for。',
+    topic: '雙賓語',
+    translation: '媽媽買了一個新滑鼠給我。'
+  },
+  {
+    sentence: 'The villager gave the emerald _____ Steve.',
+    blank: 'to',
+    options: ['to', 'for', 'at', 'on'],
+    explain: 'give + 物 + to + 人，give 的介系詞要用 to。',
+    topic: '雙賓語',
+    translation: '村民把綠寶石給了 Steve。'
+  },
+  {
+    sentence: 'I will buy _____ a Robux gift card.',
+    blank: 'her',
+    options: ['her', 'she', 'hers', 'to her'],
+    explain: 'buy + 人 + 物，人放在物前面時直接用受格 her，不加介系詞。',
+    topic: '雙賓語',
+    translation: '我會買一張 Robux 禮物卡給她。'
+  },
+  {
+    sentence: 'Grandma gave _____ some money for Robux.',
+    blank: 'us',
+    options: ['us', 'we', 'our', 'ours'],
+    explain: 'give + 人 + 物，人要用受格代名詞 us。',
+    topic: '雙賓語',
+    translation: '奶奶給了我們一些錢買 Robux。'
+  },
+  {
+    sentence: 'She bought _____ some cookies after school.',
+    blank: 'them',
+    options: ['them', 'they', 'their', 'theirs'],
+    explain: 'buy + 人 + 物，人要用受格代名詞 them。',
+    topic: '雙賓語',
+    translation: '放學後她買了一些餅乾給他們。'
+  },
+  {
+    sentence: 'I _____ Minecraft on weekends.',
+    blank: 'always play',
+    options: ['always play', 'play always', 'am always play', 'always playing'],
+    explain: '頻率副詞 always 要放在一般動詞前面。',
+    topic: '頻率副詞',
+    translation: '我週末總是玩 Minecraft。'
+  },
+  {
+    sentence: 'He _____ late for school.',
+    blank: 'is never',
+    options: ['is never', 'never is', 'never', 'is never be'],
+    explain: '頻率副詞 never 要放在 be 動詞後面。',
+    topic: '頻率副詞',
+    translation: '他上學從來不遲到。'
+  },
+  {
+    sentence: 'She _____ her homework before dinner.',
+    blank: 'usually does',
+    options: ['usually does', 'does usually', 'usually do', 'is usually do'],
+    explain: '頻率副詞 usually 放在一般動詞前，主詞第三人稱單數動詞加 s。',
+    topic: '頻率副詞',
+    translation: '她通常在晚餐前做完功課。'
+  },
+  {
+    sentence: 'We _____ creepers in the desert.',
+    blank: 'sometimes see',
+    options: ['sometimes see', 'see sometimes', 'sometimes sees', 'are sometimes see'],
+    explain: '頻率副詞 sometimes 放在一般動詞前面。',
+    topic: '頻率副詞',
+    translation: '我們有時會在沙漠看到苦力怕。'
+  },
+  {
+    sentence: 'My brother _____ his diamonds with me.',
+    blank: 'never shares',
+    options: ['never shares', 'shares never', 'never share', 'is never share'],
+    explain: '頻率副詞 never 放在一般動詞前，第三人稱單數動詞加 s。',
+    topic: '頻率副詞',
+    translation: '我哥哥從來不跟我分享他的鑽石。'
+  },
+  {
+    sentence: 'They _____ on that Roblox server.',
+    blank: 'often play',
+    options: ['often play', 'play often', 'often plays', 'are often play'],
+    explain: '頻率副詞 often 要放在一般動詞前面。',
+    topic: '頻率副詞',
+    translation: '他們常常在那個 Roblox 伺服器上玩。'
+  },
+  {
+    sentence: 'Steve is not only brave _____ also smart.',
+    blank: 'but',
+    options: ['but', 'and', 'or', 'so'],
+    explain: 'not only... but also... 是固定用法，表示「不但…而且…」。',
+    topic: '對等連接詞',
+    translation: 'Steve 不但勇敢而且聰明。'
+  },
+  {
+    sentence: 'She can _____ only sing but also dance.',
+    blank: 'not',
+    options: ['not', 'no', 'never', 'none'],
+    explain: 'not only... but also... 的第一個字是 not，不能用 no 或 never。',
+    topic: '對等連接詞',
+    translation: '她不但會唱歌，還會跳舞。'
+  },
+  {
+    sentence: 'This obby is not only long but _____ very hard.',
+    blank: 'also',
+    options: ['also', 'too', 'either', 'so'],
+    explain: 'not only... but also... 中 but 後面要搭配 also。',
+    topic: '對等連接詞',
+    translation: '這個跑酷關卡不但很長，而且很難。'
+  },
+  {
+    sentence: '_____ only my brother but also my sister loves Roblox.',
+    blank: 'Not',
+    options: ['Not', 'No', 'Only', 'But'],
+    explain: 'not only A but also B 可以放句首當主詞，開頭用 Not。',
+    topic: '對等連接詞',
+    translation: '不只我哥哥，連我妹妹也喜歡 Roblox。'
+  },
+  {
+    sentence: 'It _____ ten minutes to walk to school.',
+    blank: 'takes',
+    options: ['takes', 'take', 'spends', 'costs'],
+    explain: 'It takes + 時間 + to V 表示「做某事花多少時間」，主詞 It 動詞加 s。',
+    topic: 'It takes...to',
+    translation: '走路到學校要花十分鐘。'
+  },
+  {
+    sentence: 'It took me two hours _____ the castle in Minecraft.',
+    blank: 'to build',
+    options: ['to build', 'build', 'building', 'built'],
+    explain: 'It takes/took + 人 + 時間後面要接不定詞 to + 原形動詞。',
+    topic: 'It takes...to',
+    translation: '我在 Minecraft 裡花了兩小時蓋這座城堡。'
+  },
+  {
+    sentence: '_____ takes a long time to find diamonds.',
+    blank: 'It',
+    options: ['It', 'This', 'That', 'There'],
+    explain: '「花時間做某事」的句型用虛主詞 It 開頭：It takes... to...',
+    topic: 'It takes...to',
+    translation: '找鑽石要花很長的時間。'
+  },
+  {
+    sentence: 'It takes three eggs _____ a cake.',
+    blank: 'to make',
+    options: ['to make', 'make', 'making', 'makes'],
+    explain: 'It takes... to V，後面要用不定詞 to make。',
+    topic: 'It takes...to',
+    translation: '做一個蛋糕需要三顆蛋。'
+  },
+  {
+    sentence: 'I lost my sword, so I need to craft a new _____.',
+    blank: 'one',
+    options: ['one', 'ones', 'it', 'them'],
+    explain: 'one 代替前面提過的單數可數名詞 sword，指同類的另一個。',
+    topic: '不定代名詞',
+    translation: '我的劍不見了，所以我需要再合成一把新的。'
+  },
+  {
+    sentence: 'These skins are cool, but I like the red _____ best.',
+    blank: 'ones',
+    options: ['ones', 'one', 'it', 'they'],
+    explain: '代替複數名詞 skins 要用 ones。',
+    topic: '不定代名詞',
+    translation: '這些造型都很酷，但我最喜歡紅色的那些。'
+  },
+  {
+    sentence: 'My pencil is broken. Can I borrow _____?',
+    blank: 'one',
+    options: ['one', 'it', 'ones', 'them'],
+    explain: 'one 指同類東西中的任何一枝，it 是指同一枝原本的鉛筆。',
+    topic: '不定代名詞',
+    translation: '我的鉛筆斷了，可以借我一枝嗎？'
+  },
+  {
+    sentence: 'Which pickaxe do you want, the iron one or the gold _____?',
+    blank: 'one',
+    options: ['one', 'ones', 'it', 'this'],
+    explain: 'one 代替單數名詞 pickaxe，避免重複。',
+    topic: '不定代名詞',
+    translation: '你想要哪一把鎬，鐵的還是金的？'
+  },
 ];
