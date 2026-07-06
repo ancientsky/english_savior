@@ -18,6 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
   BuilderGame.init();
   SpeakGame.init();
   TowerGame.init();
+  RpgGame.init();
   DailyQuests.init();
 
   // Navigation
