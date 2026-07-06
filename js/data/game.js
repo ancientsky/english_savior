@@ -23,6 +23,10 @@ const ACHIEVEMENTS = [
   { id: 'candy_master', name: '糖果大師', desc: '在糖果消消樂通過 10 關', icon: '🧁', condition: s => (s.candyLevels || 0) >= 10 },
   { id: 'sling_first', name: '初試彈弓', desc: '在單字彈弓打中第一個單字箱', icon: '🐤', condition: s => (s.slingHits || 0) >= 1 },
   { id: 'sling_sharpshooter', name: '神射手', desc: '在單字彈弓打中 50 個單字箱', icon: '🎯', condition: s => (s.slingHits || 0) >= 50 },
+  { id: 'builder_first', name: '第一棟房子', desc: '在句子建築工地蓋好第一棟房子（8 句）', icon: '🏠', condition: s => (s.builderSentences || 0) >= 8 },
+  { id: 'builder_master', name: '建築大師', desc: '在句子建築工地組對 80 個句子', icon: '🏘️', condition: s => (s.builderSentences || 0) >= 80 },
+  { id: 'speak_first', name: '開口第一咒', desc: '在魔法咒語學院唸對第一個咒語', icon: '🎤', condition: s => (s.speakCasts || 0) >= 1 },
+  { id: 'speak_master', name: '咒語大師', desc: '在魔法咒語學院唸對 50 個咒語', icon: '🧙', condition: s => (s.speakCasts || 0) >= 50 },
 ];
 
 const DAILY_QUESTS = [
@@ -33,6 +37,8 @@ const DAILY_QUESTS = [
   { id: 'dq_empire', name: '守護帝國城堡', desc: '在英語帝國擊敗 5 個敵人', icon: '🏰', target: 5, key: 'dailyEmpire' },
   { id: 'dq_candy', name: '糖果消消樂過關', desc: '在糖果消消樂通過 1 關', icon: '🍬', target: 1, key: 'dailyCandy' },
   { id: 'dq_sling', name: '彈弓神射手', desc: '在單字彈弓打中 5 個單字箱', icon: '🐤', target: 5, key: 'dailySling' },
+  { id: 'dq_builder', name: '句子建築師', desc: '在句子建築工地組對 3 個句子', icon: '🧱', target: 3, key: 'dailyBuilder' },
+  { id: 'dq_speak', name: '大聲唸咒語', desc: '在魔法咒語學院唸對 3 個咒語', icon: '🎤', target: 3, key: 'dailySpeak' },
 ];
 
 const INVENTORY_ITEMS = [

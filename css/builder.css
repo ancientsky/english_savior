@@ -1,0 +1,247 @@
+/* ===== Sentence Builder (句子建築工地) ===== */
+
+.bd-container {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.bd-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.bd-header h2 {
+  color: #ffce54;
+  text-shadow: 2px 2px 0 #6b4413;
+}
+
+.bd-stats {
+  display: flex;
+  gap: 12px;
+  font-size: 0.95rem;
+  color: #ffe6a7;
+}
+
+.bd-difficulty { display: flex; gap: 6px; margin-left: auto; }
+
+.bd-diff-btn {
+  font-family: inherit;
+  padding: 8px 16px;
+  border: 2px solid #e0a04a;
+  border-radius: 8px;
+  background: transparent;
+  color: #f5c97b;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.bd-diff-btn:hover { background: rgba(224, 160, 74, 0.15); }
+.bd-diff-btn.active {
+  background: #e0a04a;
+  color: #3a2408;
+  font-weight: bold;
+}
+
+/* Main play area: construction site */
+.bd-site {
+  display: grid;
+  grid-template-columns: 1fr 190px;
+  gap: 14px;
+  align-items: start;
+}
+
+.bd-panel {
+  background: linear-gradient(180deg, rgba(58, 41, 17, 0.95), rgba(41, 28, 11, 0.95));
+  border: 3px solid #b8802f;
+  border-radius: 12px;
+  padding: 16px;
+  min-height: 300px;
+}
+
+/* Start / done screens are normal-flow panels (never absolute over an
+   empty container — they must own the layout height on mobile) */
+.bd-screen {
+  display: flex;
+  flex-direction: column;
+  justify-content: safe center;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+  line-height: 1.7;
+  color: #ffe6a7;
+  padding: 24px 16px;
+}
+.bd-screen h3 { font-size: 1.4rem; color: #ffce54; }
+.bd-instructions { font-size: 0.85rem; color: #e8c68f; margin: 0; }
+
+.bd-btn {
+  font-family: inherit;
+  font-size: 1.05rem;
+  font-weight: bold;
+  padding: 12px 30px;
+  border: none;
+  border-radius: 24px;
+  cursor: pointer;
+  background: linear-gradient(135deg, #ffce54, #e0812a);
+  color: #3a2408;
+  box-shadow: 0 4px 0 #8a5416;
+  transition: transform 0.1s;
+}
+.bd-btn:hover { transform: translateY(-2px); }
+.bd-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #8a5416; }
+
+/* Blueprint (Chinese prompt) */
+.bd-zh {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  background: rgba(38, 66, 110, 0.85);
+  border: 2px dashed #7fb3e8;
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 1.05rem;
+  color: #dceafc;
+  text-align: center;
+  margin-bottom: 14px;
+  min-height: 50px;
+}
+
+.bd-progress {
+  font-size: 0.85rem;
+  color: #e8c68f;
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+/* Answer slots row */
+.bd-slots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+  align-items: center;
+  min-height: 54px;
+  padding: 8px;
+  border-bottom: 3px solid #8a5416;
+  margin-bottom: 14px;
+}
+
+.bd-slot-empty {
+  display: inline-block;
+  width: 52px;
+  height: 38px;
+  border: 2px dashed rgba(255, 206, 84, 0.4);
+  border-radius: 6px;
+  background: rgba(255, 206, 84, 0.06);
+}
+
+/* Word blocks — Minecraft-style tiles */
+.bd-block {
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: bold;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  background: linear-gradient(180deg, #d9a05b, #b8802f);
+  color: #2e1c06;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.35), 0 3px 0 #7a4c12;
+  transition: transform 0.1s;
+}
+.bd-block:hover { transform: translateY(-2px); }
+.bd-block:active { transform: translateY(1px); box-shadow: inset 0 2px 0 rgba(255,255,255,0.35), 0 1px 0 #7a4c12; }
+.bd-block.placed {
+  background: linear-gradient(180deg, #8ecf6a, #5f9c3f);
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.35), 0 3px 0 #3d6b26;
+  color: #17300b;
+}
+.bd-block.used {
+  opacity: 0.25;
+  cursor: default;
+  transform: none;
+}
+
+/* Tile tray */
+.bd-tiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  min-height: 54px;
+}
+
+.bd-hint-btn {
+  font-family: inherit;
+  font-size: 0.85rem;
+  padding: 8px 14px;
+  border: 2px solid #b48ae8;
+  border-radius: 20px;
+  background: rgba(120, 70, 190, 0.25);
+  color: #dcc6f7;
+  cursor: pointer;
+}
+.bd-hint-btn:hover { background: rgba(120, 70, 190, 0.45); }
+
+.bd-feedback {
+  min-height: 30px;
+  margin-top: 12px;
+  text-align: center;
+  font-size: 1rem;
+  color: #ffe6a7;
+  line-height: 1.5;
+}
+.bd-feedback.correct { color: #8ecf6a; }
+.bd-feedback.wrong { color: #ff8fa3; }
+.bd-feedback.hint { color: #7fb3e8; }
+
+/* House column */
+.bd-house-panel {
+  background: linear-gradient(180deg, #8ec9ef 0%, #bfe3f7 55%, #7cb85a 55.5%, #5f9c3f 100%);
+  border: 3px solid #b8802f;
+  border-radius: 12px;
+  padding: 12px 8px 8px;
+  min-height: 300px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  overflow: hidden;
+}
+
+.bd-house {
+  display: flex;
+  flex-direction: column-reverse; /* build bottom-up */
+  align-items: center;
+}
+
+.bd-layer {
+  font-size: 1.35rem;
+  line-height: 1.25;
+  letter-spacing: -2px;
+  white-space: nowrap;
+}
+.bd-layer.new { animation: bd-drop 0.5s ease-out; }
+.bd-layer.ghost { font-size: 0.9rem; color: #234d12; letter-spacing: 0; }
+
+@keyframes bd-drop {
+  0% { transform: translateY(-40px); opacity: 0; }
+  70% { transform: translateY(4px); opacity: 1; }
+  100% { transform: translateY(0); }
+}
+
+/* Hub card accent */
+.builder-card .card-icon { filter: drop-shadow(0 0 6px rgba(255, 206, 84, 0.75)); }
+
+@media (max-width: 640px) {
+  .bd-site { grid-template-columns: 1fr; }
+  .bd-house-panel { min-height: 150px; order: 2; }
+  .bd-panel { min-height: 0; }
+  .bd-difficulty { margin-left: 0; }
+  .bd-block { font-size: 0.9rem; padding: 7px 10px; }
+}

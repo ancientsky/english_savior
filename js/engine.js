@@ -173,6 +173,8 @@ const GameEngine = (() => {
       dailyEmpire: 0,
       dailyCandy: 0,
       dailySling: 0,
+      dailyBuilder: 0,
+      dailySpeak: 0,
       dailyDate: null,
       dailyClaimed: [],
       dailyBonusClaimed: false,
@@ -183,6 +185,8 @@ const GameEngine = (() => {
       empireMaxAge: 1,
       candyLevels: 0,
       slingHits: 0,
+      builderSentences: 0,
+      speakCasts: 0,
       // history
       learnedWordsList: [],
       // shop system
@@ -236,6 +240,8 @@ const GameEngine = (() => {
       state.dailyEmpire = 0;
       state.dailyCandy = 0;
       state.dailySling = 0;
+      state.dailyBuilder = 0;
+      state.dailySpeak = 0;
       state.dailyClaimed = [];
       state.dailyBonusClaimed = false;
       state.dailyDate = today;
@@ -325,6 +331,22 @@ const GameEngine = (() => {
   function recordEmpire() {
     state.empireKills = (state.empireKills || 0) + 1;
     state.dailyEmpire = (state.dailyEmpire || 0) + 1;
+    save();
+    checkAchievements();
+    checkDailyQuests();
+  }
+
+  function recordBuilder() {
+    state.builderSentences = (state.builderSentences || 0) + 1;
+    state.dailyBuilder = (state.dailyBuilder || 0) + 1;
+    save();
+    checkAchievements();
+    checkDailyQuests();
+  }
+
+  function recordSpeak() {
+    state.speakCasts = (state.speakCasts || 0) + 1;
+    state.dailySpeak = (state.dailySpeak || 0) + 1;
     save();
     checkAchievements();
     checkDailyQuests();
@@ -852,6 +874,7 @@ const GameEngine = (() => {
     recordWord, recordGrammar, recordVideo,
     recordSpelling, recordListening,
     recordEmpire, recordEmpireAge, recordCandy, recordSling,
+    recordBuilder, recordSpeak,
     recordPerfectGrammar, recordStreak,
     updateHUD, updateStats,
     showInventory, showAchievements, showToast,

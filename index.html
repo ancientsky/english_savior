@@ -98,6 +98,8 @@
   <link rel="stylesheet" href="css/empire.css">
   <link rel="stylesheet" href="css/candy.css">
   <link rel="stylesheet" href="css/sling.css">
+  <link rel="stylesheet" href="css/builder.css">
+  <link rel="stylesheet" href="css/speak.css">
 </head>
 <body>
   <!-- Top HUD Bar -->
@@ -151,6 +153,12 @@
     </button>
     <button class="nav-tab" data-zone="sling">
       <span class="nav-icon">🐤</span><span class="nav-label">單字彈弓</span>
+    </button>
+    <button class="nav-tab" data-zone="builder">
+      <span class="nav-icon">🧱</span><span class="nav-label">句子建築工地</span>
+    </button>
+    <button class="nav-tab" data-zone="speak">
+      <span class="nav-icon">🎤</span><span class="nav-label">魔法咒語學院</span>
     </button>
     <button class="nav-tab" data-zone="daily">
       <span class="nav-icon">📋</span><span class="nav-label">每日任務</span>
@@ -210,6 +218,18 @@
           <h3>單字彈弓</h3>
           <p>像憤怒鳥一樣拉彈弓發射！瞄準寫著正確英文單字的箱子！</p>
           <span class="card-tag">Physics</span>
+        </div>
+        <div class="hub-card builder-card" data-zone="builder">
+          <div class="card-icon">🧱</div>
+          <h3>句子建築工地</h3>
+          <p>把打亂的單字方塊排成正確句子，每組對一句就蓋一層房子！</p>
+          <span class="card-tag">Sentence</span>
+        </div>
+        <div class="hub-card speak-card" data-zone="speak">
+          <div class="card-icon">🎤</div>
+          <h3>魔法咒語學院</h3>
+          <p>大聲唸出英文咒語，用你的聲音施展魔法擊退怪物！</p>
+          <span class="card-tag">Speaking</span>
         </div>
       </div>
     </div>
@@ -609,6 +629,113 @@
     </div>
   </main>
 
+  <!-- Zone: Sentence Builder (句子建築工地) -->
+  <main id="zone-builder" class="zone">
+    <div class="bd-container">
+      <div class="bd-header">
+        <h2>🧱 句子建築工地</h2>
+        <button class="zone-fs-btn" title="遊戲畫面最大化">⛶</button>
+        <div class="bd-stats">
+          <span id="bd-houses" title="本次蓋好的房子">🏘️ 0</span>
+        </div>
+        <div class="bd-difficulty">
+          <button class="bd-diff-btn active" data-diff="easy">簡單</button>
+          <button class="bd-diff-btn" data-diff="medium">中等</button>
+          <button class="bd-diff-btn" data-diff="hard">困難</button>
+        </div>
+      </div>
+
+      <!-- Start Screen (normal flow — mobile safe) -->
+      <div class="bd-panel bd-screen" id="bd-start-screen">
+        <h3>🧱 句子建築工地</h3>
+        <p class="bd-instructions">📐 看中文藍圖，把打亂的單字方塊照正確順序排好</p>
+        <p class="bd-instructions">👆 點方塊放上去，點錯了可以點放好的方塊拿回來</p>
+        <p class="bd-instructions">🏠 每組對一句就蓋一層，8 句蓋好一棟房子拿完工獎勵！</p>
+        <p class="bd-instructions">💡 放錯有 2 次機會，第 3 次會示範正確順序（房子照蓋）</p>
+        <button class="bd-btn" id="bd-start-btn">🚧 開工蓋房子</button>
+      </div>
+
+      <!-- House Complete Screen -->
+      <div class="bd-panel bd-screen" id="bd-done-screen" style="display:none">
+        <h3>🎉 房子完工！</h3>
+        <div id="bd-done-info"></div>
+        <button class="bd-btn" id="bd-done-btn">🚧 再蓋一棟</button>
+      </div>
+
+      <!-- Game Area -->
+      <div id="bd-game" style="display:none">
+        <div class="bd-site">
+          <div class="bd-panel">
+            <div class="bd-zh" id="bd-zh"></div>
+            <div class="bd-progress" id="bd-progress"></div>
+            <div class="bd-slots" id="bd-slots"></div>
+            <div class="bd-tiles" id="bd-tiles"></div>
+            <div class="bd-feedback" id="bd-feedback"></div>
+          </div>
+          <div class="bd-house-panel">
+            <div class="bd-house" id="bd-house"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Zone: Spell Academy (魔法咒語學院) -->
+  <main id="zone-speak" class="zone">
+    <div class="sk-container">
+      <div class="sk-header">
+        <h2>🎤 魔法咒語學院</h2>
+        <button class="zone-fs-btn" title="遊戲畫面最大化">⛶</button>
+        <div class="sk-hud">
+          <span id="sk-lives">❤️❤️❤️</span>
+          <span id="sk-score">0 / 10</span>
+        </div>
+        <div class="sk-difficulty">
+          <button class="sk-diff-btn active" data-diff="easy">簡單</button>
+          <button class="sk-diff-btn" data-diff="medium">中等</button>
+          <button class="sk-diff-btn" data-diff="hard">困難</button>
+        </div>
+      </div>
+
+      <!-- Start Screen (normal flow — mobile safe) -->
+      <div class="sk-screen" id="sk-start-screen">
+        <h3>🎤 魔法咒語學院</h3>
+        <p class="sk-instructions">🧟 怪物會慢慢逼近你的法師！</p>
+        <p class="sk-instructions">📜 螢幕會顯示英文「咒語」（單字或句子），先按 🔊 聽示範</p>
+        <p class="sk-instructions">🪄 按魔杖按鈕，大聲唸出咒語——唸對就發出閃電擊退怪物！</p>
+        <p class="sk-instructions">❤️ 有 3 條命，擊退 10 隻怪物就從學院畢業！</p>
+        <p class="sk-mode-note" id="sk-mode-note"></p>
+        <button class="sk-btn" id="sk-start-btn">🪄 開始上課</button>
+      </div>
+
+      <!-- Round Over Screen -->
+      <div class="sk-screen" id="sk-over-screen" style="display:none">
+        <h3 id="sk-over-title">🎓 畢業考通過！</h3>
+        <div id="sk-over-info"></div>
+        <button class="sk-btn" id="sk-over-btn">🎤 再挑戰一輪</button>
+      </div>
+
+      <!-- Game Area -->
+      <div id="sk-game" style="display:none">
+        <div class="sk-stage" id="sk-stage">
+          <span class="sk-wizard">🧙</span>
+          <span class="sk-monster" id="sk-monster">🧟</span>
+        </div>
+        <div class="sk-approach"><div class="sk-approach-bar" id="sk-approach-bar"></div></div>
+        <div class="sk-card">
+          <div class="sk-spell" id="sk-spell"></div>
+          <div class="sk-zh" id="sk-zh"></div>
+          <button class="sk-mic-btn" id="sk-mic-btn">🪄 按我，唸出咒語！</button>
+          <div class="sk-honor" id="sk-honor" style="display:none">
+            <button class="sk-honor-btn" id="sk-honor-yes">✅ 我唸對了</button>
+            <button class="sk-honor-btn" id="sk-honor-no">🔊 再聽一次示範</button>
+          </div>
+          <div class="sk-heard" id="sk-heard"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
   <!-- Zone: Daily Quests -->
   <main id="zone-daily" class="zone">
     <div class="daily-container">
@@ -785,6 +912,32 @@
           </ul>
         </div>
         <div class="help-section">
+          <h3>🧱 句子建築工地</h3>
+          <p>把打亂的英文單字方塊排成正確的句子，蓋出你的房子！</p>
+          <ul>
+            <li>看中文藍圖，點單字方塊照正確順序放上去</li>
+            <li>放錯了？點放好的方塊可以拿回來重排</li>
+            <li>全部放完會自動檢查：對了就蓋一層＋唸整句給你聽</li>
+            <li>放錯有 2 次機會，第 3 次會示範正確順序（房子照蓋，但沒有獎勵）</li>
+            <li>每組對一句獲得 XP＋寶石；8 句蓋好一棟房子再拿完工寶石</li>
+            <li>難度決定句子長度：簡單 4-6 字、中等 6-8 字、困難 8-11 字</li>
+            <li>提示水晶可自動放一塊、復活羽毛多一次機會，雙倍經驗、寶石探測器都有效</li>
+          </ul>
+        </div>
+        <div class="help-section">
+          <h3>🎤 魔法咒語學院</h3>
+          <p>大聲唸出英文咒語，用你的聲音施展魔法擊退逼近的怪物！</p>
+          <ul>
+            <li>怪物會在 18 秒內逼近，先按 🔊 聽咒語示範發音</li>
+            <li>按魔杖按鈕開始收音，大聲唸出咒語（第一次會請求麥克風權限）</li>
+            <li>唸對就發出閃電擊退怪物；沒唸對會顯示「你唸的聽起來像…」，可以再試</li>
+            <li>怪物碰到法師扣 1 條命（共 3 條）；復活羽毛可以擋一次</li>
+            <li>簡單＝單字、中等＝單字＋生活短句、困難＝完整句子</li>
+            <li>擊退 10 隻怪物畢業，獲得回合寶石獎勵</li>
+            <li>瀏覽器不支援語音辨識（如 iPhone）會自動改「榮譽模式」：跟著唸、自己評分，獎勵減半</li>
+          </ul>
+        </div>
+        <div class="help-section">
           <h3>📋 每日任務</h3>
           <p>每天完成任務可各獲得 10 XP，全部完成再送 50 💎 和神秘寶箱！</p>
           <ul>
@@ -795,6 +948,8 @@
             <li>英語帝國擊敗 5 個敵人</li>
             <li>糖果消消樂通過 1 關</li>
             <li>單字彈弓打中 5 個單字箱</li>
+            <li>句子建築工地組對 3 個句子</li>
+            <li>魔法咒語學院唸對 3 個咒語</li>
           </ul>
         </div>
         <div class="help-section">
@@ -827,6 +982,8 @@
   <script src="js/empire.js"></script>
   <script src="js/candy.js"></script>
   <script src="js/sling.js"></script>
+  <script src="js/builder.js"></script>
+  <script src="js/speak.js"></script>
   <script src="js/daily.js"></script>
   <script src="js/app.js"></script>
 </body>
