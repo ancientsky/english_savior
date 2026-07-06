@@ -36,7 +36,7 @@ js/
   empire.js             — Age of Empires-style 3D castle defense (Three.js)
   candy.js              — Candy Crush-style match-3 with vocabulary quizzes
   sling.js              — Angry Birds-style word slingshot (canvas physics)
-  builder.js            — Duolingo-style sentence builder (word-order house building)
+  builder.js            — Duolingo-style sentence builder (word-order game building 33 world landmarks with cultural facts)
   speak.js              — Spell academy speaking game (Web Speech Recognition, honor-mode fallback)
   daily.js              — Daily quest tracking and rendering
   tts.js                — Text-to-speech module (Web Speech API)
@@ -47,7 +47,7 @@ js/
     grammar.js          — Grammar questions (GRAMMAR_DATA, 480 questions, 68 topics covering the 國中基礎文法句構參考表)
     video.js            — Video lessons (VIDEO_LESSONS, 42 lessons with 126 quiz questions)
     empire.js           — Empire dialogues (EMPIRE_DIALOGUES) and daily-life English (EMPIRE_LIFE), easy/medium/hard
-    game.js             — Achievements (27), daily quests (9), inventory items, shop items
+    game.js             — Achievements (28), daily quests (9), inventory items, shop items
 reference/
   taiwan_elementary_1000_minecraft_flavor.csv  — Source word list reference
 ```
@@ -106,7 +106,7 @@ Empire (英語帝國) scales by age instead of difficulty: 10/15/20/25 XP + 1 ge
 - **Web Speech API** — text-to-speech pronunciation (TTSManager), listening game audio, and speech recognition for the spell academy (with self-graded "honor mode" fallback where unavailable, e.g. iOS Safari)
 - **Canvas 2D API** — spelling runner rendering (800×340 px) and word slingshot physics (880×420 px)
 - **WebGL via Three.js** — empire 3D battlefield rendering (`js/vendor/three.min.js`, r149)
-- **localStorage** — game state persistence (`english_savior_save` for the engine, `english_savior_empire` for empire campaign progress, `english_savior_candy` for candy level progress)
+- **localStorage** — game state persistence (`english_savior_save` for the engine, `english_savior_empire` for empire campaign progress, `english_savior_candy` for candy level progress, `english_savior_builder` for the landmark collection)
 
 ## Naming Conventions
 - **CSS classes**: kebab-case with module prefix (`mc-block`, `rb-platform`, `yt-card`, `sp-canvas`, `ls-card`)

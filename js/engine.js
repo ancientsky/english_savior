@@ -186,6 +186,7 @@ const GameEngine = (() => {
       candyLevels: 0,
       slingHits: 0,
       builderSentences: 0,
+      builderLandmarks: 0,
       speakCasts: 0,
       // history
       learnedWordsList: [],
@@ -342,6 +343,12 @@ const GameEngine = (() => {
     save();
     checkAchievements();
     checkDailyQuests();
+  }
+
+  function recordBuilderLandmark() {
+    state.builderLandmarks = (state.builderLandmarks || 0) + 1;
+    save();
+    checkAchievements();
   }
 
   function recordSpeak() {
@@ -874,7 +881,7 @@ const GameEngine = (() => {
     recordWord, recordGrammar, recordVideo,
     recordSpelling, recordListening,
     recordEmpire, recordEmpireAge, recordCandy, recordSling,
-    recordBuilder, recordSpeak,
+    recordBuilder, recordBuilderLandmark, recordSpeak,
     recordPerfectGrammar, recordStreak,
     updateHUD, updateStats,
     showInventory, showAchievements, showToast,
