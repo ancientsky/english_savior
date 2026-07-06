@@ -266,16 +266,22 @@
       <div class="rb-header">
         <h2>🏃 文法跑酷大冒險</h2>
         <button class="zone-fs-btn" title="遊戲畫面最大化">⛶</button>
-        <div class="rb-progress">
-          關卡 <span id="rb-stage">1</span> / <span id="rb-total">10</span>
+        <div class="rb-status">
+          <span class="rb-world" id="rb-world">🌳 草原世界</span>
+          <span class="rb-lives" id="rb-lives">❤️❤️❤️</span>
+          <span class="rb-progress">關卡 <span id="rb-stage">1</span> / <span id="rb-total">10</span></span>
         </div>
       </div>
-      <div class="rb-track">
+      <div class="rb-track" id="rb-track">
+        <div class="rb-deco" id="rb-deco"></div>
+        <span class="rb-flag">🏁</span>
         <div class="rb-character" id="rb-character">🏃</div>
         <div class="rb-platforms" id="rb-platforms">
           <!-- Platforms generated dynamically -->
         </div>
+        <div class="rb-combo" id="rb-combo" style="display:none">🔥 連擊 ×2</div>
       </div>
+      <div class="rb-timer"><div class="rb-timer-bar" id="rb-timer-bar"></div></div>
       <div class="rb-question-area">
         <div class="rb-sentence" id="rb-sentence"></div>
         <div class="rb-hint" id="rb-hint" style="display:none"></div>
@@ -284,6 +290,14 @@
         </div>
       </div>
       <div class="rb-feedback" id="rb-feedback"></div>
+      <div class="rb-next-hint" id="rb-next-hint" style="display:none">👆 點一下畫面立刻繼續</div>
+      <div class="rb-results" id="rb-results" style="display:none">
+        <h2 id="rb-results-title">🎉 完美通關！</h2>
+        <div class="rb-results-stars" id="rb-results-stars"></div>
+        <div class="rb-score" id="rb-results-score">10 / 10</div>
+        <p class="rb-results-info" id="rb-results-info"></p>
+        <button class="rb-retry-btn" id="rb-retry">🏃 再跑一次</button>
+      </div>
     </div>
   </main>
 
@@ -659,10 +673,13 @@
           <h3>🏃 跑酷學文法</h3>
           <p>像 Roblox Obby 一樣闖關，選擇正確的文法選項才能繼續前進！</p>
           <ul>
-            <li>閱讀句子，找出需要填空的地方</li>
-            <li>從四個選項中選擇正確答案</li>
-            <li>答對後角色會向前跳躍</li>
-            <li>完成 10 個關卡獲得豐厚獎勵</li>
+            <li>每一趟旅程會穿越 3 個隨機世界（草原、沙漠、冰雪、火山、太空）</li>
+            <li>跑者就是你在商店裝備的皮膚角色！</li>
+            <li>每題限時 15 秒；5 秒內快答額外 +5 XP</li>
+            <li>連續答對 3 題以上，每題再 +1 💎 連擊獎勵</li>
+            <li>答錯或超時會掉下平台，扣 1 條命（共 3 條），生命用完就結束</li>
+            <li>答題後點一下畫面可以立刻前進，不用等待</li>
+            <li>完成 10 關依正確率獲得 ⭐ 星級評價，高分還有彩帶慶祝！</li>
           </ul>
         </div>
         <div class="help-section">
