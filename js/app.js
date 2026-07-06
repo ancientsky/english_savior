@@ -6,20 +6,18 @@ document.addEventListener('DOMContentLoaded', () => {
   GameEngine.recordStreak();
   GameEngine.updateStats();
 
-  // Init modules
-  MinecraftGame.init();
-  RobloxGame.init();
-  YoutubeGame.init();
-  SpellingGame.init();
-  ListeningGame.init();
-  EmpireGame.init();
-  CandyGame.init();
-  SlingGame.init();
-  BuilderGame.init();
-  SpeakGame.init();
-  TowerGame.init();
-  RpgGame.init();
-  DailyQuests.init();
+  // Init modules — isolated so one game failing can't break the rest
+  [
+    MinecraftGame, RobloxGame, YoutubeGame, SpellingGame, ListeningGame,
+    EmpireGame, CandyGame, SlingGame, BuilderGame, SpeakGame, TowerGame,
+    RpgGame, DailyQuests,
+  ].forEach(mod => {
+    try {
+      mod.init();
+    } catch (err) {
+      console.error('Module init failed:', err);
+    }
+  });
 
   // Navigation
   document.querySelectorAll('[data-zone]').forEach(el => {
