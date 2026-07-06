@@ -50,6 +50,17 @@ const EmpireGame = (() => {
   let renderer, scene, camera, clock;
   let castleGroup = null;
   let rafId = null;
+  let hemiLight = null, sunLight = null;
+  let clouds = [];
+  let targetArrow = null;
+
+  // Orbit camera (spherical coordinates around a look-at target).
+  // Low + close by default so approaching enemies visibly grow.
+  const CAM_HOME = { radius: 40, theta: 0.55, phi: 0.30 };
+  const CAM_TARGET = { x: 0, y: 2, z: -16 };
+  let cam = { ...CAM_HOME };
+  let activePointers = new Map();  // pointerId -> {x, y}
+  let pinchDist = 0;
 
   // DOM refs
   let els = {};
@@ -94,6 +105,17 @@ const EmpireGame = (() => {
         renderStartStats();
         updateHUD();
       }
+    });
+
+    // Camera control buttons (work once the 3D scene exists)
+    document.getElementById('emp-cam-reset')?.addEventListener('click', () => {
+      if (threeReady) resetCamera();
+    });
+    document.getElementById('emp-cam-zoomin')?.addEventListener('click', () => {
+      if (threeReady) zoomCamera(0.85);
+    });
+    document.getElementById('emp-cam-zoomout')?.addEventListener('click', () => {
+      if (threeReady) zoomCamera(1.18);
     });
 
     window.addEventListener('resize', resizeRenderer);
@@ -163,19 +185,20 @@ const EmpireGame = (() => {
     scene.fog = new THREE.Fog(0x9fd4f5, 70, 150);
 
     camera = new THREE.PerspectiveCamera(48, w / h, 0.1, 300);
-    camera.position.set(20, 15, 30);
-    camera.lookAt(0, 0, -12);
+    applyCamera();
+    setupCameraControls();
 
-    // Lights
-    scene.add(new THREE.HemisphereLight(0xffffee, 0x7da35d, 0.85));
-    const sun = new THREE.DirectionalLight(0xfff3d6, 1.0);
-    sun.position.set(30, 40, 15);
-    sun.castShadow = true;
-    sun.shadow.mapSize.set(1024, 1024);
-    sun.shadow.camera.left = -60; sun.shadow.camera.right = 60;
-    sun.shadow.camera.top = 60; sun.shadow.camera.bottom = -100;
-    sun.shadow.camera.far = 200;
-    scene.add(sun);
+    // Lights (kept as refs so each age can tint the atmosphere)
+    hemiLight = new THREE.HemisphereLight(0xffffee, 0x7da35d, 0.85);
+    scene.add(hemiLight);
+    sunLight = new THREE.DirectionalLight(0xfff3d6, 1.0);
+    sunLight.position.set(30, 40, 15);
+    sunLight.castShadow = true;
+    sunLight.shadow.mapSize.set(1024, 1024);
+    sunLight.shadow.camera.left = -60; sunLight.shadow.camera.right = 60;
+    sunLight.shadow.camera.top = 60; sunLight.shadow.camera.bottom = -100;
+    sunLight.shadow.camera.far = 200;
+    scene.add(sunLight);
 
     // Ground
     const ground = new THREE.Mesh(
@@ -205,6 +228,53 @@ const EmpireGame = (() => {
       else scene.add(makeRock(x, z));
     }
 
+    // Flower patches on the grass
+    const flowerColors = [0xff6b81, 0xffd166, 0xc77dff, 0xffffff, 0xff9f1c];
+    for (let i = 0; i < 40; i++) {
+      const side = Math.random() < 0.5 ? -1 : 1;
+      const f = new THREE.Mesh(
+        new THREE.SphereGeometry(0.28, 6, 5),
+        new THREE.MeshLambertMaterial({ color: flowerColors[i % flowerColors.length] })
+      );
+      f.position.set(side * (5 + Math.random() * 34), 0.3, 12 - Math.random() * 95);
+      scene.add(f);
+    }
+
+    // Border stones along the path
+    const stoneMat = new THREE.MeshLambertMaterial({ color: 0xa8a49a });
+    for (let i = 0; i < 14; i++) {
+      [-4.2, 4.2].forEach(sx => {
+        const s = new THREE.Mesh(new THREE.DodecahedronGeometry(0.45), stoneMat);
+        s.position.set(sx + (Math.random() - 0.5) * 0.5, 0.3, 4 - i * 6);
+        scene.add(s);
+      });
+    }
+
+    // Drifting clouds
+    for (let i = 0; i < 5; i++) {
+      const cloud = new THREE.Group();
+      const cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 });
+      for (let j = 0; j < 3 + Math.floor(Math.random() * 3); j++) {
+        const puff = new THREE.Mesh(new THREE.SphereGeometry(3 + Math.random() * 2.5, 7, 6), cloudMat);
+        puff.position.set(j * 3.6 - 5, Math.random() * 1.4, (Math.random() - 0.5) * 3);
+        puff.scale.y = 0.6;
+        cloud.add(puff);
+      }
+      cloud.position.set(-90 + Math.random() * 180, 32 + Math.random() * 14, -70 - Math.random() * 40);
+      cloud.userData.speed = 1 + Math.random() * 1.6;
+      clouds.push(cloud);
+      scene.add(cloud);
+    }
+
+    // Bouncing marker above the enemy the current question belongs to
+    targetArrow = new THREE.Mesh(
+      new THREE.ConeGeometry(0.75, 1.5, 8),
+      new THREE.MeshBasicMaterial({ color: 0xff3344 })
+    );
+    targetArrow.rotation.x = Math.PI;
+    targetArrow.visible = false;
+    scene.add(targetArrow);
+
     // Distant mountains
     for (let i = 0; i < 6; i++) {
       const m = new THREE.Mesh(
@@ -220,6 +290,85 @@ const EmpireGame = (() => {
     clock = new THREE.Clock();
     threeReady = true;
     animate();
+  }
+
+  // ===== Orbit camera controls =====
+  function applyCamera(shakeX = 0, shakeY = 0) {
+    const r = cam.radius;
+    const x = r * Math.sin(cam.theta) * Math.cos(cam.phi) + CAM_TARGET.x;
+    const y = r * Math.sin(cam.phi) + CAM_TARGET.y;
+    const z = r * Math.cos(cam.theta) * Math.cos(cam.phi) + CAM_TARGET.z;
+    camera.position.set(x + shakeX, y + shakeY, z);
+    camera.lookAt(CAM_TARGET.x, CAM_TARGET.y, CAM_TARGET.z);
+  }
+
+  function clampCamera() {
+    cam.phi = Math.min(1.05, Math.max(0.12, cam.phi));
+    cam.theta = Math.min(1.25, Math.max(-1.25, cam.theta));
+    cam.radius = Math.min(64, Math.max(20, cam.radius));
+  }
+
+  function resetCamera() {
+    cam = { ...CAM_HOME };
+    applyCamera();
+  }
+
+  function zoomCamera(factor) {
+    cam.radius *= factor;
+    clampCamera();
+    applyCamera();
+  }
+
+  function setupCameraControls() {
+    const el = renderer.domElement;
+
+    el.addEventListener('pointerdown', e => {
+      activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      el.setPointerCapture?.(e.pointerId);
+      if (activePointers.size === 2) {
+        const [a, b] = [...activePointers.values()];
+        pinchDist = Math.hypot(a.x - b.x, a.y - b.y);
+      }
+    });
+
+    el.addEventListener('pointermove', e => {
+      if (!activePointers.has(e.pointerId)) return;
+      const prev = activePointers.get(e.pointerId);
+      activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+      if (activePointers.size === 1) {
+        // Drag to orbit
+        cam.theta -= (e.clientX - prev.x) * 0.006;
+        cam.phi += (e.clientY - prev.y) * 0.005;
+        clampCamera();
+        applyCamera();
+      } else if (activePointers.size === 2) {
+        // Pinch to zoom
+        const [a, b] = [...activePointers.values()];
+        const d = Math.hypot(a.x - b.x, a.y - b.y);
+        if (pinchDist > 0 && d > 0) {
+          cam.radius *= pinchDist / d;
+          clampCamera();
+          applyCamera();
+        }
+        pinchDist = d;
+      }
+    });
+
+    const release = e => {
+      activePointers.delete(e.pointerId);
+      pinchDist = 0;
+    };
+    el.addEventListener('pointerup', release);
+    el.addEventListener('pointercancel', release);
+    el.addEventListener('pointerleave', release);
+
+    el.addEventListener('wheel', e => {
+      e.preventDefault();
+      zoomCamera(1 + Math.sign(e.deltaY) * 0.09);
+    }, { passive: false });
+
+    el.addEventListener('dblclick', resetCamera);
   }
 
   function makeTree(x, z) {
@@ -254,68 +403,178 @@ const EmpireGame = (() => {
     return rock;
   }
 
-  // Castle grows grander with each age
+  // Each age has a visually distinct castle AND atmosphere so upgrades
+  // feel like a real transformation, not just a taller box
+  const AGE_STYLES = {
+    1: { // 黑暗時代: rough wooden fort under a misty grey sky
+      wall: 0x8a6237, roof: 0x6e4520, keepH: 4.5, towers: 2, towerH: 6.5,
+      palisade: true, banners: false, spire: false, gold: false,
+      sky: 0xa8b8c2, fog: 0xa8b8c2, sun: 0xd8d4c8, sunI: 0.8, hemiI: 0.7,
+      flag: 0x8d5524,
+    },
+    2: { // 封建時代: proper stone castle, clear blue day
+      wall: 0xb5aa97, roof: 0x8b3a3a, keepH: 6.5, towers: 4, towerH: 9,
+      palisade: false, banners: false, spire: false, gold: false,
+      sky: 0x9fd4f5, fog: 0x9fd4f5, sun: 0xfff3d6, sunI: 1.0, hemiI: 0.85,
+      flag: 0xe94560,
+    },
+    3: { // 城堡時代: white-stone fortress with banners, bright sky
+      wall: 0xe3e0d8, roof: 0xb8332f, keepH: 8.5, towers: 4, towerH: 12,
+      palisade: false, banners: true, spire: false, gold: false,
+      sky: 0x8fd0ff, fog: 0xa9dcff, sun: 0xffffff, sunI: 1.1, hemiI: 0.95,
+      flag: 0x2e6fd8,
+    },
+    4: { // 帝王時代: golden-roofed palace at golden hour
+      wall: 0xefe9dc, roof: 0xd4af37, keepH: 10, towers: 4, towerH: 14,
+      palisade: false, banners: true, spire: true, gold: true,
+      sky: 0xffd9a0, fog: 0xffe3b8, sun: 0xffca7a, sunI: 1.15, hemiI: 0.9,
+      flag: 0xd4af37,
+    },
+  };
+
   function buildCastle(ageId) {
     if (castleGroup) scene.remove(castleGroup);
     castleGroup = new THREE.Group();
+    const st = AGE_STYLES[ageId] || AGE_STYLES[4];
 
-    const stone = new THREE.MeshLambertMaterial({ color: ageId >= 3 ? 0xcfcfd6 : 0xb5aa97 });
-    const roofMat = new THREE.MeshLambertMaterial({ color: ageId >= 4 ? 0xd4af37 : 0x8b3a3a });
+    // Atmosphere shift per age
+    if (scene.background) scene.background.set(st.sky);
+    if (scene.fog) scene.fog.color.set(st.fog);
+    if (sunLight) { sunLight.color.set(st.sun); sunLight.intensity = st.sunI; }
+    if (hemiLight) hemiLight.intensity = st.hemiI;
+
+    const wallMat = new THREE.MeshLambertMaterial({ color: st.wall });
+    const roofMat = new THREE.MeshLambertMaterial({ color: st.roof });
+    const woodMat = new THREE.MeshLambertMaterial({ color: 0x5c3a21 });
 
     // Main keep
-    const keepH = 5 + ageId * 1.5;
-    const keep = new THREE.Mesh(new THREE.BoxGeometry(10, keepH, 6), stone);
-    keep.position.set(0, keepH / 2, 12);
+    const keep = new THREE.Mesh(new THREE.BoxGeometry(10, st.keepH, 6), wallMat);
+    keep.position.set(0, st.keepH / 2, 12);
     keep.castShadow = true;
     castleGroup.add(keep);
 
     // Gate
-    const gate = new THREE.Mesh(
-      new THREE.BoxGeometry(3, 3.6, 0.6),
-      new THREE.MeshLambertMaterial({ color: 0x5c3a21 })
-    );
+    const gate = new THREE.Mesh(new THREE.BoxGeometry(3, 3.6, 0.6), woodMat);
     gate.position.set(0, 1.8, 8.9);
     castleGroup.add(gate);
 
-    // Corner towers (more + taller as ages advance)
-    const towerCount = ageId >= 2 ? 4 : 2;
-    const towerH = keepH + 2.5;
+    // Dark-age palisade: a ring of sharpened logs instead of stone walls
+    if (st.palisade) {
+      for (let i = -7; i <= 7; i++) {
+        const log = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.5, 3.6, 6), woodMat);
+        log.position.set(i * 1.05, 1.8, 8.2);
+        castleGroup.add(log);
+        const tip = new THREE.Mesh(new THREE.ConeGeometry(0.42, 0.9, 6), woodMat);
+        tip.position.set(i * 1.05, 4.05, 8.2);
+        castleGroup.add(tip);
+      }
+    } else {
+      // Side curtain walls from feudal age on
+      [-8.5, 8.5].forEach(wx => {
+        const wallH = st.keepH * 0.55;
+        const wall = new THREE.Mesh(new THREE.BoxGeometry(7, wallH, 2.2), wallMat);
+        wall.position.set(wx, wallH / 2, 11);
+        wall.castShadow = true;
+        castleGroup.add(wall);
+        for (let i = -2; i <= 2; i++) {
+          const merlon = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.9, 0.9), wallMat);
+          merlon.position.set(wx + i * 1.4, wallH + 0.45, 10.2);
+          castleGroup.add(merlon);
+        }
+      });
+    }
+
+    // Towers
     const positions = [[-6, 9], [6, 9], [-6, 15], [6, 15]];
-    for (let i = 0; i < towerCount; i++) {
+    for (let i = 0; i < st.towers; i++) {
       const [tx, tz] = positions[i];
-      const tower = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.7, towerH, 8), stone);
-      tower.position.set(tx, towerH / 2, tz);
+      const tower = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.7, st.towerH, 8), wallMat);
+      tower.position.set(tx, st.towerH / 2, tz);
       tower.castShadow = true;
       castleGroup.add(tower);
-      const roof = new THREE.Mesh(new THREE.ConeGeometry(2, 2.4, 8), roofMat);
-      roof.position.set(tx, towerH + 1.2, tz);
+      const roof = new THREE.Mesh(new THREE.ConeGeometry(2, 2.6, 8), roofMat);
+      roof.position.set(tx, st.towerH + 1.3, tz);
       roof.castShadow = true;
       castleGroup.add(roof);
+      if (st.gold) {
+        const orb = new THREE.Mesh(
+          new THREE.SphereGeometry(0.32, 8, 6),
+          new THREE.MeshLambertMaterial({ color: 0xffe28a, emissive: 0x8a6a1a })
+        );
+        orb.position.set(tx, st.towerH + 2.8, tz);
+        castleGroup.add(orb);
+      }
+      if (st.banners) {
+        const banner = new THREE.Mesh(
+          new THREE.PlaneGeometry(0.9, 2.2),
+          new THREE.MeshLambertMaterial({ color: st.flag, side: THREE.DoubleSide })
+        );
+        banner.position.set(tx, st.towerH - 1.6, tz + 1.75);
+        castleGroup.add(banner);
+      }
     }
 
     // Battlements on the keep
     for (let i = -4; i <= 4; i += 2) {
-      const merlon = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), stone);
-      merlon.position.set(i, keepH + 0.5, 9.2);
+      const merlon = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), wallMat);
+      merlon.position.set(i, st.keepH + 0.5, 9.2);
       castleGroup.add(merlon);
     }
 
-    // Flag
+    // Imperial central spire
+    if (st.spire) {
+      const spire = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.4, 5, 8), wallMat);
+      spire.position.set(0, st.keepH + 2.5, 12);
+      spire.castShadow = true;
+      castleGroup.add(spire);
+      const spireRoof = new THREE.Mesh(new THREE.ConeGeometry(1.7, 3, 8), roofMat);
+      spireRoof.position.set(0, st.keepH + 6.5, 12);
+      castleGroup.add(spireRoof);
+    }
+
+    // Flag on the keep (or spire)
+    const flagBaseY = st.spire ? st.keepH + 8 : st.keepH;
     const pole = new THREE.Mesh(
       new THREE.CylinderGeometry(0.08, 0.08, 3.5, 5),
       new THREE.MeshLambertMaterial({ color: 0x444444 })
     );
-    pole.position.set(0, keepH + 1.75, 12);
+    pole.position.set(0, flagBaseY + 1.75, 12);
     castleGroup.add(pole);
     const flag = new THREE.Mesh(
       new THREE.PlaneGeometry(2, 1.2),
-      new THREE.MeshLambertMaterial({ color: 0xe94560, side: THREE.DoubleSide })
+      new THREE.MeshLambertMaterial({ color: st.flag, side: THREE.DoubleSide })
     );
-    flag.position.set(1.05, keepH + 2.8, 12);
+    flag.position.set(1.05, flagBaseY + 2.8, 12);
     castleGroup.add(flag);
     castleGroup.userData.flag = flag;
 
     scene.add(castleGroup);
+  }
+
+  // Celebration fireworks above the castle (age up / wave clear)
+  function fireworks(count) {
+    if (!threeReady) return;
+    const palette = [0xffd166, 0xff6b81, 0x4ecca3, 0x7db8ff, 0xc77dff];
+    for (let i = 0; i < count; i++) {
+      setTimeout(() => {
+        if (!scene) return;
+        const pos = new THREE.Vector3((Math.random() - 0.5) * 22, 14 + Math.random() * 8, 6 + Math.random() * 8);
+        const group = new THREE.Group();
+        const color = palette[Math.floor(Math.random() * palette.length)];
+        for (let j = 0; j < 16; j++) {
+          const p = new THREE.Mesh(
+            new THREE.SphereGeometry(0.22, 6, 6),
+            new THREE.MeshBasicMaterial({ color, transparent: true })
+          );
+          p.position.copy(pos);
+          const a = (j / 16) * Math.PI * 2;
+          p.userData.v = new THREE.Vector3(Math.cos(a) * 7, Math.sin(a) * 7 + 2, (Math.random() - 0.5) * 4);
+          group.add(p);
+        }
+        scene.add(group);
+        explosions.push({ mesh: group, t: 0, life: 1.2, grav: 6 });
+      }, i * 450);
+    }
   }
 
   // ===== Enemy construction (low-poly soldiers) =====
@@ -817,10 +1076,13 @@ const EmpireGame = (() => {
       SoundManager.playLevelUp();
       GameEngine.recordEmpireAge(newAge.id);
       buildCastle(newAge.id);
+      fireworks(6);
       els.ageDisplay.textContent = `${newAge.icon} ${newAge.name}`;
-      els.ageupBanner.innerHTML = `${newAge.icon}<br>晉升「${newAge.name}」！<br><small>城堡升級了，敵人與題目也更強了！</small>`;
+      els.ageupBanner.innerHTML = `${newAge.icon}<br>晉升「${newAge.name}」！<br><small>城堡大升級，連天空都變了！敵人與題目也更強了！</small>`;
       els.ageupBanner.style.display = 'flex';
       setTimeout(() => { els.ageupBanner.style.display = 'none'; }, 3200);
+    } else {
+      fireworks(2);
     }
 
     GameEngine.setDeferLevelUp(false);
@@ -904,6 +1166,12 @@ const EmpireGame = (() => {
         e.mesh.position.z += e.baseSpeed * rush * dt;
         e.walkT += dt * e.baseSpeed * rush * 3;
 
+        // Grow as they close in — exaggerates perspective so the threat
+        // of an approaching enemy is unmistakable
+        const prog = Math.min(1, Math.max(0,
+          (e.mesh.position.z - PATH_START_Z) / (CASTLE_LINE_Z - PATH_START_Z)));
+        e.mesh.scale.setScalar(ENEMY_TYPES[e.type].scale * (0.9 + prog * 0.45));
+
         // Walk cycle
         if (e.mesh.userData.legs) {
           const swing = Math.sin(e.walkT) * 0.55;
@@ -955,36 +1223,54 @@ const EmpireGame = (() => {
       if (battleActive) pickTarget();
     }
 
-    // Explosions
+    // Explosions & fireworks (per-burst life/gravity)
     explosions.forEach(x => {
       x.t += dt;
+      const life = x.life || 0.7;
+      const grav = x.grav !== undefined ? x.grav : 18;
       x.mesh.children.forEach(p => {
         p.position.addScaledVector(p.userData.v, dt);
-        p.userData.v.y -= 18 * dt;
-        p.material.opacity = Math.max(0, 1 - x.t / 0.7);
+        p.userData.v.y -= grav * dt;
+        p.material.opacity = Math.max(0, 1 - x.t / life);
       });
-      if (x.t > 0.7) {
+      if (x.t > life) {
         scene.remove(x.mesh);
         x.remove = true;
       }
     });
     explosions = explosions.filter(x => !x.remove);
 
-    // Flag wave + camera shake
+    // Drifting clouds
+    clouds.forEach(c => {
+      c.position.x += c.userData.speed * dt;
+      if (c.position.x > 100) c.position.x = -100;
+    });
+
+    // Bouncing marker above the current target enemy
+    if (targetArrow) {
+      if (currentTarget && !currentTarget.dying && battleActive) {
+        const m = currentTarget.mesh;
+        targetArrow.visible = true;
+        targetArrow.position.set(
+          m.position.x,
+          4.6 * m.scale.x + 0.9 + Math.sin(now / 180) * 0.35,
+          m.position.z
+        );
+      } else {
+        targetArrow.visible = false;
+      }
+    }
+
+    // Flag wave + camera (orbit controls + shake)
     if (castleGroup && castleGroup.userData.flag) {
       castleGroup.userData.flag.rotation.y = Math.sin(now / 300) * 0.25;
     }
     if (shakeTime > 0) {
       shakeTime -= dt;
-      camera.position.set(
-        20 + (Math.random() - 0.5) * 0.8,
-        15 + (Math.random() - 0.5) * 0.8,
-        30
-      );
-    } else {
-      camera.position.set(20, 15, 30);
+      applyCamera((Math.random() - 0.5) * 0.8, (Math.random() - 0.5) * 0.8);
+    } else if (activePointers.size === 0) {
+      applyCamera();
     }
-    camera.lookAt(0, 0, -12);
 
     renderer.render(scene, camera);
   }
