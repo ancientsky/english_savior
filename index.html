@@ -458,7 +458,8 @@
           <p class="emp-start-sub">敵軍正朝你的城堡進攻！答對英文題目，城堡的投石機就會發射，擊退敵人！</p>
           <p class="emp-instructions">📖 單字 ｜ 💬 常見對話 ｜ ✏️ 基本文法 ｜ 🌏 生活英文</p>
           <p class="emp-instructions">❌ 答錯敵人會加速衝鋒 ｜ 💥 敵人抵達城堡會扣血 ｜ 🪵 攻城槌要答對 3 題才會倒</p>
-          <p class="emp-instructions">🌑 → 🏘️ → 🏰 → 👑 每守住 3 波就晉升新時代，城堡升級、題目變難！</p>
+          <p class="emp-instructions">🌑 → 🏘️ → 🏰 → 👑 每守住 3 波就晉升新時代，城堡大變身、連天空都會變！</p>
+          <p class="emp-instructions">🖱️ 拖曳畫面旋轉視角 ｜ 滾輪或雙指縮放 ｜ 雙擊或 🎥 重置視角</p>
           <div class="emp-start-stats" id="emp-start-stats"></div>
           <button class="emp-btn" id="emp-start-btn">⚔️ 開始戰役</button>
           <button class="emp-btn secondary" id="emp-reset-btn">🔄 重置戰役進度</button>
@@ -470,6 +471,11 @@
         </div>
         <div class="emp-ageup-banner" id="emp-ageup-banner" style="display:none"></div>
         <div class="emp-damage-flash" id="emp-damage-flash"></div>
+        <div class="emp-cam-controls">
+          <button class="emp-cam-btn" id="emp-cam-zoomin" title="拉近">➕</button>
+          <button class="emp-cam-btn" id="emp-cam-zoomout" title="拉遠">➖</button>
+          <button class="emp-cam-btn" id="emp-cam-reset" title="重置視角">🎥</button>
+        </div>
       </div>
       <div class="emp-question" id="emp-question" style="display:none">
         <div class="emp-q-target" id="emp-q-target"></div>
@@ -702,7 +708,8 @@
             <li>答錯敵人會加速衝鋒；連錯兩次會顯示正確答案讓你學習</li>
             <li>敵人抵達城堡會扣血（民兵 -1、騎士 -2、攻城槌 -3）</li>
             <li>攻城槌是 Boss，要答對 3 題才能摧毀</li>
-            <li>每守住 3 波晉升新時代：黑暗 → 封建 → 城堡 → 帝王，題目越來越難</li>
+            <li>每守住 3 波晉升新時代：黑暗 → 封建 → 城堡 → 帝王，城堡外觀、天空氛圍都會大變身</li>
+            <li>拖曳畫面可旋轉視角，滾輪／雙指可縮放，雙擊畫面或按 🎥 重置視角</li>
             <li>每擊敗一個敵人獲得 XP 與寶石，守住一波再加碼寶石獎勵</li>
             <li>戰役進度自動儲存，隨時可以繼續挑戰</li>
           </ul>
