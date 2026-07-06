@@ -39,8 +39,8 @@ js/
   vendor/
     three.min.js        — Three.js r149 (vendored UMD build, no CDN)
   data/
-    vocab.js            — Vocabulary words (VOCAB_DATA, easy/medium/hard, 1,270+ words)
-    grammar.js          — Grammar questions (GRAMMAR_DATA, 430+ questions, 62 topics)
+    vocab.js            — Vocabulary words (VOCAB_DATA, easy/medium/hard, 2,080 words covering the 十二年國教課綱 2,000-word list)
+    grammar.js          — Grammar questions (GRAMMAR_DATA, 480 questions, 68 topics covering the 國中基礎文法句構參考表)
     video.js            — Video lessons (VIDEO_LESSONS, 42 lessons with 126 quiz questions)
     empire.js           — Empire dialogues (EMPIRE_DIALOGUES) and daily-life English (EMPIRE_LIFE), easy/medium/hard
     game.js             — Achievements (23), daily quests (7), inventory items, shop items
