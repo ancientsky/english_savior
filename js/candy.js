@@ -36,6 +36,7 @@ const CandyGame = (() => {
   let quizWord = null;
   let quizTries = 0;
   let quizStarPos = null;
+  let quizKind = 'wrap';
 
   let els = {};
 
@@ -83,6 +84,12 @@ const CandyGame = (() => {
     // Pointer input: tap to select, tap neighbor to swap, or swipe
     els.board.addEventListener('pointerdown', onPointerDown);
     els.board.addEventListener('pointerup', onPointerUp);
+
+    // Read/inject hook for automated tests (board state is closure-only)
+    window.__candyTest = {
+      board: () => board.map(row => row.map(c => (c ? { ...c } : null))),
+      setCell: (r, c, cell) => { board[r][c] = cell; renderBoard(); },
+    };
   }
 
   // ===== Persistence =====
@@ -237,8 +244,10 @@ const CandyGame = (() => {
         div.dataset.c = c;
         if (cell) {
           if (cell.type === STAR) {
-            div.classList.add('star');
-            div.textContent = '⭐';
+            const info = SPECIAL_INFO[cell.kind] || SPECIAL_INFO.wrap;
+            div.classList.add('star', 'sp-' + (cell.kind || 'wrap'));
+            div.textContent = info.icon;
+            div.title = `${info.name}：${info.desc}（點我答題引爆！）`;
           } else {
             div.classList.add('t' + cell.type);
             div.textContent = TYPES[cell.type].emoji;
@@ -361,7 +370,8 @@ const CandyGame = (() => {
     board[b.r][b.c] = tmp;
   }
 
-  // Find all horizontal/vertical runs of 3+; return matched cells and runs
+  // Find all horizontal/vertical runs of 3+; return matched cells and
+  // runs annotated with their direction (needed for special spawning)
   function findMatches() {
     const cells = new Set();
     const runs = [];
@@ -375,7 +385,7 @@ const CandyGame = (() => {
           if (c - runStart >= 3 && board[r][runStart] && board[r][runStart].type !== STAR) {
             const run = [];
             for (let i = runStart; i < c; i++) { cells.add(r + ',' + i); run.push({ r, c: i }); }
-            runs.push(run);
+            runs.push({ cells: run, dir: 'h' });
           }
           runStart = c;
         }
@@ -391,7 +401,7 @@ const CandyGame = (() => {
           if (r - runStart >= 3 && board[runStart][c] && board[runStart][c].type !== STAR) {
             const run = [];
             for (let i = runStart; i < r; i++) { cells.add(i + ',' + c); run.push({ r: i, c }); }
-            runs.push(run);
+            runs.push({ cells: run, dir: 'v' });
           }
           runStart = r;
         }
@@ -399,6 +409,54 @@ const CandyGame = (() => {
     }
     return { cells, runs };
   }
+
+  // Candy Crush-style special spawning:
+  //   5+ straight line → 🌈 rainbow (clears every candy of a goal type)
+  //   L/T intersection  → 🎁 wrapped (5×5 blast)
+  //   exactly 4 in line → 🍭 striped (horizontal match clears its column,
+  //                        vertical match clears its row — like the original)
+  function planSpecials(runs, swapPos) {
+    const specials = [];
+    const used = new Set();
+    const spawnAt = run =>
+      swapPos && run.cells.some(p => p.r === swapPos.r && p.c === swapPos.c)
+        ? swapPos
+        : run.cells[Math.floor(run.cells.length / 2)];
+
+    // Rainbow first (most powerful)
+    runs.forEach(run => {
+      if (run.cells.length >= 5) {
+        specials.push({ pos: spawnAt(run), kind: 'rainbow' });
+        used.add(run);
+      }
+    });
+    // Wrapped: an H run crossing a V run of the same type
+    runs.filter(r => r.dir === 'h' && !used.has(r)).forEach(h => {
+      runs.filter(r => r.dir === 'v' && !used.has(r) && !used.has(h)).forEach(v => {
+        const inter = h.cells.find(p => v.cells.some(q => q.r === p.r && q.c === p.c));
+        if (inter) {
+          specials.push({ pos: inter, kind: 'wrap' });
+          used.add(h);
+          used.add(v);
+        }
+      });
+    });
+    // Striped: remaining 4-in-a-line
+    runs.forEach(run => {
+      if (!used.has(run) && run.cells.length === 4) {
+        specials.push({ pos: spawnAt(run), kind: run.dir === 'h' ? 'stripeCol' : 'stripeRow' });
+        used.add(run);
+      }
+    });
+    return specials;
+  }
+
+  const SPECIAL_INFO = {
+    stripeRow: { icon: '🍭', name: '條紋糖果', desc: '清除一整行', toast: '🍭 條紋糖果出現了！點它答題清除一整行！' },
+    stripeCol: { icon: '🍭', name: '條紋糖果', desc: '清除一整列', toast: '🍭 條紋糖果出現了！點它答題清除一整列！' },
+    wrap:      { icon: '🎁', name: '包裝糖果', desc: '5×5 大爆炸', toast: '🎁 包裝糖果出現了！點它答題引爆 5×5！' },
+    rainbow:   { icon: '🌈', name: '彩虹糖果', desc: '清除所有目標糖果', toast: '🌈 彩虹糖果出現了！點它答題清光目標糖果！' },
+  };
 
   // Remove matches, spawn stars, apply gravity, cascade until stable
   function resolveBoard(swapPos, onDone) {
@@ -418,14 +476,8 @@ const CandyGame = (() => {
       progress.totalCleared++;
     });
 
-    // 4+ run spawns a magic star (at the swapped cell if it's in the run)
-    const starSpawns = [];
-    runs.filter(run => run.length >= 4).forEach(run => {
-      const at = swapPos && run.some(p => p.r === swapPos.r && p.c === swapPos.c)
-        ? swapPos
-        : run[Math.floor(run.length / 2)];
-      starSpawns.push(at);
-    });
+    // Candy Crush-style specials from this wave of matches
+    const specials = planSpecials(runs, swapPos);
 
     renderGoals();
     saveProgress();
@@ -437,9 +489,9 @@ const CandyGame = (() => {
         const [r, c] = key.split(',').map(Number);
         board[r][c] = null;
       });
-      starSpawns.forEach(p => {
-        board[p.r][p.c] = { type: STAR };
-        GameEngine.showToast('⭐ 魔法糖果出現了！點它回答單字題！', 'achievement');
+      specials.forEach(s => {
+        board[s.pos.r][s.pos.c] = { type: STAR, kind: s.kind };
+        GameEngine.showToast(SPECIAL_INFO[s.kind].toast, 'achievement');
       });
       const fell = applyGravity();
       renderBoard({ fall: fell });
@@ -531,7 +583,12 @@ const CandyGame = (() => {
   function openQuiz(starPos) {
     busy = true;
     quizStarPos = starPos;
+    quizKind = board[starPos.r][starPos.c]?.kind || 'wrap';
     quizTries = 0;
+
+    const info = SPECIAL_INFO[quizKind];
+    const titleEl = document.getElementById('cd-quiz-title');
+    if (titleEl) titleEl.textContent = `${info.icon} ${info.name}單字題（${info.desc}）`;
 
     // Quiz only words whose zh field yields a concise meaning (either the
     // "含義 — 說明" format or a **含義** marker inside an example sentence)
@@ -630,7 +687,7 @@ const CandyGame = (() => {
       setTimeout(() => {
         els.quiz.style.display = 'none';
         els.board.style.display = 'grid';
-        explodeAt(quizStarPos);
+        detonate(quizStarPos);
       }, 900);
     } else {
       SoundManager.playWrong();
@@ -653,21 +710,77 @@ const CandyGame = (() => {
     }
   }
 
-  // 3×3 blast around the star; collected candies count toward goals
-  function explodeAt(pos) {
-    const popped = new Set();
-    for (let r = pos.r - 1; r <= pos.r + 1; r++) {
-      for (let c = pos.c - 1; c <= pos.c + 1; c++) {
-        if (!inBounds({ r, c }) || !board[r][c]) continue;
-        popped.add(r + ',' + c);
-        const cell = board[r][c];
-        if (cell.type !== STAR) {
-          const goal = goals.find(g => g.type === cell.type);
-          if (goal) goal.got++;
-          progress.totalCleared++;
+  // Which cells a special candy wipes out. Specials caught in the blast
+  // chain-detonate too (no extra quiz needed — pure combo joy).
+  function collectBlast(pos, kind, popped, visited) {
+    visited.add(pos.r + ',' + pos.c);
+    popped.add(pos.r + ',' + pos.c);
+
+    const targets = [];
+    if (kind === 'wrap') {
+      for (let r = pos.r - 2; r <= pos.r + 2; r++) {
+        for (let c = pos.c - 2; c <= pos.c + 2; c++) targets.push({ r, c });
+      }
+    } else if (kind === 'stripeRow') {
+      for (let c = 0; c < COLS; c++) targets.push({ r: pos.r, c });
+    } else if (kind === 'stripeCol') {
+      for (let r = 0; r < ROWS; r++) targets.push({ r, c: pos.c });
+    } else if (kind === 'rainbow') {
+      // Clears every candy of the first unfinished goal type
+      const goal = goals.find(g => g.got < g.need);
+      const targetType = goal ? goal.type : mostCommonType();
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          if (board[r][c] && board[r][c].type === targetType) targets.push({ r, c });
         }
       }
     }
+
+    targets.forEach(p => {
+      if (!inBounds(p) || !board[p.r][p.c]) return;
+      const key = p.r + ',' + p.c;
+      const cell = board[p.r][p.c];
+      if (cell.type === STAR) {
+        if (!visited.has(key)) {
+          collectBlast(p, cell.kind || 'wrap', popped, visited); // chain reaction!
+        }
+      } else {
+        popped.add(key);
+      }
+    });
+  }
+
+  function mostCommonType() {
+    const counts = new Array(TYPES.length).fill(0);
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        if (board[r][c] && board[r][c].type !== STAR) counts[board[r][c].type]++;
+      }
+    }
+    return counts.indexOf(Math.max(...counts));
+  }
+
+  // Detonate the special at pos; collected candies count toward goals
+  function detonate(pos) {
+    const kind = board[pos.r][pos.c]?.kind || 'wrap';
+    const popped = new Set();
+    const visited = new Set();
+    collectBlast(pos, kind, popped, visited);
+
+    // Chained specials make it extra festive
+    if (visited.size > 1) {
+      GameEngine.showToast(`💥 連鎖引爆 ×${visited.size}！`, 'achievement');
+    }
+
+    popped.forEach(key => {
+      const [r, c] = key.split(',').map(Number);
+      const cell = board[r][c];
+      if (cell && cell.type !== STAR) {
+        const goal = goals.find(g => g.type === cell.type);
+        if (goal) goal.got++;
+        progress.totalCleared++;
+      }
+    });
     renderGoals();
     saveProgress();
     renderBoard({ pop: popped });

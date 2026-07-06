@@ -132,6 +132,31 @@
   animation: cd-star-glow 1.2s infinite;
 }
 
+/* Striped candy: the stripes show which line it will clear */
+.cd-cell.star.sp-stripeRow {
+  background: repeating-linear-gradient(0deg,
+    rgba(255, 126, 185, 0.45) 0 5px, rgba(255, 255, 255, 0.12) 5px 10px);
+}
+.cd-cell.star.sp-stripeCol {
+  background: repeating-linear-gradient(90deg,
+    rgba(255, 126, 185, 0.45) 0 5px, rgba(255, 255, 255, 0.12) 5px 10px);
+}
+
+/* Wrapped candy: pulsing purple gift glow */
+.cd-cell.star.sp-wrap {
+  background: radial-gradient(circle, rgba(199, 125, 255, 0.5), rgba(199, 125, 255, 0.1));
+  box-shadow: 0 0 14px rgba(199, 125, 255, 0.85);
+}
+
+/* Rainbow candy: full spectrum shimmer */
+.cd-cell.star.sp-rainbow {
+  background: conic-gradient(from 0deg,
+    rgba(233, 69, 96, 0.5), rgba(255, 159, 28, 0.5), rgba(255, 209, 102, 0.5),
+    rgba(78, 204, 163, 0.5), rgba(0, 180, 216, 0.5), rgba(199, 125, 255, 0.5),
+    rgba(233, 69, 96, 0.5));
+  box-shadow: 0 0 16px rgba(255, 255, 255, 0.8);
+}
+
 @keyframes cd-star-glow {
   0%, 100% { box-shadow: 0 0 8px rgba(255, 209, 102, 0.5); filter: brightness(1); }
   50% { box-shadow: 0 0 20px rgba(255, 209, 102, 0.95); filter: brightness(1.25); }

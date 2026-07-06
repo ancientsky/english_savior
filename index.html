@@ -537,7 +537,9 @@
           <h3>🍬 糖果消消樂</h3>
           <p class="cd-instructions">👆 點選或滑動交換相鄰糖果，連成 3 個以上就會消除</p>
           <p class="cd-instructions">🎯 收集目標糖果過關——目標都是英文單字，點一下聽發音！</p>
-          <p class="cd-instructions">⭐ 一次消 4 顆會出現魔法糖果，點它回答單字題，答對引爆 3×3 大爆炸！</p>
+          <p class="cd-instructions">🍭 消 4 顆＝條紋糖果（清一整行/列） ｜ 🎁 L/T 型＝包裝糖果（5×5 爆炸）</p>
+          <p class="cd-instructions">🌈 消 5 顆＝彩虹糖果（清光目標糖果）——點特殊糖果答對單字題就引爆！</p>
+          <p class="cd-instructions">💥 爆炸掃到其他特殊糖果會連鎖引爆！</p>
           <p class="cd-instructions">📈 關卡越高，單字越難（國小 → 國中）</p>
           <div class="cd-start-stats" id="cd-start-stats"></div>
           <button class="cd-btn" id="cd-start-btn">🍬 開始遊戲</button>
@@ -557,7 +559,7 @@
         </div>
         <!-- Vocabulary Quiz -->
         <div class="cd-quiz" id="cd-quiz" style="display:none">
-          <h3>⭐ 魔法糖果單字題</h3>
+          <h3 id="cd-quiz-title">⭐ 魔法糖果單字題</h3>
           <div class="cd-quiz-word" id="cd-quiz-word"></div>
           <div class="cd-quiz-feedback" id="cd-quiz-feedback"></div>
           <div class="cd-quiz-options" id="cd-quiz-options"></div>
@@ -758,8 +760,11 @@
           <p>Candy Crush 風格的三消遊戲！交換相鄰糖果，連成 3 個以上就消除。</p>
           <ul>
             <li>每關有收集目標，目標以英文單字顯示，點一下可以聽發音</li>
-            <li>一次消 4 顆以上會出現 ⭐ 魔法糖果</li>
-            <li>點魔法糖果回答單字題：答對引爆 3×3 大爆炸＋額外 XP 和寶石</li>
+            <li>🍭 一次消 4 顆＝條紋糖果：清除一整行或一整列（照 Candy Crush 規則：橫向四連清整列、縱向四連清整行）</li>
+            <li>🎁 L 型或 T 型消除＝包裝糖果：5×5 大爆炸</li>
+            <li>🌈 一次消 5 顆直線＝彩虹糖果：清光全場還沒收集完的目標糖果</li>
+            <li>點特殊糖果回答單字題，答對就引爆＋額外 XP 和寶石</li>
+            <li>爆炸範圍掃到其他特殊糖果會連鎖引爆，超痛快！</li>
             <li>連錯兩次會亮出正確答案讓你學起來</li>
             <li>在步數用完前完成所有目標就過關</li>
             <li>關卡越高，出題單字越難（第 10 關中等、第 20 關困難）</li>
