@@ -32,6 +32,7 @@ const ACHIEVEMENTS = [
   { id: 'tower_slayer', name: '屠魔勇者', desc: '在單字魔王塔打倒 10 隻魔王', icon: '👹', condition: s => (s.towerBosses || 0) >= 10 },
   { id: 'rpg_first', name: '冒險啟程', desc: '在英語冒險物語通過第一章', icon: '🗺️', condition: s => (s.rpgChapters || 0) >= 1 },
   { id: 'rpg_hero', name: '大陸救世主', desc: '在英語冒險物語通過 6 個章節', icon: '🛡️', condition: s => (s.rpgChapters || 0) >= 6 },
+  { id: 'rpg_legend', name: '傳說冒險家', desc: '在英語冒險物語通過 9 個章節', icon: '🌟', condition: s => (s.rpgChapters || 0) >= 9 },
 ];
 
 const DAILY_QUESTS = [
