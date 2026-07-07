@@ -120,8 +120,9 @@ const RpgGame = (() => {
       } : null),
       advance: () => advance(),
       choose: i => {
-        const btns = els.dlgOptions.querySelectorAll('button.rpg-opt');
-        if (btns[i]) btns[i].click();
+        // i is the ORIGINAL option index (display order is shuffled)
+        const btn = els.dlgOptions.querySelector(`button.rpg-opt[data-orig="${i}"]`);
+        if (btn) btn.click();
       },
       progress: () => JSON.parse(JSON.stringify(save)),
       npcDone: () => (ch ? chProg().npcs.slice() : []),
@@ -414,13 +415,21 @@ const RpgGame = (() => {
     dlg.waiting = 'option';
     dlg.firstTry = true;
     els.dlgOptions.innerHTML = '';
-    e.options.forEach((opt, i) => {
+    // Shuffle the display order (data always lists the correct answer
+    // first) so kids can't learn to just pick option 1
+    const order = e.options.map((_, i) => i);
+    for (let i = order.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [order[i], order[j]] = [order[j], order[i]];
+    }
+    order.forEach(orig => {
       const b = document.createElement('button');
       b.className = 'rpg-opt';
-      b.innerHTML = `<span class="rpg-heart">❤️</span><span>${opt}</span>`;
+      b.dataset.orig = orig;
+      b.innerHTML = `<span class="rpg-heart">❤️</span><span>${e.options[orig]}</span>`;
       b.addEventListener('click', ev => {
         ev.stopPropagation();
-        pickOption(e, i, b);
+        pickOption(e, orig, b);
       });
       els.dlgOptions.appendChild(b);
     });
@@ -435,7 +444,7 @@ const RpgGame = (() => {
         GameEngine.consumeBuff('hint');
         GameEngine.showToast('🔮 提示水晶生效！', 'achievement');
         const wrongs = [...els.dlgOptions.querySelectorAll('button.rpg-opt')]
-          .filter((btn, i2) => i2 !== e.a && !btn.disabled);
+          .filter(btn => Number(btn.dataset.orig) !== e.a && !btn.disabled);
         if (wrongs.length) { wrongs[0].disabled = true; wrongs[0].classList.add('eliminated'); }
         hb.remove();
       });
