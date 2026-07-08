@@ -1,0 +1,65 @@
+# Deploys the site to GitHub Pages, injecting the Google OAuth Client ID
+# from the repo's Actions variable/secret GOOGLE_CLIENT_ID (if set) into
+# js/cloud.js at deploy time — so the ID never has to live in the source.
+#
+# One-time setup (repo owner):
+#   1. Settings → Pages → Build and deployment → Source: "GitHub Actions"
+#   2. Settings → Secrets and variables → Actions → Variables (or Secrets)
+#      → New repository variable: GOOGLE_CLIENT_ID = <你的用戶端 ID>
+# Without the variable the site still deploys — the Drive sync section
+# just stays hidden (file export/import always works).
+
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [claude/init-project-g9JMc]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Inject Google OAuth Client ID (optional)
+        env:
+          # Actions "Variables" preferred (the ID is public anyway);
+          # falls back to Secrets if that's where it was stored.
+          CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID || secrets.GOOGLE_CLIENT_ID }}
+        run: |
+          if [ -n "$CLIENT_ID" ]; then
+            sed -i "s|const GOOGLE_CLIENT_ID = '';|const GOOGLE_CLIENT_ID = '$CLIENT_ID';|" js/cloud.js
+            if grep -q "GOOGLE_CLIENT_ID = ''" js/cloud.js; then
+              echo "::error::Injection failed — placeholder not found in js/cloud.js"
+              exit 1
+            fi
+            echo "Google Client ID injected into js/cloud.js"
+          else
+            echo "No GOOGLE_CLIENT_ID variable configured — Drive sync section stays hidden."
+          fi
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
