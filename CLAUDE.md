@@ -42,6 +42,7 @@ js/
   speak.js              — Spell academy speaking game (Web Speech Recognition, honor-mode fallback)
   tower.js              — Tower of Saviors-style word boss battle (drag letter orbs to spell words; 12 bosses scale endlessly by floor)
   rpg.js                — Undertale-style 2D RPG engine for conversation practice (interprets RPG_CHAPTERS data)
+  cloud.js              — Save backup: file export/import + optional Google Drive appDataFolder sync (owner fills GOOGLE_CLIENT_ID; see DEPLOYMENT.md)
   daily.js              — Daily quest tracking and rendering
   tts.js                — Text-to-speech module (Web Speech API)
   vendor/
@@ -52,7 +53,7 @@ js/
     video.js            — Video lessons (VIDEO_LESSONS, 42 lessons with 126 quiz questions)
     empire.js           — Empire dialogues (EMPIRE_DIALOGUES) and daily-life English (EMPIRE_LIFE), easy/medium/hard
     rpg.js              — RPG chapters (RPG_CHAPTERS, 9 chapters mapped to 課綱學習主題; maps, NPCs, dialogue scripts)
-    game.js             — Achievements (33), daily quests (11), inventory items, shop items
+    game.js             — Achievements (33, each with pts), daily quests (11), inventory items (8, usable as charms), shop items (consumables/skins/titles/themes), ACH_POINT_REWARDS, LEVEL_MILESTONES, CHARM_PERKS, SELL_PRICES
 reference/
   taiwan_elementary_1000_minecraft_flavor.csv  — Source word list reference
 ```
@@ -74,6 +75,7 @@ All game modules use the IIFE (Immediately Invoked Function Expression) pattern 
 - `SpeakGame` — spell academy speaking game (speak.js)
 - `TowerGame` — word boss tower orb battle (tower.js)
 - `RpgGame` — English adventure RPG (rpg.js)
+- `CloudSave` — save export/import + Google Drive sync (cloud.js)
 - `DailyQuests` — daily quest system (daily.js)
 - `TTSManager` — text-to-speech (tts.js)
 
@@ -89,9 +91,15 @@ Each game module exports `{ init }`. `app.js` calls all `.init()` methods on `DO
 - **Achievements/quests/items/shop**: edit `js/data/game.js`.
 
 ### Key Systems
-- **Gamification**: XP (dynamic scaling: 80 + level × 20 per level), gems (currency), streaks, achievements, daily quests
-- **Shop**: Consumables (buffs), skins (9), titles (9) — all purchasable with gems
-- **Buff system**: `double_xp`, `hint`, `revive`, `lucky`, `instant_xp`, `gem_bonus`
+- **Gamification**: XP (dynamic scaling: 80 + level × 20 per level), gems (currency), streaks, achievements (each grants 15 gems + pts), daily quests
+- **Achievement points**: derived from unlocked achievements (10/20/40 pts tiers, 640 total); ACH_POINT_REWARDS thresholds grant exclusive titles/skins/themes (state.pointRewardsClaimed)
+- **Level milestones**: LEVEL_MILESTONES every 5 levels to 50 grant gems/items/exclusive unlocks (state.milestonesClaimed; granted in addXP via grantLevelMilestones)
+- **Shop**: Consumables (buffs, some with `uses`/`minLevel`), skins (13), titles (15), themes (6) — `unlock`-flagged items are never purchasable (granted by milestones/points/collection)
+- **Themes**: body[data-theme] overrides :root CSS vars (style.css); applyTheme() on load/equip; owned in state.owned.themes
+- **Lucky charms**: equip an inventory collectible (state.equipped.charm) for passive XP/gem perks (CHARM_PERKS, applied inside addXP/addGems); duplicates sellable via sellItem (SELL_PRICES); owning all 8 grants a one-time collection reward
+- **Buff system**: `double_xp`, `hint`, `revive`, `lucky`, `instant_xp`, `gem_bonus`, `streak_shield` (consumed in load()), `double_gems` (consumed in addGems), plus instant effects `instant_xp_big`, `mystery_item`
+- **Re-entrancy rule**: reward grants inside checkAchievements/checkPointRewards/grantLevelMilestones/checkCollectionReward mutate `state.gems`/`state.owned` directly — never call addGems/addXP there
+- **Cloud save**: js/cloud.js exports all 7 localStorage keys as a v1 JSON payload; file export/import always works; Google Drive appDataFolder sync activates only when GOOGLE_CLIENT_ID is set (GIS script lazy-loaded on sign-in — the sole external-script exception)
 - **Sound**: Synthesized via Web Audio API (no audio files needed)
 - **TTS**: Web Speech API for word pronunciation (en-US, zh-TW)
 - **Storage**: All state persisted in `localStorage` as JSON
@@ -133,12 +141,13 @@ python3 -m http.server 8000
 ```
 
 ### Cache busting
-All CSS/JS references in index.html carry a `?v=N` query string. GitHub Pages caches assets for 10 minutes, so a freshly deployed index.html can otherwise pair with stale cached JS/CSS (symptoms: a new game's zone shows but its dynamic UI is empty). **Bump the version number on every release that changes JS or CSS** (single `sed -i 's/?v=9/?v=10/g' index.html`-style edit).
+All CSS/JS references in index.html carry a `?v=N` query string. GitHub Pages caches assets for 10 minutes, so a freshly deployed index.html can otherwise pair with stale cached JS/CSS (symptoms: a new game's zone shows but its dynamic UI is empty). **Bump the version number on every release that changes JS or CSS** (single `sed -i 's/?v=10/?v=11/g' index.html`-style edit).
 
 ### Testing
 There is no automated test suite. Manual testing in a browser is the current workflow. Verify changes by opening `index.html` and exercising the affected game zone.
 
 ### External Resources
 - **Google Fonts**: Press Start 2P (pixel game font), Noto Sans TC (Chinese text)
+- **Google Identity Services** (`accounts.google.com/gsi/client`): lazy-loaded by js/cloud.js only when the owner has configured GOOGLE_CLIENT_ID and the user clicks sign-in — never loaded otherwise
 - **Three.js r149**: vendored at `js/vendor/three.min.js`, loaded via plain script tag
 - No CDN libraries or npm packages — fully self-contained

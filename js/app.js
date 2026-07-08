@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
   [
     MinecraftGame, RobloxGame, YoutubeGame, SpellingGame, ListeningGame,
     EmpireGame, CandyGame, SlingGame, BuilderGame, SpeakGame, TowerGame,
-    RpgGame, DailyQuests,
+    RpgGame, DailyQuests, CloudSave,
   ].forEach(mod => {
     try {
       mod.init();
@@ -71,6 +71,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-shop').addEventListener('click', GameEngine.showShop);
   document.getElementById('btn-inventory').addEventListener('click', GameEngine.showInventory);
   document.getElementById('btn-achievements').addEventListener('click', GameEngine.showAchievements);
+  document.getElementById('btn-cloud').addEventListener('click', CloudSave.showModal);
   document.getElementById('btn-help').addEventListener('click', () => {
     document.getElementById('modal-help').classList.add('active');
   });

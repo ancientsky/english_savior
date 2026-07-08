@@ -337,3 +337,37 @@ git push origin main
 ---
 
 **Happy Deploying! 部署愉快！** 🚀
+
+## Google 雲端同步設定（選用）
+
+網站的「☁️ 存檔備份」內建 Google Drive 雲端同步，但需要站長先建立一個免費的
+OAuth Client ID（約 10 分鐘，一次設定永久有效）。**沒設定也沒關係**——檔案匯出/
+匯入功能永遠可用，只是 Google 登入區塊會隱藏。
+
+設定步驟：
+
+1. 打開 [Google Cloud Console](https://console.cloud.google.com/)，用你的 Google 帳號登入，
+   建立一個新專案（名稱隨意，例如 `english-savior`）。
+2. 左側選單「API 和服務 → 程式庫」，搜尋 **Google Drive API** → 點「啟用」。
+3. 「API 和服務 → OAuth 同意畫面」：
+   - User Type 選 **External（外部）** → 建立
+   - 填入應用程式名稱（English Savior）、你的信箱 → 儲存
+   - 「範圍（Scopes）」步驟可以直接跳過（程式會在登入時請求 `drive.appdata`，屬於非敏感範圍）
+   - 完成後在「測試使用者」加入會用到的 Google 帳號（小孩的帳號）；
+     或按「發布應用程式」讓所有帳號都能登入
+4. 「API 和服務 → 憑證 → 建立憑證 → OAuth 用戶端 ID」：
+   - 應用程式類型：**網頁應用程式**
+   - 「已授權的 JavaScript 來源」加入：
+     - `https://ancientsky.github.io`
+     - `http://localhost:8000`（本機測試用，可省略）
+   - 「已授權的重新導向 URI」**不用填**（本站使用 token client，不需要 redirect）
+   - 建立後複製「用戶端 ID」（長得像 `1234567890-abc.apps.googleusercontent.com`）
+5. 打開 `js/cloud.js`，把用戶端 ID 貼進最上面的 `GOOGLE_CLIENT_ID = ''` 引號中，
+   commit + 部署即可。
+
+備註：
+- 存檔放在使用者自己 Google 雲端硬碟的**隱藏應用程式資料夾（appDataFolder）**，
+  使用者在雲端硬碟介面看不到這個檔案，本網站也只能存取這一個檔案（約 2 KB），
+  完全碰不到使用者的其他檔案。
+- Client ID 是公開資訊（會出現在網頁原始碼中），這是 OAuth 網頁應用的正常設計，
+  不是秘密金鑰，可以放心 commit。

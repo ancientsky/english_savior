@@ -15,6 +15,8 @@
   --pixel-font: 'Press Start 2P', monospace;
   --ui-font: 'Noto Sans TC', sans-serif;
   --radius: 8px;
+  --line: #333;
+  --line2: #444;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -64,7 +66,7 @@ body {
 .xp-bar-container {
   position: relative;
   height: 20px;
-  background: #333;
+  background: var(--line);
   border-radius: 10px;
   overflow: hidden;
   border: 1px solid #555;
@@ -111,7 +113,7 @@ body {
   gap: 4px;
   padding: 8px;
   background: var(--bg-mid);
-  border-bottom: 1px solid #333;
+  border-bottom: 1px solid var(--line);
   flex-wrap: wrap;
 }
 
@@ -210,7 +212,7 @@ body {
 
 .stat-box {
   background: var(--bg-mid);
-  border: 1px solid #333;
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 16px;
   text-align: center;
@@ -270,7 +272,7 @@ body {
 .inv-slot {
   aspect-ratio: 1;
   background: rgba(0,0,0,0.3);
-  border: 2px solid #444;
+  border: 2px solid var(--line2);
   border-radius: 6px;
   display: flex;
   flex-direction: column;
@@ -297,7 +299,7 @@ body {
   background: rgba(0,0,0,0.2);
   border-radius: var(--radius);
   margin-bottom: 8px;
-  border: 1px solid #333;
+  border: 1px solid var(--line);
 }
 .ach-item.unlocked { border-color: var(--gold); background: rgba(245,197,24,0.08); }
 .ach-icon { font-size: 32px; }
@@ -311,7 +313,7 @@ body {
   border-radius: 4px;
 }
 .ach-item.unlocked .ach-status { background: var(--gold); color: #000; }
-.ach-item:not(.unlocked) .ach-status { background: #444; color: #888; }
+.ach-item:not(.unlocked) .ach-status { background: var(--line2); color: #888; }
 
 /* Level up modal */
 .levelup-modal { text-align: center; }
@@ -376,7 +378,7 @@ body {
   gap: 12px;
   padding: 14px;
   background: var(--bg-mid);
-  border: 1px solid #333;
+  border: 1px solid var(--line);
   border-radius: var(--radius);
 }
 .daily-item.done { border-color: var(--green); opacity: 0.7; }
@@ -475,7 +477,7 @@ body {
   display: flex;
   gap: 8px;
   margin-bottom: 16px;
-  border-bottom: 2px solid #333;
+  border-bottom: 2px solid var(--line);
   padding-bottom: 12px;
 }
 
@@ -513,7 +515,7 @@ body {
 
 .shop-card {
   background: rgba(0, 0, 0, 0.3);
-  border: 2px solid #444;
+  border: 2px solid var(--line2);
   border-radius: var(--radius);
   padding: 14px;
   display: flex;
@@ -621,7 +623,7 @@ body {
 }
 
 .shop-buy-btn.disabled {
-  background: #444;
+  background: var(--line2);
   color: #888;
   cursor: not-allowed;
 }
@@ -702,7 +704,7 @@ body {
   gap: 12px;
   padding: 10px 12px;
   background: rgba(0, 0, 0, 0.3);
-  border: 1px solid #444;
+  border: 1px solid var(--line2);
   border-radius: 8px;
   transition: border-color 0.2s;
 }
@@ -907,3 +909,152 @@ body.game-max .zone-fs-btn {
   border-color: var(--gold, #f5c518);
   color: var(--gold, #f5c518);
 }
+
+/* ===== 佈景主題（body[data-theme] 覆蓋 :root 變數；全部深色系，
+   各遊戲專屬 CSS 不受影響）===== */
+body[data-theme="forest"] {
+  --bg-dark: #0c1f12; --bg-mid: #123524; --bg-light: #1b4a30;
+  --accent: #7ac74f; --line: #2a4433; --line2: #37543f;
+}
+body[data-theme="ocean"] {
+  --bg-dark: #071e33; --bg-mid: #0b2d4d; --bg-light: #104e78;
+  --accent: #19b3d4; --line: #1c3a52; --line2: #284962;
+}
+body[data-theme="candyland"] {
+  --bg-dark: #2a1030; --bg-mid: #3d1a4a; --bg-light: #58256b;
+  --accent: #ff6bcb; --gold: #ffe066; --line: #4a2a55; --line2: #5b3a66;
+}
+body[data-theme="lava"] {
+  --bg-dark: #240b0b; --bg-mid: #3a1010; --bg-light: #571414;
+  --accent: #ff7a1a; --gold: #ffd23f; --line: #4a2222; --line2: #5c2e2e;
+}
+body[data-theme="galaxy"] {
+  --bg-dark: #0b0b23; --bg-mid: #14143c; --bg-light: #1d1d5c;
+  --accent: #8f6bff; --line: #26265a; --line2: #33336b;
+}
+
+/* ===== 商店：解鎖徽章 / 主題分頁 ===== */
+.shop-unlock-badge {
+  display: inline-block;
+  font-size: 12px;
+  color: var(--gold);
+  background: rgba(0,0,0,0.35);
+  border: 1px dashed var(--gold);
+  border-radius: 6px;
+  padding: 6px 10px;
+  line-height: 1.4;
+}
+.shop-price.unlock { color: var(--gold); }
+
+/* ===== 成就點數面板 ===== */
+.ach-points-header {
+  background: rgba(0,0,0,0.25);
+  border: 1px solid var(--line2);
+  border-radius: var(--radius);
+  padding: 12px;
+  margin-top: 12px;
+  font-size: 14px;
+  line-height: 1.7;
+}
+.ach-points-title { font-size: 15px; }
+.ach-points-bar {
+  height: 12px;
+  background: rgba(0,0,0,0.5);
+  border-radius: 6px;
+  overflow: hidden;
+  margin: 6px 0 8px;
+  border: 1px solid var(--line2);
+}
+.ach-points-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--gold), var(--accent));
+  transition: width 0.4s;
+}
+.ach-reward-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.ach-reward {
+  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: 10px;
+  background: rgba(0,0,0,0.35);
+  border: 1px solid var(--line2);
+  color: var(--text-dim);
+}
+.ach-reward.claimed { color: var(--green); border-color: var(--green); }
+.ach-milestone-line { font-size: 13px; color: var(--gold); }
+.ach-pts-badge { font-size: 11px; color: var(--gold); font-weight: normal; }
+
+/* ===== 背包：護符 / 圖鑑 / 賣出 ===== */
+.inv-charm-section .inv-charm-current {
+  font-size: 14px;
+  padding: 8px 10px;
+  background: rgba(0,0,0,0.25);
+  border: 1px dashed var(--line2);
+  border-radius: var(--radius);
+  line-height: 1.6;
+}
+.inv-charm-tip { font-size: 12px; color: var(--text-dim); }
+.inv-album-done { font-size: 12px; color: var(--green); font-weight: normal; }
+.inv-album-hint { font-size: 12px; color: var(--text-dim); font-weight: normal; }
+
+.inv-slot.rich {
+  aspect-ratio: auto;
+  padding: 8px 6px;
+  gap: 4px;
+  font-size: 15px;
+}
+.inv-slot.rich .inv-slot-icon { font-size: 26px; position: relative; }
+.inv-slot.rich .inv-slot-icon .inv-count {
+  position: absolute; bottom: -4px; right: -14px;
+  font-size: 10px; font-family: var(--pixel-font); color: var(--gold);
+}
+.inv-slot.rich .inv-slot-name { font-size: 12px; }
+.inv-slot.rich .inv-slot-perk { font-size: 10px; color: var(--text-dim); text-align: center; }
+.inv-slot.charm-equipped { border-color: var(--gold); box-shadow: 0 0 8px rgba(245,197,24,0.5); }
+
+.inv-charm-btn, .inv-sell-btn {
+  font-family: inherit;
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--gold);
+  background: rgba(245,197,24,0.12);
+  color: var(--gold);
+  cursor: pointer;
+}
+.inv-sell-btn { border-color: var(--green); background: rgba(78,204,163,0.12); color: var(--green); }
+.inv-charm-btn:hover, .inv-sell-btn:hover { filter: brightness(1.3); }
+
+/* ===== 雲端存檔 modal ===== */
+.cloud-modal h2 { margin-bottom: 8px; }
+.cloud-section {
+  background: rgba(0,0,0,0.25);
+  border: 1px solid var(--line2);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-top: 14px;
+}
+.cloud-section h3 { font-size: 15px; margin-bottom: 6px; }
+.cloud-section p { font-size: 13px; color: var(--text-dim); line-height: 1.6; margin-bottom: 10px; }
+.cloud-btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.cloud-btn {
+  font-family: inherit;
+  font-size: 14px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--accent);
+  background: rgba(233,69,96,0.15);
+  color: var(--text);
+  cursor: pointer;
+}
+.cloud-btn:hover { background: rgba(233,69,96,0.3); }
+.cloud-btn.google { border-color: var(--blue); background: rgba(0,180,216,0.15); }
+.cloud-btn.google:hover { background: rgba(0,180,216,0.3); }
+.cloud-btn:disabled { opacity: 0.4; cursor: default; }
+#cloud-status {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--gold);
+  min-height: 20px;
+  line-height: 1.6;
+}
+#cloud-drive-hint { font-size: 13px; color: var(--text-dim); line-height: 1.6; }
