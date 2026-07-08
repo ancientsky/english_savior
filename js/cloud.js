@@ -189,6 +189,9 @@ const CloudSave = (() => {
               accessToken = resp.access_token;
               setSignedIn(true);
               setStatus('✅ 已登入 Google，可以備份或還原了');
+            } else if (resp.error === 'access_denied') {
+              setStatus('❌ 登入被拒絕（access_denied）。如果你是站長：到 Google Cloud Console 的' +
+                '「OAuth 同意畫面」按「發布應用程式」，或把這個 Google 帳號加入「測試使用者」名單。');
             } else {
               setStatus('❌ 登入失敗：' + (resp.error || '未知錯誤'));
             }

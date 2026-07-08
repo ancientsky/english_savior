@@ -384,3 +384,16 @@ OAuth Client ID（約 10 分鐘，一次設定永久有效）。**沒設定也�
   完全碰不到使用者的其他檔案。
 - Client ID 是公開資訊（會出現在網頁原始碼中），這是 OAuth 網頁應用的正常設計，
   不是秘密金鑰，可以放心 commit。
+
+### 疑難排解
+
+- **登入時出現 `Error 403: access_denied`**：OAuth 同意畫面還在「測試中（Testing）」
+  狀態，只有「測試使用者」名單裡的帳號能登入。解法擇一：
+  1. （推薦）「OAuth 同意畫面」→ 按 **發布應用程式（Publish App）** 改成正式版。
+     本站只用 `drive.appdata` 非敏感範圍，不需要 Google 審核，按下去立即生效。
+  2. 維持測試中，把要使用的 Google 帳號加入 **測試使用者（Test users）**（上限 100 個）。
+- **登入視窗顯示「這個應用程式未經 Google 驗證」**：只會在使用敏感範圍時出現；
+  本站的 `drive.appdata` 屬於非敏感範圍，正常情況不會看到。若看到，檢查同意畫面
+  的範圍設定是否多加了其他 Drive 範圍。
+- **`idpiframe_initialization_failed` 或 origin 錯誤**：檢查憑證的「已授權的
+  JavaScript 來源」是否確實包含 `https://ancientsky.github.io`（不含路徑、結尾不加斜線）。
