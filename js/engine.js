@@ -273,6 +273,23 @@ const GameEngine = (() => {
     }
     // NOTE: lastPlayDate is updated by recordStreak(), not here —
     // stamping it during load would make the streak check always a no-op.
+    //
+    // Retroactive grants: milestones/point rewards are normally handed out
+    // the moment a level-up or achievement happens, so players who reached
+    // their level/points BEFORE those systems shipped would otherwise stay
+    // stuck (e.g. a Lv.22 save showing "next milestone Lv.5" forever).
+    // Granting on load pays out the backlog exactly once; the individual
+    // toasts are batched into one summary so the screen isn't flooded.
+    toastCollector = [];
+    grantLevelMilestones();
+    checkPointRewards();
+    const backlog = toastCollector;
+    toastCollector = null;
+    if (backlog.length > 3) {
+      showToast(`🎁 系統補發獎勵 ${backlog.length} 項！打開 🏆 成就和 🎒 背包看看吧`, 'achievement');
+    } else {
+      backlog.forEach(m => showToast(m, 'achievement'));
+    }
     save();
     applyTheme(state.equipped.theme);
     updateHUD();
@@ -922,7 +939,15 @@ const GameEngine = (() => {
     document.getElementById('modal-achievements').classList.add('active');
   }
 
+  // When set (load-time backlog grants), toasts are collected instead of
+  // shown so a returning player isn't flooded by a dozen popups at once
+  let toastCollector = null;
+
   function showToast(msg, type = 'info') {
+    if (toastCollector) {
+      toastCollector.push(msg);
+      return;
+    }
     const container = document.getElementById('toast-container');
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;

@@ -679,7 +679,11 @@ body {
 }
 
 .inv-section {
-  margin-bottom: 20px;
+  /* #inventory-grid is a 5-column grid — sections must span the full
+     width or they get squeezed into single narrow columns */
+  grid-column: 1 / -1;
+  margin-bottom: 12px;
+  min-width: 0;
 }
 
 .inv-section-title {
@@ -795,7 +799,7 @@ body {
 /* Collection grid in inventory */
 .inv-collection-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
   gap: 8px;
 }
 
@@ -993,33 +997,68 @@ body[data-theme="galaxy"] {
   line-height: 1.6;
 }
 .inv-charm-tip { font-size: 12px; color: var(--text-dim); }
-.inv-album-done { font-size: 12px; color: var(--green); font-weight: normal; }
-.inv-album-hint { font-size: 12px; color: var(--text-dim); font-weight: normal; }
+/* Album status sits on its own line under the section title */
+.inv-album-done, .inv-album-hint {
+  display: block;
+  font-size: 12px;
+  font-weight: normal;
+  font-family: var(--ui-font);
+  margin-top: 4px;
+  line-height: 1.5;
+}
+.inv-album-done { color: var(--green); }
+.inv-album-hint { color: var(--text-dim); }
 
 .inv-slot.rich {
   aspect-ratio: auto;
-  padding: 8px 6px;
-  gap: 4px;
+  min-height: 150px;
+  padding: 10px 8px;
+  gap: 5px;
   font-size: 15px;
+  justify-content: flex-start;
 }
-.inv-slot.rich .inv-slot-icon { font-size: 26px; position: relative; }
+.inv-slot.rich .inv-slot-icon {
+  font-size: 26px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
 .inv-slot.rich .inv-slot-icon .inv-count {
-  position: absolute; bottom: -4px; right: -14px;
-  font-size: 10px; font-family: var(--pixel-font); color: var(--gold);
+  /* inline next to the icon — absolute positioning overflowed the card */
+  position: static;
+  margin-left: 4px;
+  font-size: 10px;
+  font-family: var(--pixel-font);
+  color: var(--gold);
+  vertical-align: middle;
 }
-.inv-slot.rich .inv-slot-name { font-size: 12px; }
-.inv-slot.rich .inv-slot-perk { font-size: 10px; color: var(--text-dim); text-align: center; }
+.inv-slot.rich .inv-slot-name {
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+  white-space: nowrap;
+}
+.inv-slot.rich .inv-slot-perk {
+  font-size: 10px;
+  color: var(--text-dim);
+  text-align: center;
+  line-height: 1.4;
+  min-height: 2.8em;
+  display: flex;
+  align-items: center;
+}
 .inv-slot.charm-equipped { border-color: var(--gold); box-shadow: 0 0 8px rgba(245,197,24,0.5); }
 
 .inv-charm-btn, .inv-sell-btn {
-  font-family: inherit;
-  font-size: 11px;
-  padding: 3px 10px;
+  font-family: var(--ui-font);
+  font-size: 12px;
+  padding: 4px 12px;
   border-radius: 10px;
   border: 1px solid var(--gold);
   background: rgba(245,197,24,0.12);
   color: var(--gold);
   cursor: pointer;
+  white-space: nowrap;
+  width: 90%;
 }
 .inv-sell-btn { border-color: var(--green); background: rgba(78,204,163,0.12); color: var(--green); }
 .inv-charm-btn:hover, .inv-sell-btn:hover { filter: brightness(1.3); }
