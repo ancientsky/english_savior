@@ -89,19 +89,19 @@
   </script>
 
   <title>English Savior — 英語救星</title>
-  <link rel="stylesheet" href="css/style.css?v=9">
-  <link rel="stylesheet" href="css/minecraft.css?v=9">
-  <link rel="stylesheet" href="css/roblox.css?v=9">
-  <link rel="stylesheet" href="css/youtube.css?v=9">
-  <link rel="stylesheet" href="css/spelling.css?v=9">
-  <link rel="stylesheet" href="css/listening.css?v=9">
-  <link rel="stylesheet" href="css/empire.css?v=9">
-  <link rel="stylesheet" href="css/candy.css?v=9">
-  <link rel="stylesheet" href="css/sling.css?v=9">
-  <link rel="stylesheet" href="css/builder.css?v=9">
-  <link rel="stylesheet" href="css/speak.css?v=9">
-  <link rel="stylesheet" href="css/tower.css?v=9">
-  <link rel="stylesheet" href="css/rpg.css?v=9">
+  <link rel="stylesheet" href="css/style.css?v=10">
+  <link rel="stylesheet" href="css/minecraft.css?v=10">
+  <link rel="stylesheet" href="css/roblox.css?v=10">
+  <link rel="stylesheet" href="css/youtube.css?v=10">
+  <link rel="stylesheet" href="css/spelling.css?v=10">
+  <link rel="stylesheet" href="css/listening.css?v=10">
+  <link rel="stylesheet" href="css/empire.css?v=10">
+  <link rel="stylesheet" href="css/candy.css?v=10">
+  <link rel="stylesheet" href="css/sling.css?v=10">
+  <link rel="stylesheet" href="css/builder.css?v=10">
+  <link rel="stylesheet" href="css/speak.css?v=10">
+  <link rel="stylesheet" href="css/tower.css?v=10">
+  <link rel="stylesheet" href="css/rpg.css?v=10">
 </head>
 <body>
   <!-- Top HUD Bar -->
@@ -123,6 +123,7 @@
       <button class="hud-btn" id="btn-shop" title="商店">🛒</button>
       <button class="hud-btn" id="btn-inventory" title="背包">🎒</button>
       <button class="hud-btn" id="btn-achievements" title="成就">🏆</button>
+      <button class="hud-btn" id="btn-cloud" title="存檔備份與雲端同步">☁️</button>
       <button class="hud-btn" id="btn-help" title="使用說明">❓</button>
     </div>
   </header>
@@ -912,6 +913,7 @@
     <div class="modal-content achievements-modal">
       <button class="modal-close" data-close="modal-achievements">&times;</button>
       <h2>🏆 成就系統</h2>
+      <div class="ach-points-header" id="ach-points-header"></div>
       <div class="achievements-list" id="achievements-list"></div>
     </div>
   </div>
@@ -938,6 +940,7 @@
         <button class="shop-tab active" data-tab="consumables" onclick="GameEngine.switchShopTab('consumables')">🧪 道具</button>
         <button class="shop-tab" data-tab="skins" onclick="GameEngine.switchShopTab('skins')">🎨 皮膚</button>
         <button class="shop-tab" data-tab="titles" onclick="GameEngine.switchShopTab('titles')">🏷️ 稱號</button>
+        <button class="shop-tab" data-tab="themes" onclick="GameEngine.switchShopTab('themes')">🖼️ 主題</button>
       </div>
       <div class="shop-grid" id="shop-grid">
         <!-- Items rendered dynamically -->
@@ -1134,11 +1137,47 @@
         </div>
         <div class="help-section">
           <h3>🎯 獎勵系統</h3>
-          <p><strong>經驗值 (XP)</strong> - 完成任務獲得，累積升級</p>
-          <p><strong>寶石 💎</strong> - 完成任務和升級時獲得</p>
-          <p><strong>道具 🎒</strong> - 升級時隨機獲得收藏品</p>
-          <p><strong>成就 🏆</strong> - 達成特殊條件解鎖徽章</p>
+          <p><strong>經驗值 (XP)</strong> - 完成任務獲得；每升一級 +10💎＋隨機收藏品</p>
+          <p><strong>等級里程碑 🏁</strong> - 每 5 級有大獎（寶石、收藏品、專屬主題/稱號/皮膚，一路到 Lv.50）</p>
+          <p><strong>寶石 💎</strong> - 在商店買道具、皮膚、稱號、佈景主題</p>
+          <p><strong>佈景主題 🖼️</strong> - 商店「主題」分頁換整個網站的配色（森林、深海、糖果、岩漿、銀河）</p>
+          <p><strong>成就點數 ⭐</strong> - 每個成就給 10~40 點，累積到門檻解鎖專屬稱號/皮膚/主題（成就視窗看進度）</p>
+          <p><strong>收藏品 🎒</strong> - 可以裝備成「幸運護符」獲得 XP/寶石被動加成；重複的可以賣掉換寶石；集滿 8 種有 300💎＋稱號</p>
+          <p><strong>存檔備份 ☁️</strong> - 按右上角 ☁️ 可以匯出/匯入存檔，或用 Google 帳號備份到雲端</p>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Cloud Save -->
+  <div class="modal" id="modal-cloud">
+    <div class="modal-content cloud-modal">
+      <button class="modal-close" data-close="modal-cloud">&times;</button>
+      <h2>☁️ 存檔備份</h2>
+      <p style="font-size:13px;color:var(--text-dim);line-height:1.6">
+        遊戲進度平常存在這台裝置裡。想換裝置繼續玩，可以用下面兩種方式備份／還原。
+      </p>
+      <div class="cloud-section">
+        <h3>📁 檔案備份</h3>
+        <p>把全部進度下載成一個檔案，換裝置後再匯入即可。</p>
+        <div class="cloud-btn-row">
+          <button class="cloud-btn" id="cloud-export-btn">⬇️ 匯出存檔</button>
+          <button class="cloud-btn" id="cloud-import-btn">⬆️ 匯入存檔</button>
+          <input type="file" id="cloud-file-input" accept=".json,application/json" style="display:none">
+        </div>
+      </div>
+      <div class="cloud-section" id="cloud-drive-section">
+        <h3>🌐 Google 雲端同步</h3>
+        <p>登入 Google 帳號，把進度備份到你自己的雲端硬碟（隱藏的應用程式空間，看不到也不佔用你的檔案）。</p>
+        <div class="cloud-btn-row">
+          <button class="cloud-btn google" id="cloud-signin-btn">🔑 使用 Google 登入</button>
+          <button class="cloud-btn" id="cloud-backup-btn" disabled>☁️⬆️ 備份到雲端</button>
+          <button class="cloud-btn" id="cloud-restore-btn" disabled>☁️⬇️ 從雲端還原</button>
+        </div>
+        <div id="cloud-status"></div>
+      </div>
+      <div class="cloud-section" id="cloud-drive-hint" style="display:none">
+        🌐 站長尚未設定 Google 雲端同步（需要在 js/cloud.js 填入 OAuth Client ID），請先使用上面的檔案備份。
       </div>
     </div>
   </div>
@@ -1146,28 +1185,29 @@
   <!-- Toast notifications -->
   <div id="toast-container"></div>
 
-  <script src="js/vendor/three.min.js?v=9"></script>
-  <script src="js/tts.js?v=9"></script>
-  <script src="js/data/vocab.js?v=9"></script>
-  <script src="js/data/grammar.js?v=9"></script>
-  <script src="js/data/video.js?v=9"></script>
-  <script src="js/data/game.js?v=9"></script>
-  <script src="js/data/empire.js?v=9"></script>
-  <script src="js/data/rpg.js?v=9"></script>
-  <script src="js/engine.js?v=9"></script>
-  <script src="js/minecraft.js?v=9"></script>
-  <script src="js/roblox.js?v=9"></script>
-  <script src="js/youtube.js?v=9"></script>
-  <script src="js/spelling.js?v=9"></script>
-  <script src="js/listening.js?v=9"></script>
-  <script src="js/empire.js?v=9"></script>
-  <script src="js/candy.js?v=9"></script>
-  <script src="js/sling.js?v=9"></script>
-  <script src="js/builder.js?v=9"></script>
-  <script src="js/speak.js?v=9"></script>
-  <script src="js/tower.js?v=9"></script>
-  <script src="js/rpg.js?v=9"></script>
-  <script src="js/daily.js?v=9"></script>
-  <script src="js/app.js?v=9"></script>
+  <script src="js/vendor/three.min.js?v=10"></script>
+  <script src="js/tts.js?v=10"></script>
+  <script src="js/data/vocab.js?v=10"></script>
+  <script src="js/data/grammar.js?v=10"></script>
+  <script src="js/data/video.js?v=10"></script>
+  <script src="js/data/game.js?v=10"></script>
+  <script src="js/data/empire.js?v=10"></script>
+  <script src="js/data/rpg.js?v=10"></script>
+  <script src="js/engine.js?v=10"></script>
+  <script src="js/minecraft.js?v=10"></script>
+  <script src="js/roblox.js?v=10"></script>
+  <script src="js/youtube.js?v=10"></script>
+  <script src="js/spelling.js?v=10"></script>
+  <script src="js/listening.js?v=10"></script>
+  <script src="js/empire.js?v=10"></script>
+  <script src="js/candy.js?v=10"></script>
+  <script src="js/sling.js?v=10"></script>
+  <script src="js/builder.js?v=10"></script>
+  <script src="js/speak.js?v=10"></script>
+  <script src="js/tower.js?v=10"></script>
+  <script src="js/rpg.js?v=10"></script>
+  <script src="js/cloud.js?v=10"></script>
+  <script src="js/daily.js?v=10"></script>
+  <script src="js/app.js?v=10"></script>
 </body>
 </html>

@@ -200,13 +200,20 @@ const GameEngine = (() => {
       owned: {
         consumables: {},  // { itemId: quantity }
         skins: ['default'],
-        titles: ['beginner']
+        titles: ['beginner'],
+        themes: ['default']
       },
       equipped: {
         skin: 'default',
-        title: 'beginner'
+        title: 'beginner',
+        theme: 'default',
+        charm: null       // equipped inventory collectible (CHARM_PERKS)
       },
       activeBuffs: [],  // [{ type: 'double_xp', uses: 1 }, ...]
+      // progression rewards
+      milestonesClaimed: [],       // LEVEL_MILESTONES levels already granted
+      pointRewardsClaimed: [],     // ACH_POINT_REWARDS pts already granted
+      collectionRewardClaimed: false,
     };
   }
 
@@ -226,6 +233,7 @@ const GameEngine = (() => {
           consumables: { ...defaults.owned.consumables, ...(saved.owned?.consumables || {}) },
           skins: saved.owned?.skins || defaults.owned.skins,
           titles: saved.owned?.titles || defaults.owned.titles,
+          themes: saved.owned?.themes || defaults.owned.themes,
         };
         state.equipped = { ...defaults.equipped, ...(saved.equipped || {}) };
         state.activeBuffs = saved.activeBuffs || [];
@@ -236,7 +244,15 @@ const GameEngine = (() => {
     if (state.lastPlayDate) {
       const last = new Date(state.lastPlayDate);
       const diff = Math.floor((new Date(today) - last) / 86400000);
-      if (diff > 1) state.streak = 0; // streak broken
+      if (diff > 1) {
+        // Streak shield consumable saves the streak once
+        if (hasBuff('streak_shield')) {
+          consumeBuff('streak_shield');
+          showToast('🛡️ 連勝護盾守住了你的連勝紀錄！', 'achievement');
+        } else {
+          state.streak = 0; // streak broken
+        }
+      }
     }
     // Reset daily if new day
     if (state.dailyDate !== today) {
@@ -258,12 +274,25 @@ const GameEngine = (() => {
     // NOTE: lastPlayDate is updated by recordStreak(), not here —
     // stamping it during load would make the streak check always a no-op.
     save();
+    applyTheme(state.equipped.theme);
     updateHUD();
+  }
+
+  // ===== 佈景主題 =====
+  function applyTheme(themeId) {
+    const valid = SHOP_ITEMS.themes.some(t => t.id === themeId);
+    document.body.dataset.theme = valid ? themeId : 'default';
   }
 
   function getState() { return state; }
 
+  function charmPerk() {
+    return (state.equipped && state.equipped.charm && CHARM_PERKS[state.equipped.charm]) || null;
+  }
+
   function addXP(amount) {
+    const perk = charmPerk();
+    if (perk && perk.xp) amount = Math.ceil(amount * (1 + perk.xp));
     state.xp += amount;
     let leveled = false;
     // Re-read the requirement each iteration: it grows with the level,
@@ -273,10 +302,13 @@ const GameEngine = (() => {
       state.level++;
       leveled = true;
       // Level up rewards
-      state.gems += 10;
+      state.gems += 10 + (perk && perk.levelGems ? perk.levelGems : 0);
       grantRandomItem();
     }
-    if (leveled) showLevelUp();
+    if (leveled) {
+      grantLevelMilestones();
+      showLevelUp();
+    }
     save();
     updateHUD();
     showToast(`+${amount} XP`, 'xp');
@@ -285,11 +317,70 @@ const GameEngine = (() => {
   }
 
   function addGems(amount) {
+    if (amount > 0) {
+      const perk = charmPerk();
+      if (perk && perk.gem) amount = Math.ceil(amount * (1 + perk.gem));
+      if (hasBuff('double_gems')) {
+        amount *= 2;
+        consumeBuff('double_gems');
+      }
+    }
     state.gems += amount;
     save();
     updateHUD();
     showToast(`+${amount} 💎`, 'gem');
     checkAchievements();
+  }
+
+  // ===== 等級里程碑 =====
+  // NOTE: grants mutate state directly (never addGems/addXP) — this can run
+  // inside addXP, and re-entrancy would double-count (same pattern as
+  // checkAchievements below).
+  function grantLevelMilestones() {
+    LEVEL_MILESTONES.forEach(m => {
+      if (m.level > state.level || state.milestonesClaimed.includes(m.level)) return;
+      state.milestonesClaimed.push(m.level);
+      const parts = [];
+      if (m.gems) { state.gems += m.gems; parts.push(`+${m.gems}💎`); }
+      if (m.items) {
+        for (let i = 0; i < m.items; i++) grantRandomItem();
+        parts.push(`收藏品 ×${m.items}`);
+      }
+      if (m.skin && !state.owned.skins.includes(m.skin)) {
+        state.owned.skins.push(m.skin);
+        const it = SHOP_ITEMS.skins.find(x => x.id === m.skin);
+        parts.push(`皮膚「${it ? it.name : m.skin}」`);
+      }
+      if (m.title && !state.owned.titles.includes(m.title)) {
+        state.owned.titles.push(m.title);
+        const it = SHOP_ITEMS.titles.find(x => x.id === m.title);
+        parts.push(`稱號「${it ? it.name : m.title}」`);
+      }
+      if (m.theme && !state.owned.themes.includes(m.theme)) {
+        state.owned.themes.push(m.theme);
+        const it = SHOP_ITEMS.themes.find(x => x.id === m.theme);
+        parts.push(`主題「${it ? it.name : m.theme}」`);
+      }
+      showToast(`🏁 里程碑 Lv.${m.level} 達成！${parts.join('、')}`, 'achievement');
+      SoundManager.playAchievement();
+    });
+    save();
+    updateHUD();
+  }
+
+  function nextMilestone() {
+    return LEVEL_MILESTONES.find(m => !state.milestonesClaimed.includes(m.level) && m.level > 0) || null;
+  }
+
+  function milestoneRewardText(m) {
+    if (!m) return '';
+    const parts = [];
+    if (m.gems) parts.push(`${m.gems}💎`);
+    if (m.items) parts.push(`收藏品×${m.items}`);
+    if (m.skin) { const it = SHOP_ITEMS.skins.find(x => x.id === m.skin); parts.push(`皮膚「${it ? it.name : m.skin}」`); }
+    if (m.title) { const it = SHOP_ITEMS.titles.find(x => x.id === m.title); parts.push(`稱號「${it ? it.name : m.title}」`); }
+    if (m.theme) { const it = SHOP_ITEMS.themes.find(x => x.id === m.theme); parts.push(`主題「${it ? it.name : m.theme}」`); }
+    return parts.join('＋');
   }
 
   function recordWord(word) {
@@ -483,7 +574,28 @@ const GameEngine = (() => {
     }
 
     showToast(toastMsg, 'achievement');
+    checkCollectionReward();
     save();
+  }
+
+  // Owning all 8 collectibles once grants a one-time big reward
+  function checkCollectionReward() {
+    if (state.collectionRewardClaimed) return;
+    if (!INVENTORY_ITEMS.every(i => (state.inventory[i.id] || 0) > 0)) return;
+    state.collectionRewardClaimed = true;
+    state.gems += 300; // direct mutation — may run inside addXP's level loop
+    if (!state.owned.titles.includes('collection_king')) {
+      state.owned.titles.push('collection_king');
+    }
+    showToast('🎖️ 收藏品全圖鑑達成！+300💎＋稱號「收藏之王」', 'achievement');
+    SoundManager.playAchievement();
+  }
+
+  // ===== 成就點數 =====
+  function getAchievementPoints() {
+    return ACHIEVEMENTS
+      .filter(a => state.achievements.includes(a.id))
+      .reduce((sum, a) => sum + (a.pts || 10), 0);
   }
 
   function checkAchievements() {
@@ -491,15 +603,45 @@ const GameEngine = (() => {
     ACHIEVEMENTS.forEach(ach => {
       if (!state.achievements.includes(ach.id) && ach.condition(state)) {
         state.achievements.push(ach.id);
-        showToast(`🏆 成就解鎖：${ach.name} +15💎`, 'achievement');
+        showToast(`🏆 成就解鎖：${ach.name} +15💎 +${ach.pts || 10}⭐`, 'achievement');
         SoundManager.playAchievement();
         // Grant gems directly (not via addGems) to avoid re-entering this check
         state.gems += 15;
         unlocked = true;
       }
     });
+    if (unlocked) checkPointRewards();
     save();
     if (unlocked) updateHUD();
+  }
+
+  // Achievement-point thresholds unlock exclusive rewards (direct mutation —
+  // runs inside checkAchievements, so no addGems/addXP here)
+  function checkPointRewards() {
+    const pts = getAchievementPoints();
+    ACH_POINT_REWARDS.forEach(r => {
+      if (r.pts > pts || state.pointRewardsClaimed.includes(r.pts)) return;
+      state.pointRewardsClaimed.push(r.pts);
+      const parts = [];
+      if (r.gems) { state.gems += r.gems; parts.push(`+${r.gems}💎`); }
+      if (r.skin && !state.owned.skins.includes(r.skin)) {
+        state.owned.skins.push(r.skin);
+        const it = SHOP_ITEMS.skins.find(x => x.id === r.skin);
+        parts.push(`皮膚「${it ? it.name : r.skin}」`);
+      }
+      if (r.title && !state.owned.titles.includes(r.title)) {
+        state.owned.titles.push(r.title);
+        const it = SHOP_ITEMS.titles.find(x => x.id === r.title);
+        parts.push(`稱號「${it ? it.name : r.title}」`);
+      }
+      if (r.theme && !state.owned.themes.includes(r.theme)) {
+        state.owned.themes.push(r.theme);
+        const it = SHOP_ITEMS.themes.find(x => x.id === r.theme);
+        parts.push(`主題「${it ? it.name : r.theme}」`);
+      }
+      showToast(`⭐ 成就點數 ${r.pts} 達成！${parts.join('、')}`, 'achievement');
+      SoundManager.playAchievement();
+    });
   }
 
   // Grant daily quest rewards the moment a quest crosses its target
@@ -563,9 +705,14 @@ const GameEngine = (() => {
       return;
     }
     document.getElementById('levelup-level').textContent = `Lv.${state.level}`;
-    document.getElementById('levelup-rewards').textContent = `獎勵：+10 💎 + 隨機道具`;
+    document.getElementById('levelup-rewards').textContent = `獎勵：+10 💎 + 隨機道具${nextMilestoneText()}`;
     document.getElementById('modal-levelup').classList.add('active');
     SoundManager.playLevelUp();
+  }
+
+  function nextMilestoneText() {
+    const m = nextMilestone();
+    return m ? `\n下個里程碑：Lv.${m.level}（${milestoneRewardText(m)}）` : '';
   }
 
   function setDeferLevelUp(value) {
@@ -576,7 +723,7 @@ const GameEngine = (() => {
     if (pendingLevelUps.length > 0) {
       const lastLevel = pendingLevelUps[pendingLevelUps.length - 1];
       document.getElementById('levelup-level').textContent = `Lv.${lastLevel}`;
-      document.getElementById('levelup-rewards').textContent = `獎勵：+10 💎 + 隨機道具`;
+      document.getElementById('levelup-rewards').textContent = `獎勵：+10 💎 + 隨機道具${nextMilestoneText()}`;
       document.getElementById('modal-levelup').classList.add('active');
       pendingLevelUps = [];
     }
@@ -643,30 +790,53 @@ const GameEngine = (() => {
       grid.appendChild(buffsSection);
     }
 
-    // Section 3: Collection items (from level-up rewards)
+    // Section 3: Lucky charm (equip a collectible for a passive perk)
+    const charmSection = document.createElement('div');
+    charmSection.className = 'inv-section inv-charm-section';
+    const charm = state.equipped.charm && CHARM_PERKS[state.equipped.charm]
+      ? INVENTORY_ITEMS.find(i => i.id === state.equipped.charm) : null;
+    charmSection.innerHTML = charm
+      ? `<h3 class="inv-section-title">🧿 幸運護符</h3>
+         <div class="inv-charm-current">${charm.icon} <b>${charm.name}</b> — ${CHARM_PERKS[charm.id].desc}
+         <span class="inv-charm-tip">（點下面收藏品可以換護符）</span></div>`
+      : `<h3 class="inv-section-title">🧿 幸運護符</h3>
+         <div class="inv-charm-current">尚未裝備 — 把收藏品裝備成護符，可以獲得被動加成！</div>`;
+    grid.appendChild(charmSection);
+
+    // Section 4: Collection album (sell duplicates, equip charms, set reward)
+    const ownedCount = INVENTORY_ITEMS.filter(i => (state.inventory[i.id] || 0) > 0).length;
     const collectionSection = document.createElement('div');
     collectionSection.className = 'inv-section';
-    collectionSection.innerHTML = '<h3 class="inv-section-title">🎒 收藏品</h3>';
+    collectionSection.innerHTML =
+      `<h3 class="inv-section-title">🎒 收藏品圖鑑（${ownedCount} / ${INVENTORY_ITEMS.length}）` +
+      (state.collectionRewardClaimed
+        ? ' <span class="inv-album-done">✅ 全圖鑑獎勵已領取</span>'
+        : ' <span class="inv-album-hint">集滿 8 種可獲得 300💎＋稱號「收藏之王」</span>') +
+      '</h3>';
     const collectionGrid = document.createElement('div');
     collectionGrid.className = 'inv-collection-grid';
 
     INVENTORY_ITEMS.forEach(item => {
       const count = state.inventory[item.id] || 0;
+      const isCharm = state.equipped.charm === item.id;
       const slot = document.createElement('div');
-      slot.className = 'inv-slot' + (count > 0 ? '' : ' empty');
-      slot.innerHTML = count > 0
-        ? `${item.icon}<span class="inv-count">x${count}</span>`
-        : '';
-      slot.title = count > 0 ? `${item.name}: ${item.desc}` : '空';
+      slot.className = 'inv-slot rich' + (count > 0 ? '' : ' empty') + (isCharm ? ' charm-equipped' : '');
+      if (count > 0) {
+        const sellPrice = SELL_PRICES[item.rarity] || 5;
+        slot.innerHTML = `
+          <div class="inv-slot-icon">${item.icon}<span class="inv-count">x${count}</span></div>
+          <div class="inv-slot-name">${item.name}</div>
+          <div class="inv-slot-perk">🧿 ${CHARM_PERKS[item.id] ? CHARM_PERKS[item.id].desc : ''}</div>
+          <button class="inv-charm-btn" onclick="GameEngine.equipCharm('${item.id}')">${isCharm ? '裝備中⭐' : '裝備'}</button>
+          ${count > 1 ? `<button class="inv-sell-btn" onclick="GameEngine.sellItem('${item.id}')">賣出 +${sellPrice}💎</button>` : ''}
+        `;
+        slot.title = `${item.name}: ${item.desc}`;
+      } else {
+        slot.innerHTML = `<div class="inv-slot-icon">❓</div><div class="inv-slot-name">???</div>`;
+        slot.title = '還沒獲得（升級或每日任務全完成有機會掉落）';
+      }
       collectionGrid.appendChild(slot);
     });
-
-    // Fill empty slots for collection
-    for (let i = INVENTORY_ITEMS.length; i < 16; i++) {
-      const slot = document.createElement('div');
-      slot.className = 'inv-slot empty';
-      collectionGrid.appendChild(slot);
-    }
 
     collectionSection.appendChild(collectionGrid);
     grid.appendChild(collectionSection);
@@ -674,7 +844,65 @@ const GameEngine = (() => {
     document.getElementById('modal-inventory').classList.add('active');
   }
 
+  // ===== 收藏品：賣出重複 / 裝備護符 =====
+  function sellItem(itemId) {
+    const item = INVENTORY_ITEMS.find(i => i.id === itemId);
+    const count = state.inventory[itemId] || 0;
+    if (!item || count < 1) return false;
+    if (count === 1) {
+      showToast('最後一個不能賣，要留著收藏！', 'error');
+      return false;
+    }
+    state.inventory[itemId] = count - 1;
+    save();
+    // user-initiated action → addGems is fine (double_gems/charm apply)
+    addGems(SELL_PRICES[item.rarity] || 5);
+    showInventory();
+    return true;
+  }
+
+  function equipCharm(itemId) {
+    if ((state.inventory[itemId] || 0) < 1 || !CHARM_PERKS[itemId]) return false;
+    if (state.equipped.charm === itemId) {
+      state.equipped.charm = null;
+      showToast('🧿 已卸下幸運護符', 'info');
+    } else {
+      state.equipped.charm = itemId;
+      const item = INVENTORY_ITEMS.find(i => i.id === itemId);
+      showToast(`🧿 裝備護符：${item.icon} ${item.name}（${CHARM_PERKS[itemId].desc}）`, 'achievement');
+    }
+    save();
+    showInventory();
+    return true;
+  }
+
   function showAchievements() {
+    // Header: achievement points + threshold rewards + next level milestone
+    const header = document.getElementById('ach-points-header');
+    if (header) {
+      const pts = getAchievementPoints();
+      const total = ACHIEVEMENTS.reduce((s, a) => s + (a.pts || 10), 0);
+      const next = ACH_POINT_REWARDS.find(r => !state.pointRewardsClaimed.includes(r.pts));
+      const pct = next ? Math.min(100, Math.round(pts / next.pts * 100)) : 100;
+      const rewardLabel = r => {
+        if (r.gems) return `${r.gems}💎`;
+        if (r.skin) { const it = SHOP_ITEMS.skins.find(x => x.id === r.skin); return `皮膚「${it ? it.name : r.skin}」`; }
+        if (r.title) { const it = SHOP_ITEMS.titles.find(x => x.id === r.title); return `稱號「${it ? it.name : r.title}」`; }
+        if (r.theme) { const it = SHOP_ITEMS.themes.find(x => x.id === r.theme); return `主題「${it ? it.name : r.theme}」`; }
+        return '';
+      };
+      const m = nextMilestone();
+      header.innerHTML = `
+        <div class="ach-points-title">⭐ 成就點數：<b>${pts}</b> / ${total}</div>
+        <div class="ach-points-bar"><div class="ach-points-fill" style="width:${pct}%"></div></div>
+        <div class="ach-reward-row">${ACH_POINT_REWARDS.map(r =>
+          `<span class="ach-reward${state.pointRewardsClaimed.includes(r.pts) ? ' claimed' : ''}">` +
+          `${state.pointRewardsClaimed.includes(r.pts) ? '✅' : '🔒'} ${r.pts}⭐ ${rewardLabel(r)}</span>`).join('')}
+        </div>
+        <div class="ach-milestone-line">🏁 下一個等級里程碑：${m ? `Lv.${m.level}（${milestoneRewardText(m)}）` : '已全部達成！'}</div>
+      `;
+    }
+
     const list = document.getElementById('achievements-list');
     list.innerHTML = '';
     ACHIEVEMENTS.forEach(ach => {
@@ -684,7 +912,7 @@ const GameEngine = (() => {
       el.innerHTML = `
         <span class="ach-icon">${unlocked ? ach.icon : '🔒'}</span>
         <div class="ach-info">
-          <h4>${ach.name}</h4>
+          <h4>${ach.name} <span class="ach-pts-badge">+${ach.pts || 10}⭐</span></h4>
           <p>${ach.desc}</p>
         </div>
         <span class="ach-status">${unlocked ? '已解鎖' : '未解鎖'}</span>
@@ -737,7 +965,12 @@ const GameEngine = (() => {
       card.className = 'shop-card' + (owned && category !== 'consumables' ? ' owned' : '') + (equipped ? ' equipped' : '');
 
       let buttonHtml = '';
-      if (category === 'consumables') {
+      if (item.unlock && !owned) {
+        // Unlock-gated item: never purchasable, granted by its system
+        buttonHtml = `<span class="shop-unlock-badge">🔒 ${item.unlockDesc || '特殊解鎖'}</span>`;
+      } else if (item.minLevel && state.level < item.minLevel && !owned) {
+        buttonHtml = `<button class="shop-buy-btn disabled" disabled>Lv.${item.minLevel} 解鎖</button>`;
+      } else if (category === 'consumables') {
         // Buy button
         buttonHtml = `<button class="shop-buy-btn${!canAfford ? ' disabled' : ''}"
           onclick="GameEngine.buyItem('${category}', '${item.id}')"
@@ -768,7 +1001,9 @@ const GameEngine = (() => {
       }
 
       const iconHtml = item.icon || '';
-      const priceHtml = item.price > 0 ? `<span class="shop-price">💎 ${item.price}</span>` : `<span class="shop-price free">免費</span>`;
+      const priceHtml = item.unlock
+        ? `<span class="shop-price unlock">✨ 解鎖獎勵</span>`
+        : item.price > 0 ? `<span class="shop-price">💎 ${item.price}</span>` : `<span class="shop-price free">免費</span>`;
       const specialClass = item.special ? ' special' : '';
 
       card.innerHTML = `
@@ -793,16 +1028,27 @@ const GameEngine = (() => {
     return state.owned[category]?.includes(itemId);
   }
 
+  const EQUIP_KEYS = { skins: 'skin', titles: 'title', themes: 'theme' };
+
   function isItemEquipped(category, itemId) {
     if (category === 'consumables') return false;
-    const key = category === 'skins' ? 'skin' : 'title';
-    return state.equipped[key] === itemId;
+    return state.equipped[EQUIP_KEYS[category]] === itemId;
   }
 
   function buyItem(category, itemId) {
     const item = SHOP_ITEMS[category].find(i => i.id === itemId);
     if (!item) {
       showToast('商品不存在', 'error');
+      return false;
+    }
+
+    if (item.unlock) {
+      showToast(`這個要靠解鎖獲得：${item.unlockDesc || '特殊解鎖'}`, 'error');
+      return false;
+    }
+
+    if (item.minLevel && state.level < item.minLevel) {
+      showToast(`要達到 Lv.${item.minLevel} 才能購買！`, 'error');
       return false;
     }
 
@@ -843,8 +1089,8 @@ const GameEngine = (() => {
       return false;
     }
 
-    const key = category === 'skins' ? 'skin' : 'title';
-    state.equipped[key] = itemId;
+    state.equipped[EQUIP_KEYS[category]] = itemId;
+    if (category === 'themes') applyTheme(itemId);
 
     const item = SHOP_ITEMS[category].find(i => i.id === itemId);
     showToast(`已裝備 ${item?.icon || ''} ${item?.name || itemId}`, 'info');
@@ -865,16 +1111,23 @@ const GameEngine = (() => {
     if (!item) return false;
 
     // Apply effect
-    if (item.effect === 'instant_xp') {
+    if (item.effect === 'instant_xp' || item.effect === 'instant_xp_big') {
       // Instant effect: add XP directly
+      const xp = item.effect === 'instant_xp_big' ? 150 : 50;
       state.owned.consumables[itemId]--;
       save();
-      addXP(50);
-      showToast(`使用 ${item.icon} ${item.name}，獲得 50 XP！`, 'xp');
+      addXP(xp);
+      showToast(`使用 ${item.icon} ${item.name}，獲得 ${xp} XP！`, 'xp');
+    } else if (item.effect === 'mystery_item') {
+      // Instant effect: random collectible drop
+      state.owned.consumables[itemId]--;
+      save();
+      grantRandomItem();
+      updateHUD();
     } else {
       // Buff effect: add to active buffs
       state.owned.consumables[itemId]--;
-      const uses = item.effect === 'gem_bonus' ? 5 : 1;
+      const uses = item.uses || (item.effect === 'gem_bonus' ? 5 : 1);
       state.activeBuffs.push({ type: item.effect, uses: uses });
       save();
       showToast(`啟用 ${item.icon} ${item.name}！`, 'achievement');
@@ -929,5 +1182,7 @@ const GameEngine = (() => {
     useConsumable, hasBuff, consumeBuff,
     getEquippedSkin, getEquippedTitle,
     setDeferLevelUp, flushPendingLevelUps,
+    // Meta-progression
+    applyTheme, sellItem, equipCharm, getAchievementPoints,
   };
 })();
