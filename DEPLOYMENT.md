@@ -362,7 +362,20 @@ OAuth Client ID（約 10 分鐘，一次設定永久有效）。**沒設定也�
      - `http://localhost:8000`（本機測試用，可省略）
    - 「已授權的重新導向 URI」**不用填**（本站使用 token client，不需要 redirect）
    - 建立後複製「用戶端 ID」（長得像 `1234567890-abc.apps.googleusercontent.com`）
-5. 打開 `js/cloud.js`，把用戶端 ID 貼進最上面的 `GOOGLE_CLIENT_ID = ''` 引號中，
+5. 設定用戶端 ID —— 兩種方式擇一：
+
+   **方式 A（推薦）：GitHub Actions 變數，不用改程式碼**
+   1. 到 repo 的 **Settings → Pages → Build and deployment → Source**，
+      改選 **GitHub Actions**（一次性切換；之後部署改由 `.github/workflows/deploy.yml` 執行，
+      推 commit 到預設分支照樣自動部署，也可以在 Actions 頁面手動 Run workflow）
+   2. 到 **Settings → Secrets and variables → Actions → Variables 分頁 →
+      New repository variable**，名稱填 `GOOGLE_CLIENT_ID`、值貼上用戶端 ID
+      （放 Variables 或 Secrets 都可以，workflow 兩邊都會讀；因為 Client ID
+      本來就是公開資訊，建議放 Variables 方便查看）
+   3. 之後每次部署，workflow 會自動把 ID 注入 `js/cloud.js` —— repo 原始碼保持乾淨
+
+   **方式 B：直接寫進程式碼**
+   打開 `js/cloud.js`，把用戶端 ID 貼進最上面的 `GOOGLE_CLIENT_ID = ''` 引號中，
    commit + 部署即可。
 
 備註：

@@ -99,7 +99,7 @@ Each game module exports `{ init }`. `app.js` calls all `.init()` methods on `DO
 - **Lucky charms**: equip an inventory collectible (state.equipped.charm) for passive XP/gem perks (CHARM_PERKS, applied inside addXP/addGems); duplicates sellable via sellItem (SELL_PRICES); owning all 8 grants a one-time collection reward
 - **Buff system**: `double_xp`, `hint`, `revive`, `lucky`, `instant_xp`, `gem_bonus`, `streak_shield` (consumed in load()), `double_gems` (consumed in addGems), plus instant effects `instant_xp_big`, `mystery_item`
 - **Re-entrancy rule**: reward grants inside checkAchievements/checkPointRewards/grantLevelMilestones/checkCollectionReward mutate `state.gems`/`state.owned` directly — never call addGems/addXP there
-- **Cloud save**: js/cloud.js exports all 7 localStorage keys as a v1 JSON payload; file export/import always works; Google Drive appDataFolder sync activates only when GOOGLE_CLIENT_ID is set (GIS script lazy-loaded on sign-in — the sole external-script exception)
+- **Cloud save**: js/cloud.js exports all 7 localStorage keys as a v1 JSON payload; file export/import always works; Google Drive appDataFolder sync activates only when GOOGLE_CLIENT_ID is set (GIS script lazy-loaded on sign-in — the sole external-script exception); the ID can live in the source or be injected at deploy time from the repo's Actions variable/secret GOOGLE_CLIENT_ID by .github/workflows/deploy.yml (requires Pages source = GitHub Actions)
 - **Sound**: Synthesized via Web Audio API (no audio files needed)
 - **TTS**: Web Speech API for word pronunciation (en-US, zh-TW)
 - **Storage**: All state persisted in `localStorage` as JSON
