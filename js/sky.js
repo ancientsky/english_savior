@@ -1156,10 +1156,11 @@ const SkyGame = (() => {
         ctx.stroke();
       }
     }
-    // player arrow
+    // player arrow — the top-down projection (x→right, z→down) mirrors a
+    // Y-axis rotation, so the canvas angle is π − yaw, not π + yaw
     ctx.save();
     ctx.translate(C, C);
-    ctx.rotate(heroYaw + Math.PI);
+    ctx.rotate(Math.PI - heroYaw);
     ctx.beginPath();
     ctx.moveTo(0, -6);
     ctx.lineTo(4.5, 5);
@@ -1200,9 +1201,13 @@ const SkyGame = (() => {
     els.tracker.style.display = '';
     const dx = it.x - pos.x, dz = it.z - pos.z;
     const dist = Math.round(Math.hypot(dx, dz));
-    // arrow relative to the camera view direction
-    const ang = Math.atan2(dx, dz) - cam.theta + Math.PI;
-    els.trackerArrow.style.transform = `rotate(${Math.round(-ang * 180 / Math.PI + 180)}deg)`;
+    // project the target direction onto the camera's forward/right axes;
+    // ➤ glyph points right at 0°, CSS rotation is clockwise
+    const st = Math.sin(cam.theta), ct = Math.cos(cam.theta);
+    const af = dx * -st + dz * -ct;   // ahead (screen up)
+    const ar = dx * ct + dz * -st;    // screen right
+    const deg = Math.atan2(-af, ar) * 180 / Math.PI;
+    els.trackerArrow.style.transform = `rotate(${Math.round(deg)}deg)`;
     els.trackerText.textContent = `${it.q.name}　${dist}m`;
   }
 
@@ -2080,6 +2085,7 @@ const SkyGame = (() => {
     combatHud.bossBar.style.display = '';
     showWorldToast('⛈️ 暴風巨像甦醒了！點擊它（或按 ⚡）用英語魔法攻擊！');
     SoundManager.playAchievement();
+    if (typeof MusicManager !== 'undefined') MusicManager.play('boss');
   }
 
   function resetBoss() {
@@ -2092,6 +2098,7 @@ const SkyGame = (() => {
     if (combatHud) combatHud.bossBar.style.display = 'none';
     if (shockRing) shockRing.visible = false;
     if (warnRing) warnRing.visible = false;
+    if (typeof MusicManager !== 'undefined') MusicManager.playForZone('sky');
   }
 
   function engageBoss() {
@@ -2142,6 +2149,7 @@ const SkyGame = (() => {
     bossActive = null;
     bossParts = null;
     if (quizOpen) closeQuiz();
+    if (typeof MusicManager !== 'undefined') MusicManager.playForZone('sky');
     showWorldToast('🎆 暴風平息了！天空之城重獲和平！');
     setTimeout(() => finishQuestDirect(q), 1200);
   }
@@ -2435,9 +2443,10 @@ const SkyGame = (() => {
     const sprint = keys.sprint || (joy.active && mag > 0.85);
 
     const st = Math.sin(cam.theta), ct = Math.cos(cam.theta);
-    // camera sits at player + (sinθ, ·, cosθ)·r → forward on the ground is (-sinθ, -cosθ)
+    // camera sits at player + (sinθ, ·, cosθ)·r → forward on the ground is
+    // (-sinθ, -cosθ); screen-right = cross(forward, up) = (cosθ, -sinθ)
     const fx = -st, fz = -ct;
-    const rx = -ct, rz = st;
+    const rx = ct, rz = -st;
     let mx = fx * iz + rx * ix;
     let mz = fz * iz + rz * ix;
     const mlen = Math.hypot(mx, mz);
