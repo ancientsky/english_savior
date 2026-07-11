@@ -38,6 +38,7 @@ const SkyGame = (() => {
   let grounded = false;
   let lastGroundedAt = -10;
   let jumpBufferedAt = -10;
+  let airJumpUsed = false;
   let lastGroundIsland = 'isle_dawn';
   let currentIsland = null;
   let hearts = 5;
@@ -58,6 +59,40 @@ const SkyGame = (() => {
   // ----- DOM -----
   let els = {};
   let toastTimer = null;
+
+  // ----- equipped-title perks + consumable session buffs (Part 4) -----
+  let perks = {};
+  let gemCarry = 0;            // fractional gem bonus accumulator
+  let gliderOn = false;        // sky_glider consumable active this adventure
+  let jumpBoostOn = false;     // cloud_boots consumable active this adventure
+
+  function computePerks() {
+    const id = GameEngine.getEquippedTitle().id;
+    perks = {
+      voidSafe: id === 'beginner',                                   // 摔虛空不扣心
+      xpMult: id === 'english_star' ? 1.1 : 1,                       // XP +10%
+      gemMult: id === 'point_master' ? 1.25 : 1,                     // 💎 +25%
+      firstLetter: id === 'word_hunter',                             // 單字題送首字母
+      dropWrong: id === 'grammar_master',                            // 文法題刪一個錯項
+      heartBonus: (id === 'bookworm' || id === 'legend_50') ? 1 : 0, // +1❤️
+      speedMult: id === 'speed_learner' ? 1.25 : (id === 'legend_50' ? 1.15 : 1),
+      freeMiss: id === 'persistent',                                 // 每任務首錯免罰
+      doubleJump: id === 'legend',                                   // 二段跳
+      glide: id === 'legend',                                        // 滑翔
+      dmg: id === 'champion' ? 2 : (id === 'legend_50' ? 1.5 : 1),   // 傷害倍率
+      jumpMult: id === 'block_master' ? 1.3 : 1,                     // 跳高 +30%
+      mobSlow: id === 'ach_legend' ? 0.7 : 1,                        // 怪速 −30%
+      chestGem: id === 'collection_king',                            // 寶箱每題 +1💎
+      padMult: id === 'summit_25' ? 1.5 : 1,                         // 跳墊 +50%
+    };
+  }
+  function maxHearts() { return SKY_CONFIG.maxHearts + (perks.heartBonus || 0); }
+  function skyAddGems(n) {
+    gemCarry += n * ((perks.gemMult || 1) - 1);
+    let bonus = 0;
+    while (gemCarry >= 1) { gemCarry -= 1; bonus++; }
+    GameEngine.addGems(n + bonus);
+  }
 
   // reused temp vectors (zero allocation inside animate)
   let _v1, _v2;
@@ -168,6 +203,9 @@ const SkyGame = (() => {
       boss: () => (bossActive ? { hp: bossActive.mob.hp, phase: bossActive.phase, waveR: bossActive.waveR, warnT: bossActive.warnT } : null),
       damage: n => damagePlayer(n || 1),
       spellWord: () => (active && active.spellEntry ? active.spellEntry.word.toUpperCase() : null),
+      // perk hooks (Part 4)
+      perks: () => ({ ...perks, maxHearts: maxHearts(), gliderOn, jumpBoostOn }),
+      refreshEquipment,
     };
   }
 
@@ -216,10 +254,15 @@ const SkyGame = (() => {
     // spawn at last visited island
     const isle = isleById(save.lastIsland) || SKY_ISLANDS[0];
     respawnAt(isle, false);
-    hearts = SKY_CONFIG.maxHearts;
+    refreshEquipment();
+    hearts = maxHearts();
     playing = true;
     updateHudHearts();
-    refreshEquipment();
+    // consumable session buffs: one use per adventure
+    gliderOn = GameEngine.consumeBuff('glide');
+    if (gliderOn) showWorldToast('🪂 滑翔翼啟動！按住跳躍鍵緩慢降落');
+    jumpBoostOn = GameEngine.consumeBuff('jump_boost');
+    if (jumpBoostOn) showWorldToast('🌨️ 彈跳雲靴啟動！跳躍高度 +40%');
     if (!rafId) animate();
   }
 
@@ -1142,8 +1185,8 @@ const SkyGame = (() => {
     }
     if (hearts <= 0) {
       if (GameEngine.consumeBuff('revive')) {
-        hearts = SKY_CONFIG.maxHearts;
-        showWorldToast('💖 復活圖騰救了你！');
+        hearts = maxHearts();
+        showWorldToast('💖 復活羽毛救了你！');
       } else {
         softKO();
       }
@@ -1159,7 +1202,7 @@ const SkyGame = (() => {
     }
     if (bossActive) resetBoss();
     if (raceActive) cancelRace('');
-    hearts = SKY_CONFIG.maxHearts;
+    hearts = maxHearts();
     const dawn = SKY_ISLANDS[0];
     pos.x = dawn.pos[0]; pos.z = dawn.pos[2]; pos.y = dawn.pos[1] + 2;
     vy = 0;
@@ -1217,6 +1260,7 @@ const SkyGame = (() => {
       renderOptions(options, options.indexOf(entry.blank),
         () => onCombatCorrect(mob, false, null, entry.explain),
         null, () => onCombatWrong(mob));
+      if (perks.dropWrong) autoEliminateOne();
     } else {
       const pool = vocabPool(diff);
       const entry = pool[Math.floor(Math.random() * pool.length)];
@@ -1282,7 +1326,7 @@ const SkyGame = (() => {
 
   function hitMob(mob) {
     if (mob.dead) return;
-    mob.hp -= 1;
+    mob.hp -= perks.dmg || 1;   // 冠軍 ×2 / 五十級傳說 ×1.5
     if (mob.isBoss) { onBossHit(mob); return; }
     if (mob.hp <= 0) {
       killMob(mob);
@@ -1343,7 +1387,7 @@ const SkyGame = (() => {
       const sameLevel = Math.abs(pos.y - isleTop) < 6;
       let vx = 0, vz = 0;
       if (distP < 12 && sameLevel) {
-        const sp = mob.def.speed * (mob.boost > 0 ? 1.5 : 1);
+        const sp = mob.def.speed * (perks.mobSlow || 1) * (mob.boost > 0 ? 1.5 : 1);
         vx = (dxp / (distP || 1)) * sp;
         vz = (dzp / (distP || 1)) * sp;
       } else {
@@ -1451,8 +1495,7 @@ const SkyGame = (() => {
           }
         } else {
           b.classList.add('wrong');
-          active.wrongThis = true;
-          active.anyWrong = true;
+          markWrong();
           SoundManager.playWrong();
           setTimeout(() => b.classList.remove('wrong'), 500);
         }
@@ -1460,6 +1503,15 @@ const SkyGame = (() => {
       grid.appendChild(b);
     });
     quiz.opts.appendChild(grid);
+    // hint crystal: reveal (auto-press) the next correct letter
+    if (active) {
+      active.hintFn = () => {
+        const next = word[idx];
+        const btn = [...grid.querySelectorAll('button')].find(b => !b.disabled && b.dataset.letter === next);
+        if (btn) btn.click();
+      };
+      updateHintBtn();
+    }
   }
 
   function askSpellWord() {
@@ -2023,8 +2075,9 @@ const SkyGame = (() => {
     scene.add(player);
   }
 
-  // re-read equipped skin/title (called on start; Part 4 adds perks here)
+  // re-read equipped skin/title and recompute title perks
   function refreshEquipment() {
+    computePerks();
     if (!playerParts) return;
     const skin = GameEngine.getEquippedSkin();
     const title = GameEngine.getEquippedTitle();
@@ -2064,15 +2117,17 @@ const SkyGame = (() => {
     pos.z = isle.pos[2];
     pos.y = isle.pos[1] + bobOf(isle.id) + 2;
     vy = 0;
-    if (hurt) {
+    if (hurt && !perks.voidSafe) {
       hearts--;
       if (hearts <= 0) {
-        hearts = SKY_CONFIG.maxHearts;
+        hearts = maxHearts();
         showWorldToast('💫 你在晨曦之島醒來了…');
         const dawn = SKY_ISLANDS[0];
         pos.x = dawn.pos[0]; pos.z = dawn.pos[2]; pos.y = dawn.pos[1] + 2;
       }
       updateHudHearts();
+    } else if (hurt) {
+      showWorldToast('🍀 初心者的祝福：墜落不扣愛心！');
     }
   }
 
@@ -2087,7 +2142,7 @@ const SkyGame = (() => {
 
   function updateHudHearts() {
     if (!els.hearts) return;
-    els.hearts.textContent = '❤️'.repeat(hearts) + '🖤'.repeat(Math.max(0, SKY_CONFIG.maxHearts - hearts));
+    els.hearts.textContent = '❤️'.repeat(Math.max(0, hearts)) + '🖤'.repeat(Math.max(0, maxHearts() - hearts));
   }
 
   function showWorldToast(msg) {
@@ -2125,7 +2180,8 @@ const SkyGame = (() => {
     const mlen = Math.hypot(mx, mz);
     if (mlen > 0.001) {
       mx /= mlen; mz /= mlen;
-      const speed = SKY_CONFIG.walkSpeed * (sprint ? SKY_CONFIG.sprintMult : 1) * Math.min(1, mag || 1);
+      const speed = SKY_CONFIG.walkSpeed * (perks.speedMult || 1) *
+        (sprint ? SKY_CONFIG.sprintMult : 1) * Math.min(1, mag || 1);
       pos.x += mx * speed * dt;
       pos.z += mz * speed * dt;
       const targetYaw = Math.atan2(mx, mz);
@@ -2139,9 +2195,10 @@ const SkyGame = (() => {
       walkTime *= 0.9;
     }
 
-    // vertical
+    // vertical (hold jump to glide with 傳說勇者 title or 🪂 glider)
     const prevFeet = pos.y;
     vy += SKY_CONFIG.gravity * dt;
+    if (jumpHeld && vy < -3.2 && (perks.glide || gliderOn)) vy = -3.2;
     pos.y += vy * dt;
 
     const sup = supportAt(pos.x, pos.z, prevFeet + 0.55);
@@ -2168,22 +2225,30 @@ const SkyGame = (() => {
       }
       // bouncy jump pad
       if (sup.col.kind === 'pad') {
-        vy = sup.col.launch;
+        vy = sup.col.launch * (perks.padMult || 1);
         grounded = false;
         SoundManager.playCorrect();
       }
+      airJumpUsed = false;
     } else {
       grounded = false;
     }
 
     // jump (with coyote time + buffered press; windows sized so a single
     // slow frame on a weak device can't swallow the input)
-    if (jumpBufferedAt >= 0 && simTime - jumpBufferedAt < 0.25 &&
-        simTime - lastGroundedAt < 0.15) {
-      vy = SKY_CONFIG.jumpV;
-      grounded = false;
-      jumpBufferedAt = -10;
-      lastGroundedAt = -10;
+    if (jumpBufferedAt >= 0 && simTime - jumpBufferedAt < 0.25) {
+      const jumpV = SKY_CONFIG.jumpV * (perks.jumpMult || 1) * (jumpBoostOn ? 1.4 : 1);
+      if (simTime - lastGroundedAt < 0.15) {
+        vy = jumpV;
+        grounded = false;
+        jumpBufferedAt = -10;
+        lastGroundedAt = -10;
+      } else if (perks.doubleJump && !airJumpUsed && vy < jumpV * 0.5) {
+        // 傳說勇者 double jump
+        vy = jumpV * 0.92;
+        airJumpUsed = true;
+        jumpBufferedAt = -10;
+      }
     }
 
     // fell into the void
@@ -2377,6 +2442,7 @@ const SkyGame = (() => {
         <div class="aw-quiz-prompt" id="sky-qz-prompt"></div>
         <div class="aw-quiz-zh" id="sky-qz-zh"></div>
         <button class="aw-quiz-tts" id="sky-qz-tts" style="display:none">🔊 再聽一次</button>
+        <button class="aw-quiz-hint" id="sky-qz-hint" style="display:none">🔮 使用提示水晶</button>
         <div class="aw-quiz-options" id="sky-qz-opts"></div>
         <div class="aw-quiz-feedback" id="sky-qz-fb"></div>
       </div>`;
@@ -2390,6 +2456,7 @@ const SkyGame = (() => {
       prompt: div.querySelector('#sky-qz-prompt'),
       zh: div.querySelector('#sky-qz-zh'),
       tts: div.querySelector('#sky-qz-tts'),
+      hint: div.querySelector('#sky-qz-hint'),
       opts: div.querySelector('#sky-qz-opts'),
       fb: div.querySelector('#sky-qz-fb'),
     };
@@ -2397,6 +2464,7 @@ const SkyGame = (() => {
     quiz.tts.addEventListener('click', () => {
       if (active && active.ttsText) TTSManager.speak(active.ttsText, 'en-US');
     });
+    quiz.hint.addEventListener('click', useQuizHint);
   }
 
   function openQuest(q) {
@@ -2451,10 +2519,39 @@ const SkyGame = (() => {
   function awardAnswer(isVocab, word) {
     const tier = SKY_REWARD[active.q.diff];
     const firstTry = !active.wrongThis && !active.replay;
-    GameEngine.addXP(firstTry ? tier.ans : Math.ceil(tier.ans / 2));
-    if (firstTry) GameEngine.addGems(1);
+    const base = firstTry ? tier.ans : Math.ceil(tier.ans / 2);
+    GameEngine.addXP(Math.round(base * (perks.xpMult || 1)));
+    if (firstTry) {
+      // 收藏之王: chests pay double per-answer gems
+      skyAddGems(perks.chestGem && active.q.type === 'chest' ? 2 : 1);
+    }
     if (isVocab && !active.wrongThis) GameEngine.recordWord(word || '');
     GameEngine.recordSkyAnswer?.();
+  }
+
+  // 永不放棄 title: the first miss of each quest costs nothing
+  function markWrong() {
+    if (!active) return;
+    if (perks.freeMiss && !active.freeMissUsed) {
+      active.freeMissUsed = true;
+      quiz.fb.textContent = '💪 永不放棄：這次失誤不算！再試一次！';
+      quiz.fb.className = 'aw-quiz-feedback good';
+      return;
+    }
+    active.wrongThis = true;
+    active.anyWrong = true;
+  }
+
+  // 🔮 hint-crystal consumable inside quizzes
+  function updateHintBtn() {
+    if (!quiz.hint) return;
+    quiz.hint.style.display = (GameEngine.hasBuff('hint') && active && active.hintFn) ? '' : 'none';
+  }
+  function useQuizHint() {
+    if (!active || !active.hintFn || !GameEngine.consumeBuff('hint')) return;
+    active.hintFn();
+    SoundManager.playCorrect();
+    updateHintBtn();
   }
 
   function nextStep() {
@@ -2492,14 +2589,22 @@ const SkyGame = (() => {
         } else {
           b.classList.add('wrong');
           b.disabled = true;
-          active.wrongThis = true;
-          active.anyWrong = true;
+          markWrong();
           SoundManager.playWrong();
           onWrong?.();
         }
       });
       quiz.opts.appendChild(b);
     });
+    // hint crystal: eliminate one wrong option
+    if (active) {
+      active.hintFn = () => {
+        const btns = [...quiz.opts.querySelectorAll('button')];
+        const wrongBtn = btns.find(b => !b.dataset.correct && !b.disabled);
+        if (wrongBtn) { wrongBtn.disabled = true; wrongBtn.classList.add('dim'); }
+      };
+      updateHintBtn();
+    }
   }
 
   function askVocab() {
@@ -2508,7 +2613,8 @@ const SkyGame = (() => {
     const distract = pickN(pool.filter(e => e.word !== entry.word), 3).map(e => e.word);
     const options = shuffled([entry.word, ...distract]);
     quiz.prompt.innerHTML = `${entry.hint} ${entry.sentence.replace(/_+/g, '<span class="aw-blank">____</span>')}`;
-    quiz.zh.innerHTML = zhPretty(entry.zh);
+    quiz.zh.innerHTML = zhPretty(entry.zh) +
+      (perks.firstLetter ? `　<span class="aw-perk-hint">💡 開頭：${entry.word[0].toUpperCase()}</span>` : '');
     quiz.tts.style.display = 'none';
     renderOptions(options, options.indexOf(entry.word), () => {
       TTSManager.speak(entry.word, 'en-US');
@@ -2533,6 +2639,14 @@ const SkyGame = (() => {
       active.step++;
       setTimeout(nextStep, 1400);
     });
+    if (perks.dropWrong) autoEliminateOne();  // 文法大師
+  }
+
+  // 文法大師 perk: silently disable one wrong option on grammar questions
+  function autoEliminateOne() {
+    const btns = [...quiz.opts.querySelectorAll('button')];
+    const wrongBtn = btns.find(b => !b.dataset.correct && !b.disabled);
+    if (wrongBtn) { wrongBtn.disabled = true; wrongBtn.classList.add('dim'); }
   }
 
   function askDialog() {
@@ -2644,8 +2758,7 @@ const SkyGame = (() => {
       } else {
         sel.btn.classList.add('wrong');
         b.classList.add('wrong');
-        active.wrongThis = true;
-        active.anyWrong = true;
+        markWrong();
         SoundManager.playWrong();
         setTimeout(() => {
           sel.btn.classList.remove('wrong');
@@ -2664,8 +2777,8 @@ const SkyGame = (() => {
     save.completed[q.id] = (save.completed[q.id] || 0) + 1;
     persist();
     if (first) {
-      GameEngine.addXP(tier.xp);
-      GameEngine.addGems(tier.gems);
+      GameEngine.addXP(Math.round(tier.xp * (perks.xpMult || 1)));
+      skyAddGems(tier.gems);
       GameEngine.recordSkyQuest?.();
       if (q.type === 'bridge') {
         save.bridgeBuilt = true;
@@ -2788,11 +2901,14 @@ const SkyGame = (() => {
       cam.radius = Math.min(16, Math.max(5, cam.radius * (1 + Math.sign(e.deltaY) * 0.09)));
     }, { passive: false });
 
-    // touch buttons
+    // touch buttons (held state feeds the glide perk)
     els.btnJump.addEventListener('pointerdown', e => {
       e.preventDefault();
       jumpBufferedAt = simTime;
+      jumpHeld = true;
     });
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(evt =>
+      els.btnJump.addEventListener(evt, () => { jumpHeld = false; }));
     els.btnAct.addEventListener('pointerdown', e => {
       e.preventDefault();
       interact();

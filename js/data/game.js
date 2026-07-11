@@ -33,6 +33,9 @@ const ACHIEVEMENTS = [
   { id: 'rpg_first', name: '冒險啟程', desc: '在英語冒險物語通過第一章', icon: '🗺️', pts: 10, condition: s => (s.rpgChapters || 0) >= 1 },
   { id: 'rpg_hero', name: '大陸救世主', desc: '在英語冒險物語通過 6 個章節', icon: '🛡️', pts: 20, condition: s => (s.rpgChapters || 0) >= 6 },
   { id: 'rpg_legend', name: '傳說冒險家', desc: '在英語冒險物語通過 9 個章節', icon: '🌟', pts: 40, condition: s => (s.rpgChapters || 0) >= 9 },
+  { id: 'sky_first', name: '初探天空之城', desc: '在天空之城完成第一個任務', icon: '🏝️', pts: 10, condition: s => (s.skyQuests || 0) >= 1 },
+  { id: 'sky_hero', name: '空島英雄', desc: '在天空之城完成 10 個任務', icon: '🌤️', pts: 20, condition: s => (s.skyQuests || 0) >= 10 },
+  { id: 'sky_storm', name: '風暴終結者', desc: '打倒天空之城的暴風巨像', icon: '⛈️', pts: 40, condition: s => !!s.skyBossDown },
 ];
 
 const DAILY_QUESTS = [
@@ -47,6 +50,7 @@ const DAILY_QUESTS = [
   { id: 'dq_speak', name: '大聲唸咒語', desc: '在魔法咒語學院唸對 3 個咒語', icon: '🎤', target: 3, key: 'dailySpeak' },
   { id: 'dq_tower', name: '轉珠打魔王', desc: '在單字魔王塔拼出 5 個單字', icon: '🧿', target: 5, key: 'dailyTower' },
   { id: 'dq_rpg', name: '勇者的對話', desc: '在英語冒險物語完成 5 段對話', icon: '🗡️', target: 5, key: 'dailyRpg' },
+  { id: 'dq_sky', name: '空島探險家', desc: '在天空之城答對 5 題', icon: '🏝️', target: 5, key: 'dailySky' },
 ];
 
 const INVENTORY_ITEMS = [
@@ -88,6 +92,10 @@ const SHOP_ITEMS = {
       desc: '接下來 5 次答題獲得雙倍 XP（Lv.10 解鎖）', effect: 'double_xp' },
     { id: 'rainbow_cookie', name: '彩虹幸運餅乾', icon: '🍪', price: 140, uses: 3,
       desc: '接下來 3 次開道具都提高稀有機率', effect: 'lucky' },
+    { id: 'sky_glider', name: '滑翔翼', icon: '🪂', price: 120, uses: 3,
+      desc: '天空之城：按住跳躍鍵緩慢滑翔降落（3 次冒險）', effect: 'glide' },
+    { id: 'cloud_boots', name: '彈跳雲靴', icon: '🌨️', price: 100, uses: 3,
+      desc: '天空之城：跳躍高度 +40%（3 次冒險）', effect: 'jump_boost' },
   ],
   // 皮膚（永久擁有）
   skins: [

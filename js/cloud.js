@@ -25,6 +25,7 @@ const CloudSave = (() => {
     'english_savior_builder',
     'english_savior_tower',
     'english_savior_rpg',
+    'english_savior_sky',
     'sound_enabled',
   ];
   const DRIVE_FILE_NAME = 'english_savior_backup.json';
