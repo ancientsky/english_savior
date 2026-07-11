@@ -120,13 +120,23 @@ const SkyGame = (() => {
     // test hooks
     window.__skyTest = {
       start: startAdventure,
-      player: () => ({ x: pos.x, y: pos.y, z: pos.z, grounded, island: currentIsland, hearts }),
+      player: () => ({ x: pos.x, y: pos.y, z: pos.z, grounded, island: currentIsland, hearts, simTime }),
       teleport: (x, y, z) => { pos.x = x; pos.y = y; pos.z = z; vy = 0; },
       stats: () => ({ islands: SKY_ISLANDS.length, ready: threeReady, playing, colliders: colliders.length }),
       keys: k => Object.assign(keys, k),
       jump: () => { jumpBufferedAt = simTime; },
       camYaw: () => cam.theta,
       renderInfo: () => (renderer ? renderer.info.render : null),
+      // quest hooks (Part 2)
+      questState: () => ({ completed: { ...save.completed }, total: totalCleared() }),
+      target: () => (currentTarget ? currentTarget.q.id : null),
+      openQuest: id => {
+        const q = SKY_QUESTS.find(x => x.id === id);
+        if (q) openQuest(q);
+      },
+      quizInfo: () => (active ? { id: active.q.id, step: active.step, n: active.q.n, open: quizOpen } : { open: quizOpen }),
+      interact,
+      closeQuiz,
     };
   }
 
@@ -227,6 +237,7 @@ const SkyGame = (() => {
       buildBridge(b);
     });
     SKY_PADS.forEach(buildPad);
+    buildQuestObjects();
     buildPlayer();
     setupPointerControls();
 
@@ -762,6 +773,225 @@ const SkyGame = (() => {
     });
   }
 
+  // ===================== quests =====================
+  const SKY_REWARD = {
+    easy: { xp: 30, gems: 5, ans: 8 },
+    medium: { xp: 50, gems: 8, ans: 12 },
+    hard: { xp: 80, gems: 12, ans: 16 },
+    boss: { xp: 150, gems: 25, ans: 16 },
+  };
+  // quest types playable now; the rest arrive in Part 3 and show ⏳
+  const LIVE_TYPES = new Set(['chest', 'gate', 'npc', 'listen', 'pillars']);
+
+  const interactables = [];    // { q, x, z, isle, marker }
+  const markerList = [];       // bobbing quest markers
+  let quizOpen = false;
+  let currentTarget = null;
+  let quiz = null;             // quiz overlay DOM refs
+  let active = null;           // running quest session
+
+  function totalCleared() { return Object.keys(save.completed).length; }
+  function isCleared(q) { return (save.completed[q.id] || 0) > 0; }
+  function isLocked(q) { return q.lock && totalCleared() < q.lock; }
+
+  function markerTexture(symbol, color) {
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = 96;
+    const ctx = cv.getContext('2d');
+    ctx.font = 'bold 72px "Noto Sans TC", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = 'rgba(0,0,0,0.5)';
+    ctx.shadowBlur = 8;
+    ctx.fillStyle = color;
+    ctx.fillText(symbol, 48, 52);
+    return new THREE.CanvasTexture(cv);
+  }
+
+  function markerState(q) {
+    if (isCleared(q)) return { s: '✓', c: '#4ade80' };
+    if (isLocked(q)) return { s: '🔒', c: '#cbd5e1' };
+    if (!LIVE_TYPES.has(q.type)) return { s: '⏳', c: '#cbd5e1' };
+    return { s: '!', c: '#ffd166' };
+  }
+
+  function updateQuestMarkers() {
+    for (const it of interactables) {
+      const st = markerState(it.q);
+      if (it.markerSym !== st.s) {
+        it.markerSym = st.s;
+        it.marker.material.map = markerTexture(st.s, st.c);
+        it.marker.material.needsUpdate = true;
+      }
+    }
+  }
+
+  function makeNpcFigure(emoji, tint) {
+    const g = new THREE.Group();
+    const legs = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.6, 0.3), matOf(0x6a5a4a));
+    legs.position.y = 0.3;
+    g.add(legs);
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.7, 0.36), matOf(tint));
+    body.position.y = 0.95;
+    body.castShadow = true;
+    g.add(body);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.52, 0.52),
+      new THREE.MeshLambertMaterial({ map: emojiTexture(emoji, '#f2c99a') }));
+    head.position.y = 1.58;
+    head.castShadow = true;
+    g.add(head);
+    return g;
+  }
+
+  function makeQuestVisual(q) {
+    const g = new THREE.Group();
+    switch (q.type) {
+      case 'chest': {
+        const base = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.9, 1.05), matOf(0x8a5a2a));
+        base.position.y = 0.45;
+        base.castShadow = true;
+        g.add(base);
+        const lid = new THREE.Mesh(new THREE.BoxGeometry(1.56, 0.4, 1.12), matOf(0x6e4620));
+        lid.position.y = 1.05;
+        g.add(lid);
+        const lock = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.34, 0.14), matOf(0xf5c518, 0x7a5200));
+        lock.position.set(0, 0.8, 0.56);
+        g.add(lock);
+        break;
+      }
+      case 'gate': {
+        [-1.25, 1.25].forEach(x => {
+          const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.7, 3.4, 0.7), matOf(0x9a927e));
+          pillar.position.set(x, 1.7, 0);
+          pillar.castShadow = true;
+          g.add(pillar);
+        });
+        const lintel = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.6, 0.9), matOf(0x8a8270));
+        lintel.position.y = 3.6;
+        lintel.castShadow = true;
+        g.add(lintel);
+        const rune = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.1), matOf(0x66e0ff, 0x1a5a7a));
+        rune.position.set(0, 3.6, 0.5);
+        g.add(rune);
+        break;
+      }
+      case 'npc':
+        g.add(makeNpcFigure(q.npc || '🙂', 0xc47ab8));
+        break;
+      case 'listen':
+        [[-0.8, 0, 0.85], [0.7, 0.2, 1.1], [0, -0.6, 0.7]].forEach(([x, z, s]) => {
+          const c = new THREE.Mesh(new THREE.OctahedronGeometry(0.55 * s), matOf(0x9fefff, 0x2a7a9a));
+          c.position.set(x, 0.6 * s, z);
+          c.scale.y = 1.8;
+          c.castShadow = true;
+          g.add(c);
+        });
+        break;
+      case 'pillars':
+        [-0.9, 0.9].forEach(x => {
+          const p = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.48, 1.6, 8), matOf(0xd8d2bc));
+          p.position.set(x, 0.8, 0);
+          p.castShadow = true;
+          g.add(p);
+          const orb = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 6), matOf(0xffd166, 0x7a5200));
+          orb.position.set(x, 1.9, 0);
+          g.add(orb);
+        });
+        break;
+      case 'runes': {
+        const slab = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.3, 1.6), matOf(0x8a8270));
+        slab.position.y = 0.15;
+        g.add(slab);
+        const glyph = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.06, 0.8), matOf(0xb08fff, 0x4a2a8a));
+        glyph.position.y = 0.34;
+        g.add(glyph);
+        break;
+      }
+      case 'arena': {
+        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 3.2, 6), matOf(0x6a4a2e));
+        pole.position.y = 1.6;
+        g.add(pole);
+        const flag = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.7, 0.06), matOf(0xe85454));
+        flag.position.set(0.6, 2.7, 0);
+        g.add(flag);
+        break;
+      }
+      case 'race': {
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(1.3, 0.14, 8, 20), matOf(0xffd166, 0x7a5200));
+        ring.position.y = 1.8;
+        g.add(ring);
+        break;
+      }
+      case 'bridge': {
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 1.4, 6), matOf(0x6a4a2e));
+        post.position.y = 0.7;
+        g.add(post);
+        const sign = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.8, 0.1), matOf(0xa8763e));
+        sign.position.y = 1.5;
+        g.add(sign);
+        break;
+      }
+      case 'boss': {
+        const altar = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 2, 1, 8), matOf(0x2c2c40, 0x1a1a4a));
+        altar.position.y = 0.5;
+        altar.castShadow = true;
+        g.add(altar);
+        break;
+      }
+    }
+    return g;
+  }
+
+  function buildQuestObjects() {
+    for (const q of SKY_QUESTS) {
+      const isle = isleById(q.island);
+      const g = islandGroups[q.island];
+      if (!isle || !g) continue;
+      const visual = makeQuestVisual(q);
+      visual.position.set(q.dx, 0, q.dz);
+      visual.traverse(o => { o.matrixAutoUpdate = false; o.updateMatrix(); });
+      visual.matrixAutoUpdate = false;
+      visual.updateMatrix();
+      g.add(visual);
+
+      const st = markerState(q);
+      const marker = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: markerTexture(st.s, st.c), transparent: true,
+      }));
+      marker.scale.set(1.6, 1.6, 1);
+      marker.position.set(q.dx, 4.3, q.dz);
+      g.add(marker);
+      markerList.push(marker);
+
+      interactables.push({
+        q, marker, markerSym: st.s,
+        x: isle.pos[0] + q.dx, z: isle.pos[2] + q.dz, isle,
+      });
+    }
+  }
+
+  // nearest quest object in range → Ⓔ hint
+  function updateInteractTarget() {
+    let best = null, bestD = 4.5;
+    for (const it of interactables) {
+      if (Math.abs(pos.y - it.isle.pos[1]) > 8) continue;
+      const d = Math.hypot(pos.x - it.x, pos.z - it.z);
+      if (d < bestD) { bestD = d; best = it; }
+    }
+    if (best === currentTarget) return;
+    currentTarget = best;
+    if (!best) { els.hint.style.display = 'none'; return; }
+    const q = best.q;
+    const key = isTouch ? '點 ⚡' : '按 E';
+    let label;
+    if (isLocked(q)) label = `🔒 ${q.name}（再完成 ${q.lock - totalCleared()} 個任務解鎖）`;
+    else if (!LIVE_TYPES.has(q.type)) label = `⏳ ${q.name}（即將開放）`;
+    else if (isCleared(q)) label = `${key}　🔁 再玩一次「${q.name}」`;
+    else label = `${key}　📜 ${q.name}`;
+    els.hint.textContent = label;
+    els.hint.style.display = '';
+  }
+
   // ===================== player =====================
   function emojiTexture(emoji, bg) {
     const cv = document.createElement('canvas');
@@ -936,9 +1166,11 @@ const SkyGame = (() => {
   function updatePlayer(dt) {
     simTime += dt;
 
-    // input vector relative to camera yaw
+    // input vector relative to camera yaw (frozen while a quiz is open)
     let ix = 0, iz = 0;
-    if (joy.active) {
+    if (quizOpen) {
+      // no movement input
+    } else if (joy.active) {
       ix = joy.dx;
       iz = joy.dy;
     } else {
@@ -1036,6 +1268,8 @@ const SkyGame = (() => {
     }
     // idle breathing
     playerParts.body.scale.y = 1 + Math.sin(simTime * 2.2) * 0.015;
+
+    if (!quizOpen) updateInteractTarget();
   }
 
   function updateCamera(dt) {
@@ -1064,6 +1298,10 @@ const SkyGame = (() => {
       const bob = Math.sin(simTime * 0.45 + isle.seed * 1.7) * 0.35;
       islandBob[isle.id] = bob;
       islandGroups[isle.id].position.y = isle.pos[1] + bob;
+    }
+    // bobbing quest markers
+    for (let i = 0; i < markerList.length; i++) {
+      markerList[i].position.y = 4.3 + Math.sin(simTime * 2 + i) * 0.25;
     }
     // drifting clouds (cheap: advance a third of them per frame)
     if (cloudMesh) {
@@ -1094,6 +1332,10 @@ const SkyGame = (() => {
     window.addEventListener('keydown', e => {
       if (!playing || !zoneActive()) return;
       if (document.querySelector('.modal.active')) return;
+      if (quizOpen) {
+        if (e.code === 'Escape') closeQuiz();
+        return;
+      }
       switch (e.code) {
         case 'KeyW': case 'ArrowUp': keys.f = 1; break;
         case 'KeyS': case 'ArrowDown': keys.b = 1; break;
@@ -1121,8 +1363,368 @@ const SkyGame = (() => {
   }
 
   function interact() {
-    // Quests plug in here in Part 2.
-    showWorldToast('🔍 附近沒有可以互動的東西');
+    if (quizOpen) return;
+    if (!currentTarget) {
+      showWorldToast('🔍 附近沒有可以互動的東西，去找金色的「!」標記吧');
+      return;
+    }
+    const q = currentTarget.q;
+    if (isLocked(q)) {
+      showWorldToast(`🔒 再完成 ${q.lock - totalCleared()} 個任務就能挑戰「${q.name}」！`);
+      return;
+    }
+    if (!LIVE_TYPES.has(q.type)) {
+      showWorldToast('⏳ 這個任務即將在後續更新開放！');
+      return;
+    }
+    openQuest(q);
+  }
+
+  // ===================== quiz overlay =====================
+  function shuffled(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+  function pickN(arr, n) { return shuffled(arr).slice(0, n); }
+  function vocabPool(diff) { return VOCAB_DATA[diff] || VOCAB_DATA.easy; }
+  // vocab zh comes in two styles: '劍 — 用來攻擊怪物的武器' and '尋找沈**船**來獲得寶藏。'
+  function zhShort(entry) {
+    const zh = entry.zh || '';
+    const m = zh.match(/\*\*([^*]+)\*\*/);
+    return m ? m[1] : zh.split(' — ')[0];
+  }
+  function zhPretty(zh) {
+    return (zh || '').replace(/\*\*([^*]+)\*\*/g, '<b class="aw-zh-key">$1</b>');
+  }
+
+  function ensureQuizDom() {
+    if (quiz) return;
+    const div = document.createElement('div');
+    div.className = 'aw-quiz';
+    div.id = 'sky-quiz';
+    div.innerHTML = `
+      <div class="aw-quiz-card">
+        <div class="aw-quiz-head">
+          <span class="aw-quiz-name" id="sky-qz-name"></span>
+          <span class="aw-quiz-prog" id="sky-qz-prog"></span>
+          <button class="aw-quiz-close" id="sky-qz-close" title="離開任務">✕</button>
+        </div>
+        <div class="aw-quiz-npc" id="sky-qz-npc" style="display:none"></div>
+        <div class="aw-quiz-prompt" id="sky-qz-prompt"></div>
+        <div class="aw-quiz-zh" id="sky-qz-zh"></div>
+        <button class="aw-quiz-tts" id="sky-qz-tts" style="display:none">🔊 再聽一次</button>
+        <div class="aw-quiz-options" id="sky-qz-opts"></div>
+        <div class="aw-quiz-feedback" id="sky-qz-fb"></div>
+      </div>`;
+    els.wrap.appendChild(div);
+    quiz = {
+      root: div,
+      name: div.querySelector('#sky-qz-name'),
+      prog: div.querySelector('#sky-qz-prog'),
+      close: div.querySelector('#sky-qz-close'),
+      npc: div.querySelector('#sky-qz-npc'),
+      prompt: div.querySelector('#sky-qz-prompt'),
+      zh: div.querySelector('#sky-qz-zh'),
+      tts: div.querySelector('#sky-qz-tts'),
+      opts: div.querySelector('#sky-qz-opts'),
+      fb: div.querySelector('#sky-qz-fb'),
+    };
+    quiz.close.addEventListener('click', closeQuiz);
+    quiz.tts.addEventListener('click', () => {
+      if (active && active.ttsText) TTSManager.speak(active.ttsText, 'en-US');
+    });
+  }
+
+  function openQuest(q) {
+    ensureQuizDom();
+    active = {
+      q, step: 0,
+      replay: isCleared(q),
+      wrongThis: false,        // wrong attempt on the current question
+      anyWrong: false,
+      ttsText: null,
+      pairsLeft: 0,
+      selectedPair: null,
+    };
+    quizOpen = true;
+    keys.f = keys.b = keys.l = keys.r = 0;
+    joy.dx = joy.dy = 0;
+    GameEngine.setDeferLevelUp(true);
+    quiz.root.classList.add('on');
+    quiz.name.textContent = `📜 ${q.name}`;
+    quiz.npc.style.display = 'none';
+    quiz.tts.style.display = 'none';
+    quiz.fb.textContent = '';
+    quiz.zh.textContent = '';
+    renderProg();
+    // intro screen
+    quiz.prompt.textContent = q.intro;
+    quiz.opts.innerHTML = '';
+    const btn = document.createElement('button');
+    btn.className = 'aw-opt aw-opt-go';
+    btn.textContent = active.replay ? '🔁 開始複習（獎勵減半）' : '⚔️ 開始挑戰！';
+    btn.addEventListener('click', nextStep);
+    quiz.opts.appendChild(btn);
+  }
+
+  function closeQuiz() {
+    if (!quizOpen) return;
+    quizOpen = false;
+    active = null;
+    quiz.root.classList.remove('on');
+    TTSManager.stop();
+    GameEngine.setDeferLevelUp(false);
+    GameEngine.flushPendingLevelUps();
+  }
+
+  function renderProg() {
+    if (!active) return;
+    const n = active.q.n;
+    quiz.prog.textContent = '●'.repeat(active.step) + '○'.repeat(Math.max(0, n - active.step));
+  }
+
+  // reward one correct answer (call BEFORE step++ so wrongThis is per-question)
+  function awardAnswer(isVocab, word) {
+    const tier = SKY_REWARD[active.q.diff];
+    const firstTry = !active.wrongThis && !active.replay;
+    GameEngine.addXP(firstTry ? tier.ans : Math.ceil(tier.ans / 2));
+    if (firstTry) GameEngine.addGems(1);
+    if (isVocab && !active.wrongThis) GameEngine.recordWord(word || '');
+    GameEngine.recordSkyAnswer?.();
+  }
+
+  function nextStep() {
+    if (!active) return;
+    active.wrongThis = false;
+    if (active.step >= active.q.n) { completeQuest(); return; }
+    quiz.fb.textContent = '';
+    quiz.fb.className = 'aw-quiz-feedback';
+    renderProg();
+    switch (active.q.type) {
+      case 'chest': askVocab(); break;
+      case 'gate': askGrammar(); break;
+      case 'npc': askDialog(); break;
+      case 'listen': askListen(); break;
+      case 'pillars': askPairs(); break;
+    }
+  }
+
+  function renderOptions(options, correctIdx, onCorrect, labeler) {
+    quiz.opts.innerHTML = '';
+    options.forEach((opt, i) => {
+      const b = document.createElement('button');
+      b.className = 'aw-opt';
+      b.textContent = labeler ? labeler(opt) : opt;
+      if (i === correctIdx) b.dataset.correct = '1';
+      b.addEventListener('click', () => {
+        if (!active) return;
+        if (i === correctIdx) {
+          b.classList.add('right');
+          SoundManager.playCorrect();
+          quiz.opts.querySelectorAll('button').forEach(x => (x.disabled = true));
+          onCorrect();
+        } else {
+          b.classList.add('wrong');
+          b.disabled = true;
+          active.wrongThis = true;
+          active.anyWrong = true;
+          SoundManager.playWrong();
+        }
+      });
+      quiz.opts.appendChild(b);
+    });
+  }
+
+  function askVocab() {
+    const pool = vocabPool(active.q.diff);
+    const entry = pool[Math.floor(Math.random() * pool.length)];
+    const distract = pickN(pool.filter(e => e.word !== entry.word), 3).map(e => e.word);
+    const options = shuffled([entry.word, ...distract]);
+    quiz.prompt.innerHTML = `${entry.hint} ${entry.sentence.replace(/_+/g, '<span class="aw-blank">____</span>')}`;
+    quiz.zh.innerHTML = zhPretty(entry.zh);
+    quiz.tts.style.display = 'none';
+    renderOptions(options, options.indexOf(entry.word), () => {
+      TTSManager.speak(entry.word, 'en-US');
+      quiz.fb.textContent = `✨ 正確！${entry.word} — ${zhShort(entry)}`;
+      quiz.fb.className = 'aw-quiz-feedback good';
+      awardAnswer(true, entry.word);
+      active.step++;
+      setTimeout(nextStep, 1100);
+    });
+  }
+
+  function askGrammar() {
+    const entry = GRAMMAR_DATA[Math.floor(Math.random() * GRAMMAR_DATA.length)];
+    const options = shuffled(entry.options.slice());
+    quiz.prompt.innerHTML = entry.sentence.replace(/_+/g, '<span class="aw-blank">____</span>');
+    quiz.zh.textContent = entry.translation || '';
+    quiz.tts.style.display = 'none';
+    renderOptions(options, options.indexOf(entry.blank), () => {
+      quiz.fb.textContent = `✨ 正確！${entry.explain}`;
+      quiz.fb.className = 'aw-quiz-feedback good';
+      awardAnswer(false);
+      active.step++;
+      setTimeout(nextStep, 1400);
+    });
+  }
+
+  function askDialog() {
+    const diff = active.q.diff;
+    const useLife = Math.random() < 0.4 && EMPIRE_LIFE[diff]?.length;
+    const pool = useLife ? EMPIRE_LIFE[diff] : EMPIRE_DIALOGUES[diff];
+    const entry = pool[Math.floor(Math.random() * pool.length)];
+    const options = shuffled([entry.a, ...entry.wrong]);
+    quiz.npc.style.display = '';
+    quiz.npc.textContent = active.q.npc || '🙂';
+    quiz.prompt.textContent = `「${entry.q}」`;
+    quiz.zh.textContent = useLife ? `💭 ${entry.scene}` : entry.qZh;
+    active.ttsText = entry.q;
+    quiz.tts.style.display = '';
+    TTSManager.speak(entry.q, 'en-US');
+    renderOptions(options, options.indexOf(entry.a), () => {
+      quiz.fb.textContent = '✨ 回答得真好！';
+      quiz.fb.className = 'aw-quiz-feedback good';
+      awardAnswer(false);
+      active.step++;
+      setTimeout(nextStep, 1100);
+    });
+  }
+
+  function askListen() {
+    const pool = vocabPool(active.q.diff);
+    const four = pickN(pool, 4);
+    const target = four[Math.floor(Math.random() * 4)];
+    quiz.prompt.textContent = '👂 仔細聽，水晶唸出了哪個單字？';
+    quiz.zh.textContent = '';
+    active.ttsText = target.word;
+    quiz.tts.style.display = '';
+    TTSManager.speak(target.word, 'en-US');
+    const options = four.map(e => e.word);
+    renderOptions(options, options.indexOf(target.word), () => {
+      quiz.fb.textContent = `✨ 沒錯！${target.word} — ${zhShort(target)}`;
+      quiz.fb.className = 'aw-quiz-feedback good';
+      awardAnswer(true, target.word);
+      active.step++;
+      setTimeout(nextStep, 1100);
+    }, w => `💎 ${w}`);
+  }
+
+  // pillars: match n English↔Chinese pairs; one matched pair = one "answer"
+  function askPairs() {
+    const pool = vocabPool(active.q.diff);
+    const pairs = pickN(pool, active.q.n);
+    active.pairsLeft = pairs.length;
+    active.selectedPair = null;
+    active.step = 0;
+    renderProg();
+    quiz.prompt.textContent = '🏛️ 點一個英文，再點它的中文意思，配成對！';
+    quiz.zh.textContent = '';
+    quiz.tts.style.display = 'none';
+    quiz.opts.innerHTML = '';
+    const grid = document.createElement('div');
+    grid.className = 'aw-pairs';
+    const left = pairs.map((e, i) => ({ i, label: e.word, en: true }));
+    const right = pairs.map((e, i) => ({ i, label: zhShort(e), en: false }));
+    const cells = [...shuffled(left), ...shuffled(right)];
+    const colA = document.createElement('div');
+    const colB = document.createElement('div');
+    colA.className = colB.className = 'aw-pair-col';
+    cells.forEach(c => (c.en ? colA : colB).appendChild(makePairBtn(c, pairs)));
+    grid.appendChild(colA);
+    grid.appendChild(colB);
+    quiz.opts.appendChild(grid);
+  }
+
+  function makePairBtn(cell, pairs) {
+    const b = document.createElement('button');
+    b.className = 'aw-opt aw-pair';
+    b.textContent = cell.label;
+    b.dataset.pair = String(cell.i);
+    b.dataset.en = cell.en ? '1' : '0';
+    b.addEventListener('click', () => {
+      if (!active || b.classList.contains('matched')) return;
+      const sel = active.selectedPair;
+      if (!sel) {
+        active.selectedPair = { i: cell.i, en: cell.en, btn: b };
+        b.classList.add('picked');
+        return;
+      }
+      if (sel.btn === b) {  // deselect
+        b.classList.remove('picked');
+        active.selectedPair = null;
+        return;
+      }
+      if (sel.en === cell.en) {  // switched selection within same column
+        sel.btn.classList.remove('picked');
+        active.selectedPair = { i: cell.i, en: cell.en, btn: b };
+        b.classList.add('picked');
+        return;
+      }
+      active.selectedPair = null;
+      sel.btn.classList.remove('picked');
+      if (sel.i === cell.i) {
+        sel.btn.classList.add('matched');
+        b.classList.add('matched');
+        SoundManager.playCorrect();
+        const word = pairs[cell.i].word;
+        TTSManager.speak(word, 'en-US');
+        awardAnswer(true, word);
+        active.wrongThis = false;
+        active.step++;
+        active.pairsLeft--;
+        renderProg();
+        if (active.pairsLeft <= 0) setTimeout(completeQuest, 900);
+      } else {
+        sel.btn.classList.add('wrong');
+        b.classList.add('wrong');
+        active.wrongThis = true;
+        active.anyWrong = true;
+        SoundManager.playWrong();
+        setTimeout(() => {
+          sel.btn.classList.remove('wrong');
+          b.classList.remove('wrong');
+        }, 600);
+      }
+    });
+    return b;
+  }
+
+  function completeQuest() {
+    if (!active) return;
+    const q = active.q;
+    const tier = SKY_REWARD[q.diff];
+    const first = !active.replay;
+    save.completed[q.id] = (save.completed[q.id] || 0) + 1;
+    persist();
+    if (first) {
+      GameEngine.addXP(tier.xp);
+      GameEngine.addGems(tier.gems);
+      GameEngine.recordSkyQuest?.();
+    }
+    SoundManager.playQuestComplete();
+    updateQuestMarkers();
+    renderStartScreen();
+    quiz.npc.style.display = 'none';
+    quiz.tts.style.display = 'none';
+    quiz.prompt.innerHTML = first
+      ? `🎉 任務完成！<div class="aw-clear-reward">+${tier.xp} XP　+${tier.gems} 💎</div>`
+      : '🎉 複習完成！繼續探索其他島嶼吧！';
+    quiz.zh.textContent = first && totalCleared() >= 12
+      ? '⛈️ 暴風之眼的封印鬆動了…'
+      : '';
+    quiz.fb.textContent = '';
+    quiz.opts.innerHTML = '';
+    const btn = document.createElement('button');
+    btn.className = 'aw-opt aw-opt-go';
+    btn.textContent = '🏝️ 繼續冒險';
+    btn.addEventListener('click', closeQuiz);
+    quiz.opts.appendChild(btn);
+    active.step = q.n;
+    renderProg();
   }
 
   function setupPointerControls() {
@@ -1130,6 +1732,10 @@ const SkyGame = (() => {
 
     el.addEventListener('pointerdown', e => {
       if (!playing) return;
+      // clicks on overlay UI (quiz card, buttons) must reach their targets —
+      // capturing them here would swallow the click event
+      if (e.target !== renderer.domElement) return;
+      if (quizOpen) return;
       const rect = el.getBoundingClientRect();
       const relX = (e.clientX - rect.left) / rect.width;
 

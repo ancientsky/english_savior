@@ -67,6 +67,66 @@ const SKY_PADS = [
   { island: 'isle_crystal', dx: -6, dz: 8, launch: 26 },
 ];
 
+// ===== Quests =====
+// type: chest | gate | npc | listen | pillars | runes | arena | bridge | race | boss
+// diff: easy | medium | hard | boss  (reward tier)
+// n: questions / rounds / pairs / mobs / rings / letters-words, by type
+// dx/dz: quest object position relative to the island centre
+// lock: total quest clears required before this quest opens
+const SKY_QUESTS = [
+  { id: 'sq_first_chest', island: 'isle_dawn', type: 'chest', name: '新手的寶箱', diff: 'easy', n: 3, dx: 8, dz: -6,
+    intro: '這個寶箱被單字咒語鎖住了！答對 3 題就能打開。' },
+  { id: 'sq_dawn_npc', island: 'isle_dawn', type: 'npc', name: '島民的問候', diff: 'easy', n: 4, dx: -9, dz: 7, npc: '👵',
+    intro: '琪琪奶奶想和你聊聊天，用英語回答她吧！' },
+  { id: 'sq_meadow_runes', island: 'isle_meadow', type: 'runes', name: '草原尋字', diff: 'easy', n: 2, dx: -8, dz: -4,
+    intro: '字母符文散落在草原上！撿回來拼出正確的單字。' },
+  { id: 'sq_meadow_arena', island: 'isle_meadow', type: 'arena', name: '史萊姆入侵', diff: 'easy', n: 3, mob: 'slime', dx: 2, dz: -12,
+    intro: '雲史萊姆入侵草原了！用英語魔法擊退牠們。' },
+  { id: 'sq_forest_gate', island: 'isle_forest', type: 'gate', name: '迷霧石門', diff: 'easy', n: 4, dx: 6, dz: 5,
+    intro: '古老的石門刻著文法謎題，答對 4 題才會敞開。' },
+  { id: 'sq_forest_listen', island: 'isle_forest', type: 'listen', name: '森林的回音', diff: 'easy', n: 5, dx: 10, dz: -4,
+    intro: '仔細聽森林水晶的聲音，點出你聽到的單字！' },
+  { id: 'sq_falls_pillars', island: 'isle_falls', type: 'pillars', name: '瀑布配對石', diff: 'easy', n: 5, dx: -6, dz: 5,
+    intro: '把英文單字和中文意思配成對，石柱就會發光！' },
+  { id: 'sq_flower_npc', island: 'isle_flower', type: 'npc', name: '花田茶會', diff: 'medium', n: 5, dx: 6, dz: -5, npc: '🧚',
+    intro: '花仙子邀請你參加茶會，禮貌地用英語應對吧！' },
+  { id: 'sq_mushroom_chest', island: 'isle_mushroom', type: 'chest', name: '蘑菇下的秘寶', diff: 'medium', n: 4, dx: -5, dz: -6,
+    intro: '大蘑菇底下藏著秘寶，答對單字題就是你的！' },
+  { id: 'sq_bridge_crystal', island: 'isle_dawn', type: 'bridge', name: '通往水晶的橋', diff: 'medium', n: 3, dx: 15, dz: -19,
+    intro: '逐字母拼出單字，每拼對一個字就會出現一段橋板！' },
+  { id: 'sq_ruins_gate', island: 'isle_ruins', type: 'gate', name: '古文明之門', diff: 'medium', n: 5, dx: 5, dz: -7,
+    intro: '遺跡之門考驗你的文法智慧，答對 5 題！' },
+  { id: 'sq_ruins_runes', island: 'isle_ruins', type: 'runes', name: '失落的銘文', diff: 'medium', n: 2, dx: -8, dz: 6,
+    intro: '收集失落的字母，還原古文明的銘文。' },
+  { id: 'sq_crystal_listen', island: 'isle_crystal', type: 'listen', name: '共鳴水晶', diff: 'medium', n: 6, dx: 5, dz: -5,
+    intro: '水晶會唸出單字，找到和聲音共鳴的那一顆！' },
+  { id: 'sq_cloud_race', island: 'isle_cloud', type: 'race', name: '雲海飛環', diff: 'medium', n: 8, time: 60, dx: -5, dz: 4,
+    intro: '限時穿越雲海中的光環！途中還要回答單字題。' },
+  { id: 'sq_library_pillars', island: 'isle_library', type: 'pillars', name: '圖書館書架', diff: 'medium', n: 6, dx: -5, dz: -4,
+    intro: '幫圖書館把英文書和中文書名排在一起！' },
+  { id: 'sq_market_npc', island: 'isle_market', type: 'npc', name: '市集大採購', diff: 'medium', n: 6, dx: 6, dz: 7, npc: '🧑‍🍳',
+    intro: '市集老闆只聽得懂英語，幫大家完成採購吧！' },
+  { id: 'sq_lava_arena', island: 'isle_lava', type: 'arena', name: '熔岩守衛', diff: 'hard', n: 4, mob: 'wisp', dx: -5, dz: 5,
+    intro: '熔岩守衛甦醒了！用進階英語魔法迎戰。' },
+  { id: 'sq_ice_chest', island: 'isle_ice', type: 'chest', name: '冰封寶庫', diff: 'hard', n: 5, dx: 4, dz: -6,
+    intro: '千年冰封的寶庫，只有單字大師能開啟。' },
+  { id: 'sq_wind_race', island: 'isle_wind', type: 'race', name: '風柱競速', diff: 'hard', n: 10, time: 55, dx: 6, dz: 3,
+    intro: '在風之柱間高速穿環，挑戰極限！' },
+  { id: 'sq_dragon_runes', island: 'isle_dragon', type: 'runes', name: '龍骨咒文', diff: 'hard', n: 3, dx: -6, dz: -5,
+    intro: '龍骨間散落著咒文字母，拼出遠古之語。' },
+  { id: 'sq_dragon_arena', island: 'isle_dragon', type: 'arena', name: '骨龍的爪牙', diff: 'hard', n: 5, mob: 'bat', dx: 7, dz: 6, lock: 8,
+    intro: '骨龍的爪牙守著荒島，這是場硬仗！' },
+  { id: 'sq_storm_boss', island: 'isle_storm', type: 'boss', name: '暴風巨像', diff: 'boss', n: 8, dx: 0, dz: 0, lock: 12,
+    intro: '吞噬天空的暴風巨像！集結你所有的英語之力，終結這場風暴！' },
+];
+
+// ===== Mobs (Part 3 combat) =====
+const SKY_MOBS = [
+  { id: 'slime', name: '雲史萊姆', hp: 1, quiz: 'vocab', diff: 'easy', color: 0x8fd4ff, speed: 3 },
+  { id: 'wisp', name: '風靈', hp: 2, quiz: 'vocab', diff: 'medium', color: 0xa8ffd8, speed: 3.8 },
+  { id: 'bat', name: '暗影蝙蝠', hp: 2, quiz: 'grammar', diff: 'medium', color: 0x5a4a7a, speed: 4.5 },
+];
+
 // Skin id → body tint for the voxel hero (head shows the emoji itself)
 const SKY_SKIN_TINTS = {
   default: 0x3aa6a0,
