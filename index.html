@@ -916,6 +916,9 @@
         </div>
         <div class="aw-start-stats" id="sky-start-stats"></div>
         <div class="aw-controls-guide" id="sky-controls-guide"></div>
+        <label class="aw-lowpower">
+          <input type="checkbox" id="sky-lowpower"> 🔋 省電模式（畫質降低、更順暢，舊裝置建議開啟）
+        </label>
         <button class="aw-start-btn" id="sky-start-btn">⚔️ 開始冒險</button>
       </div>
 
@@ -925,10 +928,17 @@
           <div class="aw-hearts" id="sky-hearts"></div>
           <div class="aw-location" id="sky-location">🏝️ 晨曦之島</div>
           <div class="aw-badge-title" id="sky-title-badge"></div>
+          <div class="aw-buffs" id="sky-buffs"></div>
+          <div class="aw-tracker" id="sky-tracker" style="display:none">
+            <span class="aw-tracker-arrow" id="sky-tracker-arrow">➤</span>
+            <span id="sky-tracker-text"></span>
+          </div>
         </div>
         <div class="aw-cam-btns">
+          <button class="aw-cam-btn" id="sky-btn-journal" title="任務日誌">📜</button>
           <button class="aw-cam-btn" id="sky-cam-reset" title="重設視角">🎯</button>
         </div>
+        <canvas class="aw-minimap" id="sky-minimap" width="140" height="140"></canvas>
         <div class="aw-hint" id="sky-hint" style="display:none"></div>
         <div class="aw-world-toast" id="sky-toast"></div>
         <div class="aw-joy-base" id="sky-joy"><div class="aw-joy-knob" id="sky-joy-knob"></div></div>
@@ -1176,6 +1186,20 @@
             <li>通關依first-try答對率獲得 1~3 顆星，解鎖下一章；章節進度自動儲存</li>
             <li>每答對一段對話獲得 XP＋寶石；通關有大獎勵</li>
             <li>提示水晶可刪去一個錯誤選項；雙倍經驗、寶石探測器都有效</li>
+          </ul>
+        </div>
+        <div class="help-section">
+          <h3>🏝️ 天空之城</h3>
+          <p>開放世界 3D 冒險！像 Minecraft / Roblox 一樣自由探索 16 座漂浮天空島，完成 22 個英語任務。</p>
+          <ul>
+            <li>電腦：WASD 移動、滑鼠拖曳轉視角、Space 跳（Shift 衝刺、E 互動）；手機：左手虛擬搖桿＋右手轉視角＋跳躍/互動鈕</li>
+            <li>找金色「!」標記接任務：拼字寶箱、文法石門、NPC 對話、聽力水晶、配對石柱、符文收集、逐字搭橋、飛環競速、怪物競技場</li>
+            <li>點擊怪物（或按 ⚡）進入戰鬥：答對英語題發射魔法彈，答錯不扣血，怪物只會舉盾換題</li>
+            <li>完成 12 個任務解鎖最終魔王「暴風巨像」——狂暴階段記得跳過衝擊波！</li>
+            <li>你裝備的「稱號」會變成特殊能力：速學者跑更快、傳說勇者能二段跳滑翔、冠軍傷害加倍⋯⋯每個稱號都不一樣</li>
+            <li>商店的 🪂 滑翔翼、🌨️ 彈跳雲靴、🔮 提示水晶、🪶 復活羽毛都能在島上使用</li>
+            <li>📜 任務日誌可追蹤任務，跟著羅盤箭頭走；右上角小地圖顯示所有島嶼</li>
+            <li>跳雲墊能把你彈上高空島；跌下虛空會扣一顆心，在原島復活</li>
           </ul>
         </div>
         <div class="help-section">

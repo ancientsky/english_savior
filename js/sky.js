@@ -141,11 +141,31 @@ const SkyGame = (() => {
       btnAct: document.getElementById('sky-btn-act'),
       belowHint: document.getElementById('sky-below-hint'),
       camReset: document.getElementById('sky-cam-reset'),
+      minimap: document.getElementById('sky-minimap'),
+      buffs: document.getElementById('sky-buffs'),
+      tracker: document.getElementById('sky-tracker'),
+      trackerArrow: document.getElementById('sky-tracker-arrow'),
+      trackerText: document.getElementById('sky-tracker-text'),
+      journalBtn: document.getElementById('sky-btn-journal'),
+      lowPower: document.getElementById('sky-lowpower'),
     };
     if (!els.zone) return;
 
     loadSave();
     renderStartScreen();
+    if (els.minimap) minimapCtx = els.minimap.getContext('2d');
+    els.journalBtn?.addEventListener('click', toggleJournal);
+    if (els.lowPower) {
+      els.lowPower.checked = lowPower();
+      els.lowPower.addEventListener('change', () => {
+        save.settings.lowPower = els.lowPower.checked;
+        persist();
+        if (threeReady) {
+          renderer.setPixelRatio(lowPower() ? 1 : Math.min(window.devicePixelRatio, 2));
+          showWorldToast(lowPower() ? '🔋 省電模式開啟（陰影下次進入時關閉）' : '✨ 高畫質模式（下次進入完整生效）');
+        }
+      });
+    }
 
     els.startBtn.addEventListener('click', startAdventure);
     els.camReset?.addEventListener('click', () => { cam.theta = heroYaw + Math.PI; cam.phi = 0.42; cam.radius = SKY_CONFIG.camRadius; });
@@ -285,10 +305,10 @@ const SkyGame = (() => {
   function initThree() {
     const { w, h } = canvasSize();
 
-    renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer = new THREE.WebGLRenderer({ antialias: !lowPower() });
+    renderer.setPixelRatio(lowPower() ? 1 : Math.min(window.devicePixelRatio, 2));
     renderer.setSize(w, h);
-    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.enabled = !lowPower();
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.domElement.className = 'aw-canvas';
     els.wrap.insertBefore(renderer.domElement, els.wrap.firstChild);
@@ -313,6 +333,7 @@ const SkyGame = (() => {
     SKY_PADS.forEach(buildPad);
     buildQuestObjects();
     AMBIENT_MOBS.forEach(a => spawnMob(a.mob, a.island, a.dx, a.dz));
+    buildParticles();
     buildPlayer();
     setupPointerControls();
 
@@ -373,7 +394,7 @@ const SkyGame = (() => {
 
   function buildClouds() {
     const rng = mulberry32(SKY_CONFIG.worldSeed);
-    const COUNT = 70;
+    const COUNT = lowPower() ? 36 : 70;
     const geo = new THREE.SphereGeometry(1, 7, 5);
     const mat = new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.85 });
     cloudMesh = new THREE.InstancedMesh(geo, mat, COUNT);
@@ -1066,6 +1087,248 @@ const SkyGame = (() => {
     else label = `${key}　📜 ${q.name}`;
     els.hint.textContent = label;
     els.hint.style.display = '';
+  }
+
+  // ===================== UI/UX polish (Part 5) =====================
+  let minimapCtx = null;
+  let minimapTimer = 0;
+  let buffBarTimer = 0;
+  let trackerTimer = 0;
+  let journalEl = null;
+  let particles = null;
+  let cullIdx = 0;
+  let fpsFrames = 0, fpsTime = 0, lowPowerSuggested = false;
+
+  const MINI_COLORS = {
+    grass: '#5cbf54', forest: '#2e7d3a', water: '#4aa8e8', flower: '#7fd070',
+    mushroom: '#9c7bb8', ruin: '#b8b09a', crystal: '#7fd8e8', cloud: '#eef6ff',
+    village: '#8fce62', ice: '#cfeaf8', lava: '#e86a2a', pillars: '#c9c3ae',
+    bone: '#d8cfae', storm: '#6a6a88',
+  };
+
+  function lowPower() { return !!save.settings.lowPower; }
+
+  function drawMinimap() {
+    if (!minimapCtx) return;
+    const ctx = minimapCtx;
+    const S = 140, C = S / 2;
+    const scale = C / 160;                 // 160 world units → map edge
+    ctx.clearRect(0, 0, S, S);
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(C, C, C - 2, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.fillStyle = 'rgba(8, 30, 55, 0.72)';
+    ctx.fillRect(0, 0, S, S);
+    // islands
+    for (const isle of SKY_ISLANDS) {
+      const dx = (isle.pos[0] - pos.x) * scale;
+      const dz = (isle.pos[2] - pos.z) * scale;
+      if (Math.abs(dx) > C + 30 || Math.abs(dz) > C + 30) continue;
+      ctx.beginPath();
+      ctx.arc(C + dx, C + dz, Math.max(2.5, isle.r * scale), 0, Math.PI * 2);
+      ctx.fillStyle = MINI_COLORS[isle.type] || '#5cbf54';
+      ctx.globalAlpha = 0.85;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    // quest dots
+    for (const it of interactables) {
+      const dx = (it.x - pos.x) * scale;
+      const dz = (it.z - pos.z) * scale;
+      if (Math.hypot(dx, dz) > C + 6) continue;
+      ctx.beginPath();
+      ctx.arc(C + dx, C + dz, 2.6, 0, Math.PI * 2);
+      ctx.fillStyle = isCleared(it.q) ? '#4ade80' : (isLocked(it.q) ? '#9aa5b5' : '#ffd166');
+      ctx.fill();
+    }
+    // tracked quest: pulsing ring (clamped to the rim when far)
+    if (save.tracked) {
+      const it = interactables.find(x => x.q.id === save.tracked);
+      if (it && !isCleared(it.q)) {
+        let dx = (it.x - pos.x) * scale, dz = (it.z - pos.z) * scale;
+        const d = Math.hypot(dx, dz);
+        if (d > C - 8) { dx = dx / d * (C - 8); dz = dz / d * (C - 8); }
+        ctx.beginPath();
+        ctx.arc(C + dx, C + dz, 5 + Math.sin(simTime * 5) * 1.5, 0, Math.PI * 2);
+        ctx.strokeStyle = '#ffd166';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+    }
+    // player arrow
+    ctx.save();
+    ctx.translate(C, C);
+    ctx.rotate(heroYaw + Math.PI);
+    ctx.beginPath();
+    ctx.moveTo(0, -6);
+    ctx.lineTo(4.5, 5);
+    ctx.lineTo(-4.5, 5);
+    ctx.closePath();
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+    ctx.restore();
+    // rim
+    ctx.restore();
+    ctx.beginPath();
+    ctx.arc(C, C, C - 2, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(150, 215, 255, 0.7)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
+  function updateBuffBar() {
+    if (!els.buffs) return;
+    const chips = [];
+    if (gliderOn) chips.push('🪂');
+    if (jumpBoostOn) chips.push('🌨️');
+    if (GameEngine.hasBuff('revive')) chips.push('🪶');
+    if (GameEngine.hasBuff('hint')) chips.push('🔮');
+    if (GameEngine.hasBuff('double_xp')) chips.push('📜×2');
+    if (GameEngine.hasBuff('double_gems')) chips.push('⚗️');
+    els.buffs.innerHTML = chips.map(c => `<span class="aw-buff-chip">${c}</span>`).join('');
+  }
+
+  function updateTracker() {
+    if (!els.tracker) return;
+    const it = save.tracked && interactables.find(x => x.q.id === save.tracked);
+    if (!it || isCleared(it.q)) {
+      els.tracker.style.display = 'none';
+      if (it && isCleared(it.q)) { save.tracked = null; persist(); }
+      return;
+    }
+    els.tracker.style.display = '';
+    const dx = it.x - pos.x, dz = it.z - pos.z;
+    const dist = Math.round(Math.hypot(dx, dz));
+    // arrow relative to the camera view direction
+    const ang = Math.atan2(dx, dz) - cam.theta + Math.PI;
+    els.trackerArrow.style.transform = `rotate(${Math.round(-ang * 180 / Math.PI + 180)}deg)`;
+    els.trackerText.textContent = `${it.q.name}　${dist}m`;
+  }
+
+  // ---- quest journal overlay ----
+  function toggleJournal() {
+    if (journalEl && journalEl.style.display !== 'none') {
+      journalEl.style.display = 'none';
+      return;
+    }
+    renderJournal();
+  }
+
+  function renderJournal() {
+    if (!journalEl) {
+      journalEl = document.createElement('div');
+      journalEl.className = 'aw-journal';
+      els.wrap.appendChild(journalEl);
+    }
+    const diffLabel = { easy: '簡單', medium: '中等', hard: '困難', boss: '魔王' };
+    const groups = new Map();
+    for (const q of SKY_QUESTS) {
+      if (!groups.has(q.island)) groups.set(q.island, []);
+      groups.get(q.island).push(q);
+    }
+    let rows = '';
+    for (const [isleId, qs] of groups) {
+      const isle = isleById(isleId);
+      rows += `<div class="aw-j-island">🏝️ ${isle.name}</div>`;
+      for (const q of qs) {
+        const cleared = isCleared(q);
+        const locked = isLocked(q);
+        const icon = cleared ? '✅' : (locked ? '🔒' : (q.type === 'boss' ? '⛈️' : '📜'));
+        const count = save.completed[q.id] ? `<span class="aw-j-count">×${save.completed[q.id]}</span>` : '';
+        const tier = SKY_REWARD[q.diff];
+        const tracked = save.tracked === q.id;
+        const trackBtn = cleared ? '' :
+          `<button class="aw-j-track${tracked ? ' on' : ''}" data-track="${q.id}">${tracked ? '🧭 追蹤中' : '追蹤'}</button>`;
+        rows += `
+          <div class="aw-j-row${cleared ? ' done' : ''}">
+            <span class="aw-j-icon">${icon}</span>
+            <span class="aw-j-name">${q.name}${count}</span>
+            <span class="aw-j-diff">${diffLabel[q.diff]}</span>
+            <span class="aw-j-reward">${tier.xp}XP+${tier.gems}💎</span>
+            ${trackBtn}
+          </div>`;
+      }
+    }
+    journalEl.innerHTML = `
+      <div class="aw-j-card">
+        <div class="aw-j-head">
+          <b>📜 任務日誌　${totalCleared()} / ${SKY_QUESTS.length}</b>
+          <button class="aw-quiz-close" id="sky-j-close">✕</button>
+        </div>
+        <div class="aw-j-list">${rows}</div>
+      </div>`;
+    journalEl.style.display = '';
+    journalEl.querySelector('#sky-j-close').addEventListener('click', () => {
+      journalEl.style.display = 'none';
+    });
+    journalEl.querySelectorAll('[data-track]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        save.tracked = save.tracked === btn.dataset.track ? null : btn.dataset.track;
+        persist();
+        renderJournal();
+        updateTracker();
+      });
+    });
+  }
+
+  // ---- confetti celebration ----
+  function spawnConfetti(n = 36) {
+    const colors = ['#ffd166', '#ff6b81', '#4ade80', '#7fd4ff', '#c77dff', '#fff'];
+    for (let i = 0; i < n; i++) {
+      const c = document.createElement('div');
+      c.className = 'aw-confetti';
+      c.style.left = 8 + Math.random() * 84 + '%';
+      c.style.background = colors[i % colors.length];
+      c.style.animationDelay = Math.random() * 0.5 + 's';
+      c.style.animationDuration = 1.6 + Math.random() * 1.2 + 's';
+      c.style.transform = `rotate(${Math.random() * 360}deg)`;
+      els.wrap.appendChild(c);
+      setTimeout(() => c.remove(), 3200);
+    }
+  }
+
+  // ---- ambient sparkle particles ----
+  function buildParticles() {
+    if (lowPower()) return;
+    const N = 420;
+    const geo = new THREE.BufferGeometry();
+    const arr = new Float32Array(N * 3);
+    const rng = mulberry32(SKY_CONFIG.worldSeed + 5);
+    for (let i = 0; i < N; i++) {
+      arr[i * 3] = -320 + rng() * 640;
+      arr[i * 3 + 1] = rng() * 110 - 10;
+      arr[i * 3 + 2] = -320 + rng() * 640;
+    }
+    geo.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+    particles = new THREE.Points(geo, new THREE.PointsMaterial({
+      color: 0xffffff, size: 1.1, transparent: true, opacity: 0.55, sizeAttenuation: true,
+    }));
+    scene.add(particles);
+  }
+
+  // ---- distance culling + fps watchdog (called from updateWorld) ----
+  function updateCulling() {
+    for (let k = 0; k < 2; k++) {
+      cullIdx = (cullIdx + 1) % SKY_ISLANDS.length;
+      const isle = SKY_ISLANDS[cullIdx];
+      const g = islandGroups[isle.id];
+      if (g) g.visible = Math.hypot(isle.pos[0] - pos.x, isle.pos[2] - pos.z) < 340;
+    }
+  }
+
+  function watchFps(dt) {
+    fpsFrames++;
+    fpsTime += dt;
+    if (fpsTime >= 5) {
+      const fps = fpsFrames / fpsTime;
+      fpsFrames = 0;
+      fpsTime = 0;
+      if (fps < 18 && !lowPower() && !lowPowerSuggested) {
+        lowPowerSuggested = true;
+        showWorldToast('🔋 畫面有點卡？回到開始畫面勾選「省電模式」會更順！');
+      }
+    }
   }
 
   // ===================== combat & advanced quests (Part 3) =====================
@@ -2310,12 +2573,22 @@ const SkyGame = (() => {
     updateRace(dt);
     updateRunePickup();
     // slowly regain hearts out of combat
-    if (playing && hearts < SKY_CONFIG.maxHearts && simTime - lastDamageAt > 20) {
+    if (playing && hearts < maxHearts() && simTime - lastDamageAt > 20) {
       hearts++;
       lastDamageAt = simTime;
       updateHudHearts();
       showWorldToast('💗 恢復了一顆心！');
     }
+    // Part 5 HUD & perf upkeep
+    minimapTimer += dt;
+    if (minimapTimer > 0.12) { minimapTimer = 0; drawMinimap(); }
+    buffBarTimer += dt;
+    if (buffBarTimer > 1) { buffBarTimer = 0; updateBuffBar(); }
+    trackerTimer += dt;
+    if (trackerTimer > 0.15) { trackerTimer = 0; updateTracker(); }
+    updateCulling();
+    watchFps(dt);
+    if (particles) particles.rotation.y += dt * 0.004;
     // drifting clouds (cheap: advance a third of them per frame)
     if (cloudMesh) {
       const m = new THREE.Matrix4();
@@ -2790,6 +3063,7 @@ const SkyGame = (() => {
       if (q.type === 'boss') GameEngine.recordSkyBoss?.();
     }
     SoundManager.playQuestComplete();
+    if (first) spawnConfetti(q.type === 'boss' ? 70 : 36);
     updateQuestMarkers();
     renderStartScreen();
     quiz.npc.style.display = 'none';
