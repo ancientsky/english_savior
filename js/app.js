@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
   [
     MinecraftGame, RobloxGame, YoutubeGame, SpellingGame, ListeningGame,
     EmpireGame, CandyGame, SlingGame, BuilderGame, SpeakGame, TowerGame,
-    RpgGame, DailyQuests, CloudSave,
+    RpgGame, SkyGame, DailyQuests, CloudSave,
   ].forEach(mod => {
     try {
       mod.init();
@@ -30,6 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (zone === 'empire') EmpireGame.onShow();
       if (zone === 'sling') SlingGame.onShow();
       if (zone === 'spelling') SpellingGame.onShow();
+      if (zone === 'sky') SkyGame.onShow();
     });
   });
 

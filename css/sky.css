@@ -1,0 +1,712 @@
+/* ===== Sky Citadel (天空之城) — open-world 3D theme, prefix aw- ===== */
+
+.aw-container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.aw-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.aw-header h2 {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 1.05rem;
+  color: #aee9ff;
+  text-shadow: 0 0 12px rgba(90, 190, 255, 0.55);
+}
+
+/* ---------- Start screen ---------- */
+#sky-start {
+  position: relative;
+  overflow: hidden;
+  border-radius: 18px;
+  border: 2px solid #5db8f0;
+  background:
+    radial-gradient(ellipse 60% 40% at 75% 18%, rgba(255, 240, 180, 0.35), transparent 60%),
+    linear-gradient(180deg, #0c2a4d 0%, #17548c 40%, #3f97d6 75%, #a5dcf7 100%);
+  padding: 34px 22px 30px;
+  text-align: center;
+  box-shadow: 0 10px 40px rgba(20, 90, 160, 0.45);
+}
+
+.aw-start-title {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 1.35rem;
+  color: #fff;
+  text-shadow: 0 3px 0 #1a5c96, 0 0 24px rgba(140, 220, 255, 0.8);
+  margin-bottom: 10px;
+}
+
+.aw-start-sub {
+  color: #dff2ff;
+  margin-bottom: 18px;
+  line-height: 1.7;
+}
+
+/* Floating CSS island art */
+.aw-isle-art {
+  position: relative;
+  height: 130px;
+  margin: 6px auto 16px;
+  max-width: 520px;
+  pointer-events: none;
+}
+.aw-isle {
+  position: absolute;
+  animation: awFloat 5s ease-in-out infinite;
+}
+.aw-isle .top {
+  width: 110px;
+  height: 26px;
+  background: linear-gradient(180deg, #6fce62, #3f9c4a);
+  border-radius: 50% 50% 40% 40%;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.15) inset;
+}
+.aw-isle .rock {
+  width: 76px;
+  height: 44px;
+  margin: -8px auto 0;
+  background: linear-gradient(180deg, #8a6a4c, #5b4230);
+  clip-path: polygon(0 0, 100% 0, 74% 70%, 50% 100%, 26% 70%);
+}
+.aw-isle .deco {
+  position: absolute;
+  top: -22px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 24px;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+.aw-isle.small { transform: scale(0.62); }
+.aw-isle.i1 { left: 4%; top: 26px; animation-delay: 0s; }
+.aw-isle.i2 { left: 40%; top: 0; animation-delay: 1.2s; }
+.aw-isle.i3 { right: 4%; top: 34px; animation-delay: 2.3s; }
+@keyframes awFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+.aw-isle.small { animation-name: awFloatSmall; }
+@keyframes awFloatSmall {
+  0%, 100% { transform: scale(0.62) translateY(0); }
+  50% { transform: scale(0.62) translateY(-14px); }
+}
+
+.aw-start-stats {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.aw-stat {
+  background: rgba(8, 40, 72, 0.55);
+  border: 1px solid rgba(140, 210, 255, 0.4);
+  border-radius: 12px;
+  padding: 10px 16px;
+  min-width: 110px;
+  color: #eaf7ff;
+}
+.aw-stat span { font-size: 1.3rem; display: block; }
+.aw-stat b { font-size: 1.05rem; display: block; margin: 2px 0; }
+.aw-stat small { color: #a8d4ef; }
+
+.aw-controls-guide {
+  display: inline-block;
+  text-align: left;
+  background: rgba(8, 40, 72, 0.5);
+  border: 1px solid rgba(140, 210, 255, 0.35);
+  border-radius: 12px;
+  padding: 12px 18px;
+  color: #d7edfc;
+  line-height: 1.9;
+  margin-bottom: 20px;
+  font-size: 0.92rem;
+}
+.aw-controls-guide .kbd {
+  display: inline-block;
+  background: #123c63;
+  border: 1px solid #4c92c9;
+  border-bottom-width: 3px;
+  border-radius: 6px;
+  padding: 1px 8px;
+  margin: 0 2px;
+  font-family: monospace;
+  color: #ffe9a8;
+}
+
+.aw-start-btn {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 1rem;
+  padding: 16px 34px;
+  border: none;
+  border-radius: 14px;
+  cursor: pointer;
+  color: #16324e;
+  background: linear-gradient(180deg, #ffe98a, #f5b830);
+  box-shadow: 0 6px 0 #b07d14, 0 10px 24px rgba(0, 0, 0, 0.35);
+  transition: transform 0.12s, box-shadow 0.12s;
+  display: block;
+  margin: 0 auto;
+}
+.aw-start-btn:hover { transform: translateY(-2px); }
+.aw-start-btn:active { transform: translateY(3px); box-shadow: 0 2px 0 #b07d14; }
+
+/* ---------- 3D canvas + overlays ---------- */
+.aw-canvas-wrap {
+  position: relative;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 2px solid #5db8f0;
+  background: #7ec3ea;
+  touch-action: none;          /* we manage all gestures ourselves */
+  user-select: none;
+  -webkit-user-select: none;
+}
+.aw-canvas-wrap canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* In-game HUD (top-left): hearts + current island */
+.aw-hud {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+  z-index: 5;
+}
+.aw-hearts {
+  font-size: 1.1rem;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.45));
+  letter-spacing: 2px;
+}
+.aw-location {
+  background: rgba(10, 40, 70, 0.6);
+  border: 1px solid rgba(150, 215, 255, 0.5);
+  color: #eaf7ff;
+  border-radius: 10px;
+  padding: 4px 12px;
+  font-size: 0.85rem;
+  width: fit-content;
+  backdrop-filter: blur(2px);
+}
+.aw-badge-title {
+  background: rgba(120, 70, 10, 0.65);
+  border: 1px solid rgba(255, 210, 110, 0.6);
+  color: #ffe9a8;
+  border-radius: 10px;
+  padding: 3px 10px;
+  font-size: 0.78rem;
+  width: fit-content;
+}
+
+/* Interact hint (Ⓔ) bottom-center */
+.aw-hint {
+  position: absolute;
+  bottom: 88px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(10, 40, 70, 0.75);
+  border: 1px solid #8fd4ff;
+  color: #fff;
+  border-radius: 12px;
+  padding: 8px 18px;
+  font-size: 0.95rem;
+  z-index: 6;
+  pointer-events: none;
+  animation: awPulse 1.4s ease-in-out infinite;
+  white-space: nowrap;
+}
+@keyframes awPulse {
+  0%, 100% { transform: translateX(-50%) scale(1); }
+  50% { transform: translateX(-50%) scale(1.06); }
+}
+
+/* Void-fall white flash / damage red flash */
+.aw-flash {
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 8;
+  transition: opacity 0.35s;
+}
+.aw-flash.on { opacity: 1; transition: opacity 0.05s; }
+.aw-flash.red { background: radial-gradient(ellipse at center, transparent 40%, rgba(220, 40, 40, 0.55)); }
+
+/* Boss HP bar */
+.aw-bossbar {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(420px, 70%);
+  z-index: 6;
+  pointer-events: none;
+}
+.aw-bossbar-label {
+  text-align: center;
+  color: #ffd7d7;
+  font-weight: bold;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+  margin-bottom: 4px;
+}
+.aw-bossbar-track {
+  height: 14px;
+  border-radius: 8px;
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  background: rgba(20, 20, 40, 0.6);
+  overflow: hidden;
+}
+.aw-bossbar-fill {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, #ff4d6d, #c9184a);
+  transition: width 0.4s;
+}
+
+/* Race timer */
+.aw-race {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(10, 40, 70, 0.75);
+  border: 1px solid #ffd166;
+  color: #ffe9a8;
+  border-radius: 12px;
+  padding: 6px 18px;
+  font-size: 1.05rem;
+  font-weight: bold;
+  z-index: 6;
+  pointer-events: none;
+}
+
+/* Spelling (bridge / runes) */
+.aw-spell-slots {
+  display: inline-block;
+  font-family: monospace;
+  font-size: 1.3rem;
+  letter-spacing: 2px;
+  color: #ffd166;
+  margin-left: 6px;
+}
+.aw-letters {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+.aw-letter {
+  min-width: 52px;
+  font-family: monospace;
+  font-size: 1.2rem;
+  font-weight: bold;
+  padding: 12px 8px;
+}
+
+/* Toast inside the world (e.g. island discovered) */
+.aw-world-toast {
+  position: absolute;
+  top: 54px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(16, 58, 94, 0.85);
+  border: 1px solid #8fd4ff;
+  color: #fff;
+  border-radius: 12px;
+  padding: 8px 22px;
+  font-size: 1rem;
+  z-index: 7;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.4s, transform 0.4s;
+}
+.aw-world-toast.on {
+  opacity: 1;
+  transform: translateX(-50%) translateY(6px);
+}
+
+/* ---------- Mobile controls ---------- */
+.aw-joy-base {
+  position: absolute;
+  width: 110px;
+  height: 110px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.12);
+  z-index: 6;
+  pointer-events: none;
+  display: none;
+  transform: translate(-50%, -50%);
+}
+.aw-joy-knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.75);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
+  transform: translate(-50%, -50%);
+}
+
+.aw-touch-btns {
+  position: absolute;
+  right: 14px;
+  bottom: 16px;
+  display: none;
+  gap: 12px;
+  z-index: 6;
+}
+.aw-touch-btn {
+  width: 62px;
+  height: 62px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.7);
+  background: rgba(20, 70, 110, 0.55);
+  color: #fff;
+  font-size: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.aw-touch-btn:active {
+  background: rgba(120, 200, 255, 0.65);
+  transform: scale(0.94);
+}
+.aw-canvas-wrap.touch-mode .aw-touch-btns { display: flex; }
+
+/* ---------- Quiz overlay ---------- */
+.aw-quiz {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8, 22, 40, 0.45);
+  z-index: 10;
+  padding: 14px;
+}
+.aw-quiz.on { display: flex; }
+.aw-quiz-card {
+  width: min(560px, 100%);
+  max-height: 92%;
+  overflow-y: auto;
+  background: linear-gradient(180deg, #10365c, #0c2a4a);
+  border: 2px solid #7fd4ff;
+  border-radius: 16px;
+  padding: 16px 18px;
+  color: #eaf7ff;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+.aw-quiz-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.aw-quiz-name { font-weight: bold; color: #ffe9a8; flex: 1; }
+.aw-quiz-prog { color: #8fd4ff; letter-spacing: 3px; font-size: 0.8rem; }
+.aw-quiz-close {
+  border: 1px solid rgba(150, 215, 255, 0.5);
+  background: rgba(10, 40, 70, 0.6);
+  color: #cfeaff;
+  border-radius: 8px;
+  width: 30px; height: 30px;
+  cursor: pointer;
+}
+.aw-quiz-npc {
+  font-size: 2.2rem;
+  text-align: center;
+  margin-bottom: 4px;
+}
+.aw-quiz-prompt {
+  font-size: 1.15rem;
+  line-height: 1.7;
+  text-align: center;
+  margin-bottom: 6px;
+}
+.aw-blank {
+  color: #ffd166;
+  border-bottom: 2px dashed #ffd166;
+  padding: 0 4px;
+}
+.aw-quiz-zh {
+  color: #a8d4ef;
+  text-align: center;
+  font-size: 0.92rem;
+  margin-bottom: 8px;
+  min-height: 1.2em;
+}
+.aw-zh-key { color: #ffd166; }
+.aw-quiz-tts,
+.aw-quiz-hint {
+  display: block;
+  margin: 0 auto 10px;
+  border: 1px solid #4c92c9;
+  background: #123c63;
+  color: #cfeaff;
+  border-radius: 10px;
+  padding: 6px 16px;
+  cursor: pointer;
+}
+.aw-quiz-hint {
+  border-color: #b07fff;
+  background: #2a1a52;
+  color: #e2ccff;
+}
+.aw-opt.dim { opacity: 0.3; text-decoration: line-through; }
+.aw-perk-hint { color: #ffd166; font-weight: bold; }
+.aw-quiz-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.aw-opt {
+  border: 2px solid #3a7ab0;
+  background: #14487a;
+  color: #fff;
+  border-radius: 12px;
+  padding: 13px 10px;
+  font-size: 1.02rem;
+  cursor: pointer;
+  transition: transform 0.1s, background 0.15s;
+  font-family: inherit;
+  line-height: 1.4;
+}
+.aw-opt:hover:not(:disabled) { background: #1a5a96; transform: translateY(-1px); }
+.aw-opt:disabled { cursor: default; opacity: 0.85; }
+.aw-opt.right { background: #1f8a4c; border-color: #4ade80; opacity: 1; }
+.aw-opt.wrong { background: #8a2f35; border-color: #f87171; opacity: 0.7; }
+.aw-opt-go {
+  grid-column: 1 / -1;
+  background: linear-gradient(180deg, #ffe98a, #f5b830);
+  border: none;
+  color: #16324e;
+  font-weight: bold;
+  font-size: 1.05rem;
+  box-shadow: 0 4px 0 #b07d14;
+}
+.aw-opt-go:hover:not(:disabled) { background: linear-gradient(180deg, #fff0a0, #f7c246); }
+.aw-quiz-feedback {
+  margin-top: 10px;
+  text-align: center;
+  min-height: 1.4em;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+.aw-quiz-feedback.good { color: #86efac; }
+.aw-clear-reward {
+  margin-top: 8px;
+  font-size: 1.2rem;
+  color: #ffd166;
+}
+
+/* pillars matching grid */
+.aw-pairs {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.aw-pair-col { display: flex; flex-direction: column; gap: 8px; }
+.aw-pair.picked { background: #2a6aa8; border-color: #8fd4ff; box-shadow: 0 0 0 2px #8fd4ff inset; }
+.aw-pair.matched {
+  background: #1f8a4c;
+  border-color: #4ade80;
+  opacity: 0.65;
+  cursor: default;
+}
+
+@media (max-width: 640px) {
+  .aw-quiz { align-items: flex-end; padding: 0; }
+  .aw-quiz-card {
+    width: 100%;
+    border-radius: 16px 16px 0 0;
+    max-height: 78%;
+  }
+  .aw-quiz-options { grid-template-columns: 1fr; }
+  .aw-pairs { grid-template-columns: 1fr 1fr; }
+}
+
+/* ---------- Part 5: minimap / journal / tracker / buffs / confetti ---------- */
+/* beats the generic `.aw-canvas-wrap canvas { width:100% }` rule */
+.aw-canvas-wrap canvas.aw-minimap {
+  position: absolute;
+  top: 52px;
+  right: 10px;
+  width: 140px;
+  height: 140px;
+  z-index: 5;
+  pointer-events: none;
+}
+.aw-buffs { display: flex; gap: 4px; }
+.aw-buff-chip {
+  background: rgba(10, 40, 70, 0.65);
+  border: 1px solid rgba(255, 210, 110, 0.5);
+  border-radius: 8px;
+  padding: 2px 7px;
+  font-size: 0.85rem;
+}
+.aw-tracker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(120, 70, 10, 0.6);
+  border: 1px solid #ffd166;
+  border-radius: 10px;
+  padding: 4px 10px;
+  color: #ffe9a8;
+  font-size: 0.85rem;
+  width: fit-content;
+}
+.aw-tracker-arrow {
+  display: inline-block;
+  font-size: 1rem;
+  transition: transform 0.2s;
+  color: #ffd166;
+}
+
+.aw-journal {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8, 22, 40, 0.5);
+  z-index: 11;
+  padding: 14px;
+}
+.aw-j-card {
+  width: min(520px, 100%);
+  max-height: 90%;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, #10365c, #0c2a4a);
+  border: 2px solid #ffd166;
+  border-radius: 16px;
+  padding: 14px 16px;
+  color: #eaf7ff;
+}
+.aw-j-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  color: #ffe9a8;
+}
+.aw-j-list { overflow-y: auto; }
+.aw-j-island {
+  margin: 10px 0 4px;
+  color: #8fd4ff;
+  font-weight: bold;
+  border-bottom: 1px solid rgba(140, 210, 255, 0.25);
+  padding-bottom: 2px;
+}
+.aw-j-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 2px;
+  font-size: 0.92rem;
+}
+.aw-j-row.done { opacity: 0.65; }
+.aw-j-name { flex: 1; }
+.aw-j-count { color: #8fd4ff; font-size: 0.8rem; margin-left: 4px; }
+.aw-j-diff { color: #a8d4ef; font-size: 0.8rem; }
+.aw-j-reward { color: #ffd166; font-size: 0.8rem; }
+.aw-j-track {
+  border: 1px solid #4c92c9;
+  background: #123c63;
+  color: #cfeaff;
+  border-radius: 8px;
+  padding: 3px 10px;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+.aw-j-track.on { border-color: #ffd166; color: #ffe9a8; background: #6a4a10; }
+
+.aw-confetti {
+  position: absolute;
+  top: -12px;
+  width: 10px;
+  height: 14px;
+  z-index: 12;
+  pointer-events: none;
+  animation: awConfettiFall 2s ease-in forwards;
+}
+@keyframes awConfettiFall {
+  0% { transform: translateY(0) rotate(0); opacity: 1; }
+  100% { transform: translateY(105vh) rotate(540deg); opacity: 0.6; }
+}
+
+.aw-lowpower {
+  display: block;
+  color: #cfe8fa;
+  margin: 0 auto 16px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  width: fit-content;
+}
+.aw-lowpower input { transform: scale(1.2); margin-right: 6px; }
+
+@media (max-width: 640px) {
+  .aw-canvas-wrap canvas.aw-minimap { width: 96px; height: 96px; top: 50px; }
+  .aw-j-diff, .aw-j-reward { display: none; }
+}
+
+/* Camera helper buttons (desktop) */
+.aw-cam-btns {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  display: flex;
+  gap: 6px;
+  z-index: 6;
+}
+.aw-cam-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid rgba(150, 215, 255, 0.6);
+  background: rgba(10, 40, 70, 0.6);
+  color: #cfeaff;
+  font-size: 1rem;
+  cursor: pointer;
+}
+.aw-cam-btn:hover { background: rgba(30, 80, 130, 0.75); }
+
+.aw-below-hint {
+  margin-top: 10px;
+  color: var(--text-dim, #9ab);
+  text-align: center;
+  font-size: 0.88rem;
+  line-height: 1.7;
+}
+
+/* Maximized mode: canvas already resizes via JS; just drop rounding */
+body.game-max #zone-sky .aw-canvas-wrap { border-radius: 8px; }
+
+@media (max-width: 640px) {
+  .aw-start-title { font-size: 1rem; }
+  .aw-controls-guide { font-size: 0.84rem; padding: 10px 12px; }
+  .aw-header h2 { font-size: 0.9rem; }
+  .aw-hint { bottom: 120px; font-size: 0.88rem; }
+}

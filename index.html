@@ -89,19 +89,20 @@
   </script>
 
   <title>English Savior — 英語救星</title>
-  <link rel="stylesheet" href="css/style.css?v=12">
-  <link rel="stylesheet" href="css/minecraft.css?v=12">
-  <link rel="stylesheet" href="css/roblox.css?v=12">
-  <link rel="stylesheet" href="css/youtube.css?v=12">
-  <link rel="stylesheet" href="css/spelling.css?v=12">
-  <link rel="stylesheet" href="css/listening.css?v=12">
-  <link rel="stylesheet" href="css/empire.css?v=12">
-  <link rel="stylesheet" href="css/candy.css?v=12">
-  <link rel="stylesheet" href="css/sling.css?v=12">
-  <link rel="stylesheet" href="css/builder.css?v=12">
-  <link rel="stylesheet" href="css/speak.css?v=12">
-  <link rel="stylesheet" href="css/tower.css?v=12">
-  <link rel="stylesheet" href="css/rpg.css?v=12">
+  <link rel="stylesheet" href="css/style.css?v=13">
+  <link rel="stylesheet" href="css/minecraft.css?v=13">
+  <link rel="stylesheet" href="css/roblox.css?v=13">
+  <link rel="stylesheet" href="css/youtube.css?v=13">
+  <link rel="stylesheet" href="css/spelling.css?v=13">
+  <link rel="stylesheet" href="css/listening.css?v=13">
+  <link rel="stylesheet" href="css/empire.css?v=13">
+  <link rel="stylesheet" href="css/candy.css?v=13">
+  <link rel="stylesheet" href="css/sling.css?v=13">
+  <link rel="stylesheet" href="css/builder.css?v=13">
+  <link rel="stylesheet" href="css/speak.css?v=13">
+  <link rel="stylesheet" href="css/tower.css?v=13">
+  <link rel="stylesheet" href="css/rpg.css?v=13">
+  <link rel="stylesheet" href="css/sky.css?v=13">
 </head>
 <body>
   <!-- Top HUD Bar -->
@@ -168,6 +169,9 @@
     </button>
     <button class="nav-tab" data-zone="rpg">
       <span class="nav-icon">🗡️</span><span class="nav-label">英語冒險物語</span>
+    </button>
+    <button class="nav-tab" data-zone="sky">
+      <span class="nav-icon">🏝️</span><span class="nav-label">天空之城</span>
     </button>
     <button class="nav-tab" data-zone="daily">
       <span class="nav-icon">📋</span><span class="nav-label">每日任務</span>
@@ -251,6 +255,12 @@
           <h3>英語冒險物語</h3>
           <p>Undertale 風格 2D RPG！探索村莊、和 NPC 用英語對話闖關！</p>
           <span class="card-tag">Story RPG</span>
+        </div>
+        <div class="hub-card sky-card" data-zone="sky">
+          <div class="card-icon">🏝️</div>
+          <h3>天空之城</h3>
+          <p>開放世界 3D 冒險！在漂浮天空島之間跑酷探索、解謎闖關！</p>
+          <span class="card-tag">Open World 3D</span>
         </div>
       </div>
     </div>
@@ -884,6 +894,66 @@
     </div>
   </main>
 
+  <!-- Zone: Sky Citadel (天空之城) open-world 3D -->
+  <main id="zone-sky" class="zone">
+    <div class="aw-container">
+      <div class="aw-header">
+        <h2>🏝️ 天空之城</h2>
+        <button class="zone-fs-btn" title="遊戲畫面最大化">⛶</button>
+      </div>
+
+      <!-- Start screen -->
+      <div id="sky-start">
+        <div class="aw-start-title">SKY CITADEL</div>
+        <p class="aw-start-sub">
+          傳說中漂浮在雲海之上的天空之城！<br>
+          在 16 座浮空島之間跑酷探索，完成英語解謎任務，打倒暴風魔王吧！
+        </p>
+        <div class="aw-isle-art">
+          <div class="aw-isle small i1"><span class="deco">🌲</span><div class="top"></div><div class="rock"></div></div>
+          <div class="aw-isle i2"><span class="deco">🏰</span><div class="top"></div><div class="rock"></div></div>
+          <div class="aw-isle small i3"><span class="deco">💎</span><div class="top"></div><div class="rock"></div></div>
+        </div>
+        <div class="aw-start-stats" id="sky-start-stats"></div>
+        <div class="aw-controls-guide" id="sky-controls-guide"></div>
+        <label class="aw-lowpower">
+          <input type="checkbox" id="sky-lowpower"> 🔋 省電模式（畫質降低、更順暢，舊裝置建議開啟）
+        </label>
+        <button class="aw-start-btn" id="sky-start-btn">⚔️ 開始冒險</button>
+      </div>
+
+      <!-- 3D world -->
+      <div class="aw-canvas-wrap" id="sky-canvas-wrap" style="display:none">
+        <div class="aw-hud">
+          <div class="aw-hearts" id="sky-hearts"></div>
+          <div class="aw-location" id="sky-location">🏝️ 晨曦之島</div>
+          <div class="aw-badge-title" id="sky-title-badge"></div>
+          <div class="aw-buffs" id="sky-buffs"></div>
+          <div class="aw-tracker" id="sky-tracker" style="display:none">
+            <span class="aw-tracker-arrow" id="sky-tracker-arrow">➤</span>
+            <span id="sky-tracker-text"></span>
+          </div>
+        </div>
+        <div class="aw-cam-btns">
+          <button class="aw-cam-btn" id="sky-btn-journal" title="任務日誌">📜</button>
+          <button class="aw-cam-btn" id="sky-cam-reset" title="重設視角">🎯</button>
+        </div>
+        <canvas class="aw-minimap" id="sky-minimap" width="140" height="140"></canvas>
+        <div class="aw-hint" id="sky-hint" style="display:none"></div>
+        <div class="aw-world-toast" id="sky-toast"></div>
+        <div class="aw-joy-base" id="sky-joy"><div class="aw-joy-knob" id="sky-joy-knob"></div></div>
+        <div class="aw-touch-btns">
+          <button class="aw-touch-btn" id="sky-btn-jump" title="跳躍">🦘</button>
+          <button class="aw-touch-btn" id="sky-btn-act" title="互動">⚡</button>
+        </div>
+        <div class="aw-flash" id="sky-flash"></div>
+      </div>
+      <p class="aw-below-hint" id="sky-below-hint" style="display:none">
+        ⌨️ WASD／方向鍵移動 ・ 🖱️ 拖曳畫面轉視角、滾輪縮放 ・ Space 跳躍 ・ Shift 衝刺 ・ E 互動
+      </p>
+    </div>
+  </main>
+
   <!-- Zone: Daily Quests -->
   <main id="zone-daily" class="zone">
     <div class="daily-container">
@@ -1119,6 +1189,20 @@
           </ul>
         </div>
         <div class="help-section">
+          <h3>🏝️ 天空之城</h3>
+          <p>開放世界 3D 冒險！像 Minecraft / Roblox 一樣自由探索 16 座漂浮天空島，完成 22 個英語任務。</p>
+          <ul>
+            <li>電腦：WASD 移動、滑鼠拖曳轉視角、Space 跳（Shift 衝刺、E 互動）；手機：左手虛擬搖桿＋右手轉視角＋跳躍/互動鈕</li>
+            <li>找金色「!」標記接任務：拼字寶箱、文法石門、NPC 對話、聽力水晶、配對石柱、符文收集、逐字搭橋、飛環競速、怪物競技場</li>
+            <li>點擊怪物（或按 ⚡）進入戰鬥：答對英語題發射魔法彈，答錯不扣血，怪物只會舉盾換題</li>
+            <li>完成 12 個任務解鎖最終魔王「暴風巨像」——狂暴階段記得跳過衝擊波！</li>
+            <li>你裝備的「稱號」會變成特殊能力：速學者跑更快、傳說勇者能二段跳滑翔、冠軍傷害加倍⋯⋯每個稱號都不一樣</li>
+            <li>商店的 🪂 滑翔翼、🌨️ 彈跳雲靴、🔮 提示水晶、🪶 復活羽毛都能在島上使用</li>
+            <li>📜 任務日誌可追蹤任務，跟著羅盤箭頭走；右上角小地圖顯示所有島嶼</li>
+            <li>跳雲墊能把你彈上高空島；跌下虛空會扣一顆心，在原島復活</li>
+          </ul>
+        </div>
+        <div class="help-section">
           <h3>📋 每日任務</h3>
           <p>每天完成任務可各獲得 10 XP，全部完成再送 50 💎 和神秘寶箱！</p>
           <ul>
@@ -1185,29 +1269,31 @@
   <!-- Toast notifications -->
   <div id="toast-container"></div>
 
-  <script src="js/vendor/three.min.js?v=12"></script>
-  <script src="js/tts.js?v=12"></script>
-  <script src="js/data/vocab.js?v=12"></script>
-  <script src="js/data/grammar.js?v=12"></script>
-  <script src="js/data/video.js?v=12"></script>
-  <script src="js/data/game.js?v=12"></script>
-  <script src="js/data/empire.js?v=12"></script>
-  <script src="js/data/rpg.js?v=12"></script>
-  <script src="js/engine.js?v=12"></script>
-  <script src="js/minecraft.js?v=12"></script>
-  <script src="js/roblox.js?v=12"></script>
-  <script src="js/youtube.js?v=12"></script>
-  <script src="js/spelling.js?v=12"></script>
-  <script src="js/listening.js?v=12"></script>
-  <script src="js/empire.js?v=12"></script>
-  <script src="js/candy.js?v=12"></script>
-  <script src="js/sling.js?v=12"></script>
-  <script src="js/builder.js?v=12"></script>
-  <script src="js/speak.js?v=12"></script>
-  <script src="js/tower.js?v=12"></script>
-  <script src="js/rpg.js?v=12"></script>
-  <script src="js/cloud.js?v=12"></script>
-  <script src="js/daily.js?v=12"></script>
-  <script src="js/app.js?v=12"></script>
+  <script src="js/vendor/three.min.js?v=13"></script>
+  <script src="js/tts.js?v=13"></script>
+  <script src="js/data/vocab.js?v=13"></script>
+  <script src="js/data/grammar.js?v=13"></script>
+  <script src="js/data/video.js?v=13"></script>
+  <script src="js/data/game.js?v=13"></script>
+  <script src="js/data/empire.js?v=13"></script>
+  <script src="js/data/rpg.js?v=13"></script>
+  <script src="js/data/sky.js?v=13"></script>
+  <script src="js/engine.js?v=13"></script>
+  <script src="js/minecraft.js?v=13"></script>
+  <script src="js/roblox.js?v=13"></script>
+  <script src="js/youtube.js?v=13"></script>
+  <script src="js/spelling.js?v=13"></script>
+  <script src="js/listening.js?v=13"></script>
+  <script src="js/empire.js?v=13"></script>
+  <script src="js/candy.js?v=13"></script>
+  <script src="js/sling.js?v=13"></script>
+  <script src="js/builder.js?v=13"></script>
+  <script src="js/speak.js?v=13"></script>
+  <script src="js/tower.js?v=13"></script>
+  <script src="js/rpg.js?v=13"></script>
+  <script src="js/sky.js?v=13"></script>
+  <script src="js/cloud.js?v=13"></script>
+  <script src="js/daily.js?v=13"></script>
+  <script src="js/app.js?v=13"></script>
 </body>
 </html>

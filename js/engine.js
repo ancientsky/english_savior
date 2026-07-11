@@ -177,6 +177,7 @@ const GameEngine = (() => {
       dailySpeak: 0,
       dailyTower: 0,
       dailyRpg: 0,
+      dailySky: 0,
       dailyDate: null,
       dailyClaimed: [],
       dailyBonusClaimed: false,
@@ -194,6 +195,8 @@ const GameEngine = (() => {
       towerBosses: 0,
       rpgTalks: 0,
       rpgChapters: 0,
+      skyQuests: 0,
+      skyBossDown: false,
       // history
       learnedWordsList: [],
       // shop system
@@ -267,6 +270,7 @@ const GameEngine = (() => {
       state.dailySpeak = 0;
       state.dailyTower = 0;
       state.dailyRpg = 0;
+      state.dailySky = 0;
       state.dailyClaimed = [];
       state.dailyBonusClaimed = false;
       state.dailyDate = today;
@@ -499,6 +503,24 @@ const GameEngine = (() => {
 
   function recordRpgChapter() {
     state.rpgChapters = (state.rpgChapters || 0) + 1;
+    save();
+    checkAchievements();
+  }
+
+  function recordSkyQuest() {
+    state.skyQuests = (state.skyQuests || 0) + 1;
+    save();
+    checkAchievements();
+  }
+
+  function recordSkyAnswer() {
+    state.dailySky = (state.dailySky || 0) + 1;
+    save();
+    checkDailyQuests();
+  }
+
+  function recordSkyBoss() {
+    state.skyBossDown = true;
     save();
     checkAchievements();
   }
@@ -1198,6 +1220,7 @@ const GameEngine = (() => {
     recordBuilder, recordBuilderLandmark, recordSpeak,
     recordTowerWord, recordTowerBoss,
     recordRpgTalk, recordRpgChapter,
+    recordSkyQuest, recordSkyAnswer, recordSkyBoss,
     recordPerfectGrammar, recordStreak,
     updateHUD, updateStats,
     showInventory, showAchievements, showToast,

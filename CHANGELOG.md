@@ -6,6 +6,9 @@ All notable changes to the English Savior project will be documented in this fil
 
 ## [Unreleased]
 
+### 新增 | Added
+- **🏝️ 天空之城（Sky Citadel）** — 開放世界 3D 冒險：16 座漂浮天空島、22 個英語任務（拼字寶箱／文法石門／NPC 對話／聽力水晶／配對石柱／符文收集／逐字搭橋／飛環競速／怪物競技場／暴風巨像魔王戰）、Roblox/Minecraft 式第三人稱操作（桌機鍵鼠＋手機雙搖桿）、15 種商店稱號全部化為遊戲內特殊能力、小地圖與任務日誌追蹤羅盤、省電模式；新增 3 個成就、1 個每日任務、🪂 滑翔翼與 🌨️ 彈跳雲靴道具
+
 ### 計劃中的功能 | Planned Features
 - 聲音效果系統
 - 英文介面切換
