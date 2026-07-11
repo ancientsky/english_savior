@@ -186,6 +186,7 @@ body {
 .speak-card { background: linear-gradient(135deg, #2b1a52, #6a48b0); border: 2px solid #c9a7ff; }
 .tower-card { background: linear-gradient(135deg, #4a1616, #a04828); border: 2px solid #ff9d5c; }
 .rpg-card { background: linear-gradient(135deg, #23355e, #4a63a8); border: 2px solid #8fb0ff; }
+.sky-card { background: linear-gradient(135deg, #103a5e, #2e7bc4); border: 2px solid #7fd4ff; }
 
 .card-icon { font-size: 48px; margin-bottom: 12px; }
 .hub-card h3 { font-size: 20px; margin-bottom: 8px; }
