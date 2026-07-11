@@ -147,6 +147,7 @@ const SkyGame = (() => {
       trackerArrow: document.getElementById('sky-tracker-arrow'),
       trackerText: document.getElementById('sky-tracker-text'),
       journalBtn: document.getElementById('sky-btn-journal'),
+      homeBtn: document.getElementById('sky-btn-home'),
       lowPower: document.getElementById('sky-lowpower'),
     };
     if (!els.zone) return;
@@ -155,6 +156,7 @@ const SkyGame = (() => {
     renderStartScreen();
     if (els.minimap) minimapCtx = els.minimap.getContext('2d');
     els.journalBtn?.addEventListener('click', toggleJournal);
+    els.homeBtn?.addEventListener('click', goHome);
     if (els.lowPower) {
       els.lowPower.checked = lowPower();
       els.lowPower.addEventListener('change', () => {
@@ -288,6 +290,11 @@ const SkyGame = (() => {
 
   // ===================== three.js scene =====================
   function canvasSize() {
+    // maximize mode: the wrap goes position:fixed inset:0 (css/sky.css),
+    // so the 3D view fills the whole screen
+    if (document.body.classList.contains('game-max') && zoneActive()) {
+      return { w: window.innerWidth, h: window.innerHeight };
+    }
     const w = els.wrap.clientWidth || 800;
     const h = Math.max(360, Math.min(Math.round(w * 0.75), Math.round(window.innerHeight * 0.72)));
     return { w, h };
@@ -779,12 +786,16 @@ const SkyGame = (() => {
     const yaw = Math.atan2(ex - sx, ez - sz);
 
     if (b.style === 'stepstones') {
-      const n = Math.max(3, Math.round(span / 3.4));
+      // steep climbs get extra, overlapping stones (a stair ramp) so each
+      // step rises ≤ ~1.3 — the jump apex is only ~2 units
+      const climb = Math.abs(ey - sy);
+      const n = Math.max(3, Math.round(span / 3.4), Math.ceil(climb / 1.3));
+      const wobble = climb > span * 0.25 ? 0 : 0.5;
       for (let i = 1; i < n; i++) {
         const t = i / n;
         const px = sx + (ex - sx) * t;
         const pz = sz + (ez - sz) * t;
-        const py = sy + (ey - sy) * t + Math.sin(i * 1.7) * 0.5;
+        const py = sy + (ey - sy) * t + Math.sin(i * 1.7) * wobble;
         const stone = new THREE.Mesh(
           GEO.step || (GEO.step = new THREE.CylinderGeometry(1.7, 1.4, 0.8, 9)),
           matOf(0x9aa5a8)
@@ -1460,6 +1471,25 @@ const SkyGame = (() => {
       }
     }
     updateHudHearts();
+  }
+
+  // 🏠 safety teleport back to the starting island — guarantees the player
+  // can never be stranded, whatever the world layout (no heart penalty)
+  function goHome() {
+    if (!playing || quizOpen) return;
+    if (raceActive) cancelRace('🏁 競速取消了');
+    if (arenaActive) {
+      despawnQuestMobs(arenaActive.q.id);
+      arenaActive = null;
+    }
+    const dawn = SKY_ISLANDS[0];
+    pos.x = dawn.pos[0];
+    pos.z = dawn.pos[2];
+    pos.y = dawn.pos[1] + bobOf(dawn.id) + 2;
+    vy = 0;
+    lastGroundIsland = dawn.id;
+    showWorldToast('🏠 回到晨曦之島！');
+    SoundManager.playCorrect();
   }
 
   function softKO() {

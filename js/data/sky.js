@@ -52,6 +52,12 @@ const SKY_BRIDGES = [
   { from: 'isle_falls', to: 'isle_market', style: 'plank' },
   { from: 'isle_dawn', to: 'isle_crystal', style: 'plank', quest: 'sq_bridge_crystal' },
   { from: 'isle_mushroom', to: 'isle_dragon', style: 'stepstones' },
+  // routes below keep every island escapable on foot — the jump pads alone
+  // can't cross these gaps (pads only launch upward ~launch²/60 units)
+  { from: 'isle_cloud', to: 'isle_wind', style: 'stepstones' },   // 雲朵(50)→風柱(34)
+  { from: 'isle_wind', to: 'isle_storm', style: 'stepstones' },   // 風柱(34)→暴風(64) 攀登段
+  { from: 'isle_ruins', to: 'isle_ice', style: 'stepstones' },    // 遺跡(30)→冰霜(56)
+  { from: 'isle_falls', to: 'isle_lava', style: 'stepstones' },   // 銀瀑(14)→熔岩(20)
 ];
 
 // Cloud jump pads: bouncy discs that launch the player upward.

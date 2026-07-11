@@ -701,8 +701,15 @@
   line-height: 1.7;
 }
 
-/* Maximized mode: canvas already resizes via JS; just drop rounding */
-body.game-max #zone-sky .aw-canvas-wrap { border-radius: 8px; }
+/* Maximized mode: the 3D view fills the entire screen (canvasSize() in
+   js/sky.js returns the viewport size; modals sit at z 100+ and stay on top) */
+body.game-max #zone-sky.active .aw-canvas-wrap {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  border: none;
+  border-radius: 0;
+}
 
 @media (max-width: 640px) {
   .aw-start-title { font-size: 1rem; }
