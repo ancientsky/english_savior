@@ -27,6 +27,7 @@ css/
   speak.css             — Spell academy (speaking) theme
   tower.css             — Word boss tower (orb battle) theme
   rpg.css               — English adventure RPG (Undertale-style) theme
+  sky.css               — Sky Citadel open-world 3D theme (prefix aw-)
 js/
   app.js                — Navigation and initialization (DOMContentLoaded entry point)
   engine.js             — Core game engine (XP, levels, gems, inventory, achievements, shop, buff system, daily quest rewards, sound effects, localStorage save)
@@ -42,6 +43,7 @@ js/
   speak.js              — Spell academy speaking game (Web Speech Recognition, honor-mode fallback)
   tower.js              — Tower of Saviors-style word boss battle (drag letter orbs to spell words; 12 bosses scale endlessly by floor)
   rpg.js                — Undertale-style 2D RPG engine for conversation practice (interprets RPG_CHAPTERS data)
+  sky.js                — Sky Citadel open-world 3D adventure (Three.js; islands/physics/camera/mobs/22 quests/boss/title perks/minimap)
   cloud.js              — Save backup: file export/import + optional Google Drive appDataFolder sync (owner fills GOOGLE_CLIENT_ID; see DEPLOYMENT.md)
   daily.js              — Daily quest tracking and rendering
   tts.js                — Text-to-speech module (Web Speech API)
@@ -53,7 +55,8 @@ js/
     video.js            — Video lessons (VIDEO_LESSONS, 42 lessons with 126 quiz questions)
     empire.js           — Empire dialogues (EMPIRE_DIALOGUES) and daily-life English (EMPIRE_LIFE), easy/medium/hard
     rpg.js              — RPG chapters (RPG_CHAPTERS, 9 chapters mapped to 課綱學習主題; maps, NPCs, dialogue scripts)
-    game.js             — Achievements (33, each with pts), daily quests (11), inventory items (8, usable as charms), shop items (consumables/skins/titles/themes), ACH_POINT_REWARDS, LEVEL_MILESTONES, CHARM_PERKS, SELL_PRICES
+    sky.js              — Sky Citadel world data (SKY_CONFIG, SKY_ISLANDS ×16, SKY_BRIDGES, SKY_PADS, SKY_QUESTS ×22, SKY_MOBS, SKY_SKIN_TINTS)
+    game.js             — Achievements (36, each with pts), daily quests (12), inventory items (8, usable as charms), shop items (consumables/skins/titles/themes), ACH_POINT_REWARDS, LEVEL_MILESTONES, CHARM_PERKS, SELL_PRICES
 reference/
   taiwan_elementary_1000_minecraft_flavor.csv  — Source word list reference
 ```
@@ -75,11 +78,12 @@ All game modules use the IIFE (Immediately Invoked Function Expression) pattern 
 - `SpeakGame` — spell academy speaking game (speak.js)
 - `TowerGame` — word boss tower orb battle (tower.js)
 - `RpgGame` — English adventure RPG (rpg.js)
+- `SkyGame` — Sky Citadel open-world 3D adventure (sky.js)
 - `CloudSave` — save export/import + Google Drive sync (cloud.js)
 - `DailyQuests` — daily quest system (daily.js)
 - `TTSManager` — text-to-speech (tts.js)
 
-Each game module exports `{ init }`. `app.js` calls all `.init()` methods on `DOMContentLoaded`. `EmpireGame` and `SlingGame` additionally export `onShow()`, called by app.js when their zone becomes visible to resume their paused render loops.
+Each game module exports `{ init }`. `app.js` calls all `.init()` methods on `DOMContentLoaded`. `EmpireGame`, `SlingGame`, `SpellingGame` and `SkyGame` additionally export `onShow()`, called by app.js when their zone becomes visible to resume their paused render loops.
 
 ### Adding Content
 - **Vocabulary**: add entries to `VOCAB_DATA` in `js/data/vocab.js` (easy/medium/hard). Each entry needs `word`, `hint` (emoji), `zh` (Chinese explanation), `sentence` (fill-in-the-blank with `___`).
@@ -88,18 +92,20 @@ Each game module exports `{ init }`. `app.js` calls all `.init()` methods on `DO
 - **Empire dialogues**: add entries to `EMPIRE_DIALOGUES` in `js/data/empire.js` (easy/medium/hard). Each entry needs `q` (line spoken to the player), `qZh` (Chinese meaning), `a` (correct response), `wrong` (3 distractors).
 - **RPG chapters**: append entries to `RPG_CHAPTERS` in `js/data/rpg.js`. Each chapter needs `id`, `title`, `theme` (課綱學習主題), `icon`, tile emoji (`wall`/`deco`) and colours (`floor`/`path`), a 13×9 ASCII `map`, `spawn`, `npcs` (each with a `talk` script of say/ask entries), and a `boss`. The engine in js/rpg.js interprets everything — no code changes needed for new chapters.
 - **Empire life English**: add entries to `EMPIRE_LIFE` in `js/data/empire.js` (easy/medium/hard). Each entry needs `scene` (Chinese scenario), `q` (English question), `a`, `wrong` (3 distractors). Empire also reuses `VOCAB_DATA` and `GRAMMAR_DATA` for vocabulary/grammar questions.
+- **Sky quests**: add entries to `SKY_QUESTS` in `js/data/sky.js`. Each quest needs `id`, `island` (a SKY_ISLANDS id), `type` (`chest`/`gate`/`npc`/`listen`/`pillars`/`runes`/`arena`/`bridge`/`race`/`boss`), `name`, `diff` (`easy`/`medium`/`hard`/`boss` — sets the reward tier), `n` (questions/pairs/mobs/rings/words by type), `dx`/`dz` (position relative to the island centre), `intro`, and optionally `npc` (emoji), `mob` (SKY_MOBS id for arenas), `time` (race seconds), `lock` (total clears required). js/sky.js builds the quest object, marker and quiz flow automatically. New islands go in `SKY_ISLANDS` (id/name/type/pos/r/seed) and are decorated procedurally by type.
 - **Achievements/quests/items/shop**: edit `js/data/game.js`.
 
 ### Key Systems
 - **Gamification**: XP (dynamic scaling: 80 + level × 20 per level), gems (currency), streaks, achievements (each grants 15 gems + pts), daily quests
-- **Achievement points**: derived from unlocked achievements (10/20/40 pts tiers, 640 total); ACH_POINT_REWARDS thresholds grant exclusive titles/skins/themes (state.pointRewardsClaimed)
+- **Achievement points**: derived from unlocked achievements (10/20/40 pts tiers, 710 total); ACH_POINT_REWARDS thresholds grant exclusive titles/skins/themes (state.pointRewardsClaimed)
 - **Level milestones**: LEVEL_MILESTONES every 5 levels to 50 grant gems/items/exclusive unlocks (state.milestonesClaimed; granted in addXP via grantLevelMilestones)
 - **Shop**: Consumables (buffs, some with `uses`/`minLevel`), skins (13), titles (15), themes (6) — `unlock`-flagged items are never purchasable (granted by milestones/points/collection)
 - **Themes**: body[data-theme] overrides :root CSS vars (style.css); applyTheme() on load/equip; owned in state.owned.themes
 - **Lucky charms**: equip an inventory collectible (state.equipped.charm) for passive XP/gem perks (CHARM_PERKS, applied inside addXP/addGems); duplicates sellable via sellItem (SELL_PRICES); owning all 8 grants a one-time collection reward
-- **Buff system**: `double_xp`, `hint`, `revive`, `lucky`, `instant_xp`, `gem_bonus`, `streak_shield` (consumed in load()), `double_gems` (consumed in addGems), plus instant effects `instant_xp_big`, `mystery_item`
+- **Buff system**: `double_xp`, `hint`, `revive`, `lucky`, `instant_xp`, `gem_bonus`, `streak_shield` (consumed in load()), `double_gems` (consumed in addGems), `glide`/`jump_boost` (consumed once per Sky Citadel adventure), plus instant effects `instant_xp_big`, `mystery_item`
+- **Sky title perks**: js/sky.js maps every equipped shop title to an in-world ability (TITLE perks in computePerks(): speed/jump/double-jump/glide/damage/hearts/XP/gem multipliers, quiz hints); recomputed on adventure start and re-equip
 - **Re-entrancy rule**: reward grants inside checkAchievements/checkPointRewards/grantLevelMilestones/checkCollectionReward mutate `state.gems`/`state.owned` directly — never call addGems/addXP there
-- **Cloud save**: js/cloud.js exports all 7 localStorage keys as a v1 JSON payload; file export/import always works; Google Drive appDataFolder sync activates only when GOOGLE_CLIENT_ID is set (GIS script lazy-loaded on sign-in — the sole external-script exception); the ID can live in the source or be injected at deploy time from the repo's Actions variable/secret GOOGLE_CLIENT_ID by .github/workflows/deploy.yml (requires Pages source = GitHub Actions)
+- **Cloud save**: js/cloud.js exports all 8 localStorage keys as a v1 JSON payload; file export/import always works; Google Drive appDataFolder sync activates only when GOOGLE_CLIENT_ID is set (GIS script lazy-loaded on sign-in — the sole external-script exception); the ID can live in the source or be injected at deploy time from the repo's Actions variable/secret GOOGLE_CLIENT_ID by .github/workflows/deploy.yml (requires Pages source = GitHub Actions)
 - **Sound**: Synthesized via Web Audio API (no audio files needed)
 - **TTS**: Web Speech API for word pronunciation (en-US, zh-TW)
 - **Storage**: All state persisted in `localStorage` as JSON
@@ -115,14 +121,14 @@ Each game module exports `{ init }`. `app.js` calls all `.init()` methods on `DO
 | Sentence builder | 15 XP + 1 gem/sentence, +10 gems house bonus | 20 XP + 1 gem, +15 gems bonus | 25 XP + 1 gem, +20 gems bonus |
 | Spell academy | 12 XP + 1 gem/monster, +10 gems round bonus | 16 XP + 1 gem, +15 gems bonus | 20 XP + 1 gem, +20 gems bonus (honor mode halves XP and bonus) |
 
-RPG (英語冒險物語) is chapter-based instead of difficulty-based: each first-try correct conversation answer grants 10 XP + 1 gem (5 XP after a retry, no gem), and clearing chapter N grants 40+15×(N-1) XP and 10+2×(N-1) gems with a 1-3 star rating from the first-try correct ratio. Tower (單字魔王塔) scales by floor tier (1-9 easy / 10-19 medium / 20+ hard): boss kill grants 30/45/60 XP + 5/8/11 gems, spelling the quest word grants 10 XP + 1 gem (plus double damage and +15 HP in-game). Empire (英語帝國) scales by age instead of difficulty: 10/15/20/25 XP + 1 gem per kill in Dark/Feudal/Castle/Imperial age, plus a 5/10/15/20-gem wave-clear bonus. Candy (糖果消消樂) scales by level tier (1-9 easy / 10-19 medium / 20+ hard): level clear grants 30/45/60 XP + 5/8/11 gems, and answering a magic-star vocabulary quiz on the first try grants 15 XP + 1 gem. Every completed daily quest grants 10 XP; completing all of them grants a one-time 50 gems + random item per day.
+RPG (英語冒險物語) is chapter-based instead of difficulty-based: each first-try correct conversation answer grants 10 XP + 1 gem (5 XP after a retry, no gem), and clearing chapter N grants 40+15×(N-1) XP and 10+2×(N-1) gems with a 1-3 star rating from the first-try correct ratio. Tower (單字魔王塔) scales by floor tier (1-9 easy / 10-19 medium / 20+ hard): boss kill grants 30/45/60 XP + 5/8/11 gems, spelling the quest word grants 10 XP + 1 gem (plus double damage and +15 HP in-game). Empire (英語帝國) scales by age instead of difficulty: 10/15/20/25 XP + 1 gem per kill in Dark/Feudal/Castle/Imperial age, plus a 5/10/15/20-gem wave-clear bonus. Candy (糖果消消樂) scales by level tier (1-9 easy / 10-19 medium / 20+ hard): level clear grants 30/45/60 XP + 5/8/11 gems, and answering a magic-star vocabulary quiz on the first try grants 15 XP + 1 gem. Sky Citadel (天空之城) scales by quest `diff`: each first-try correct answer grants 8/12/16 XP + 1 gem (easy/medium/hard, retries half XP, no gem), first clears grant 30/50/80 XP + 5/8/12 gems (boss 150 XP + 25 gems), replays pay half XP with no clear bonus, mob kills pay +2 gems; equipped-title perks multiply these further. Every completed daily quest grants 10 XP; completing all of them grants a one-time 50 gems + random item per day.
 
 ### Browser APIs Used
 - **Web Audio API** — synthesized sound effects (SoundManager)
 - **Web Speech API** — text-to-speech pronunciation (TTSManager), listening game audio, and speech recognition for the spell academy (with self-graded "honor mode" fallback where unavailable, e.g. iOS Safari)
-- **Canvas 2D API** — spelling runner rendering (800×340 px) and word slingshot physics (880×420 px)
-- **WebGL via Three.js** — empire 3D battlefield rendering (`js/vendor/three.min.js`, r149)
-- **localStorage** — game state persistence (`english_savior_save` for the engine, `english_savior_empire` for empire campaign progress, `english_savior_candy` for candy level progress, `english_savior_builder` for the landmark collection, `english_savior_tower` for the tower floor, `english_savior_rpg` for RPG chapter progress)
+- **Canvas 2D API** — spelling runner rendering (800×340 px), word slingshot physics (880×420 px), and the Sky Citadel minimap (140×140 px)
+- **WebGL via Three.js** — empire 3D battlefield and Sky Citadel open world (`js/vendor/three.min.js`, r149)
+- **localStorage** — game state persistence (`english_savior_save` for the engine, `english_savior_empire` for empire campaign progress, `english_savior_candy` for candy level progress, `english_savior_builder` for the landmark collection, `english_savior_tower` for the tower floor, `english_savior_rpg` for RPG chapter progress, `english_savior_sky` for Sky Citadel quests/settings)
 
 ## Naming Conventions
 - **CSS classes**: kebab-case with module prefix (`mc-block`, `rb-platform`, `yt-card`, `sp-canvas`, `ls-card`)
@@ -141,7 +147,7 @@ python3 -m http.server 8000
 ```
 
 ### Cache busting
-All CSS/JS references in index.html carry a `?v=N` query string. GitHub Pages caches assets for 10 minutes, so a freshly deployed index.html can otherwise pair with stale cached JS/CSS (symptoms: a new game's zone shows but its dynamic UI is empty). **Bump the version number on every release that changes JS or CSS** (single `sed -i 's/?v=12/?v=13/g' index.html`-style edit).
+All CSS/JS references in index.html carry a `?v=N` query string. GitHub Pages caches assets for 10 minutes, so a freshly deployed index.html can otherwise pair with stale cached JS/CSS (symptoms: a new game's zone shows but its dynamic UI is empty). **Bump the version number on every release that changes JS or CSS** (single `sed -i 's/?v=13/?v=14/g' index.html`-style edit).
 
 ### Testing
 There is no automated test suite. Manual testing in a browser is the current workflow. Verify changes by opening `index.html` and exercising the affected game zone.
