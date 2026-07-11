@@ -27,6 +27,7 @@ const CloudSave = (() => {
     'english_savior_rpg',
     'english_savior_sky',
     'sound_enabled',
+    'music_enabled',
   ];
   const DRIVE_FILE_NAME = 'english_savior_backup.json';
   const DRIVE_API = 'https://www.googleapis.com/drive/v3';

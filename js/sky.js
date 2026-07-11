@@ -2085,6 +2085,7 @@ const SkyGame = (() => {
     combatHud.bossBar.style.display = '';
     showWorldToast('⛈️ 暴風巨像甦醒了！點擊它（或按 ⚡）用英語魔法攻擊！');
     SoundManager.playAchievement();
+    if (typeof MusicManager !== 'undefined') MusicManager.play('boss');
   }
 
   function resetBoss() {
@@ -2097,6 +2098,7 @@ const SkyGame = (() => {
     if (combatHud) combatHud.bossBar.style.display = 'none';
     if (shockRing) shockRing.visible = false;
     if (warnRing) warnRing.visible = false;
+    if (typeof MusicManager !== 'undefined') MusicManager.playForZone('sky');
   }
 
   function engageBoss() {
@@ -2147,6 +2149,7 @@ const SkyGame = (() => {
     bossActive = null;
     bossParts = null;
     if (quizOpen) closeQuiz();
+    if (typeof MusicManager !== 'undefined') MusicManager.playForZone('sky');
     showWorldToast('🎆 暴風平息了！天空之城重獲和平！');
     setTimeout(() => finishQuestDirect(q), 1200);
   }

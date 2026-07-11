@@ -5,6 +5,8 @@ document.addEventListener('DOMContentLoaded', () => {
   GameEngine.load();
   GameEngine.recordStreak();
   GameEngine.updateStats();
+  MusicManager.init();
+  MusicManager.playForZone('hub');   // starts sounding after the first user gesture
 
   // Init modules — isolated so one game failing can't break the rest
   [
@@ -73,6 +75,16 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-inventory').addEventListener('click', GameEngine.showInventory);
   document.getElementById('btn-achievements').addEventListener('click', GameEngine.showAchievements);
   document.getElementById('btn-cloud').addEventListener('click', CloudSave.showModal);
+  const musicBtn = document.getElementById('btn-music');
+  const syncMusicBtn = () => {
+    musicBtn.textContent = MusicManager.isEnabled() ? '🎵' : '🔇';
+    musicBtn.title = MusicManager.isEnabled() ? '背景音樂：開（點擊關閉）' : '背景音樂：關（點擊開啟）';
+  };
+  musicBtn.addEventListener('click', () => {
+    MusicManager.setEnabled(!MusicManager.isEnabled());
+    syncMusicBtn();
+  });
+  syncMusicBtn();
   document.getElementById('btn-help').addEventListener('click', () => {
     document.getElementById('modal-help').classList.add('active');
   });
@@ -125,4 +137,7 @@ function switchZone(zoneId) {
 
   const tab = document.querySelector(`.nav-tab[data-zone="${zoneId}"]`);
   if (tab) tab.classList.add('active');
+
+  // background music follows the zone's mood
+  if (typeof MusicManager !== 'undefined') MusicManager.playForZone(zoneId);
 }

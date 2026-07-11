@@ -31,6 +31,7 @@ css/
 js/
   app.js                — Navigation and initialization (DOMContentLoaded entry point)
   engine.js             — Core game engine (XP, levels, gems, inventory, achievements, shop, buff system, daily quest rewards, sound effects, localStorage save)
+  music.js              — Background music (MusicManager: 6 synthesized Web Audio tracks, zone→track map, crossfades, 🎵 toggle persisted as music_enabled)
   minecraft.js          — Minecraft-themed vocabulary crafting game
   roblox.js             — Roblox-themed grammar obstacle course
   youtube.js            — YouTube-themed reading comprehension with quizzes
@@ -66,6 +67,7 @@ reference/
 All game modules use the IIFE (Immediately Invoked Function Expression) pattern and expose a single global object:
 - `GameEngine` — core state management (engine.js)
 - `SoundManager` — synthesized audio (engine.js)
+- `MusicManager` — synthesized background music (music.js)
 - `MinecraftGame` — vocabulary game (minecraft.js)
 - `RobloxGame` — grammar game (roblox.js)
 - `YoutubeGame` — video comprehension (youtube.js)
@@ -105,8 +107,9 @@ Each game module exports `{ init }`. `app.js` calls all `.init()` methods on `DO
 - **Buff system**: `double_xp`, `hint`, `revive`, `lucky`, `instant_xp`, `gem_bonus`, `streak_shield` (consumed in load()), `double_gems` (consumed in addGems), `glide`/`jump_boost` (consumed once per Sky Citadel adventure), plus instant effects `instant_xp_big`, `mystery_item`
 - **Sky title perks**: js/sky.js maps every equipped shop title to an in-world ability (TITLE perks in computePerks(): speed/jump/double-jump/glide/damage/hearts/XP/gem multipliers, quiz hints); recomputed on adventure start and re-equip
 - **Re-entrancy rule**: reward grants inside checkAchievements/checkPointRewards/grantLevelMilestones/checkCollectionReward mutate `state.gems`/`state.owned` directly — never call addGems/addXP there
-- **Cloud save**: js/cloud.js exports all 8 localStorage keys as a v1 JSON payload; file export/import always works; Google Drive appDataFolder sync activates only when GOOGLE_CLIENT_ID is set (GIS script lazy-loaded on sign-in — the sole external-script exception); the ID can live in the source or be injected at deploy time from the repo's Actions variable/secret GOOGLE_CLIENT_ID by .github/workflows/deploy.yml (requires Pages source = GitHub Actions)
+- **Cloud save**: js/cloud.js exports all 9 localStorage keys as a v1 JSON payload; file export/import always works; Google Drive appDataFolder sync activates only when GOOGLE_CLIENT_ID is set (GIS script lazy-loaded on sign-in — the sole external-script exception); the ID can live in the source or be injected at deploy time from the repo's Actions variable/secret GOOGLE_CLIENT_ID by .github/workflows/deploy.yml (requires Pages source = GitHub Actions)
 - **Sound**: Synthesized via Web Audio API (no audio files needed)
+- **Music**: js/music.js composes 6 looping tracks as data (chords/bass/melody) and renders them live with Web Audio (soft palette for learning screens, chiptune for battle); `MusicManager.playForZone()` runs on every zone switch (called in app.js switchZone), the sky boss fight swaps to the `boss` track; independent 🎵 HUD toggle persisted as localStorage `music_enabled`; playback starts only after the first user gesture (autoplay policy)
 - **TTS**: Web Speech API for word pronunciation (en-US, zh-TW)
 - **Storage**: All state persisted in `localStorage` as JSON
 - **Level-up deferral**: `GameEngine.setDeferLevelUp(true/false)` prevents modal spam during rapid answer sequences; call `flushPendingLevelUps()` when the game round ends
@@ -147,7 +150,7 @@ python3 -m http.server 8000
 ```
 
 ### Cache busting
-All CSS/JS references in index.html carry a `?v=N` query string. GitHub Pages caches assets for 10 minutes, so a freshly deployed index.html can otherwise pair with stale cached JS/CSS (symptoms: a new game's zone shows but its dynamic UI is empty). **Bump the version number on every release that changes JS or CSS** (single `sed -i 's/?v=13/?v=14/g' index.html`-style edit).
+All CSS/JS references in index.html carry a `?v=N` query string. GitHub Pages caches assets for 10 minutes, so a freshly deployed index.html can otherwise pair with stale cached JS/CSS (symptoms: a new game's zone shows but its dynamic UI is empty). **Bump the version number on every release that changes JS or CSS** (single `sed -i 's/?v=14/?v=15/g' index.html`-style edit).
 
 ### Testing
 There is no automated test suite. Manual testing in a browser is the current workflow. Verify changes by opening `index.html` and exercising the affected game zone.
