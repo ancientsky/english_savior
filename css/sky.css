@@ -232,7 +232,7 @@
   50% { transform: translateX(-50%) scale(1.06); }
 }
 
-/* Void-fall white flash */
+/* Void-fall white flash / damage red flash */
 .aw-flash {
   position: absolute;
   inset: 0;
@@ -243,6 +243,79 @@
   transition: opacity 0.35s;
 }
 .aw-flash.on { opacity: 1; transition: opacity 0.05s; }
+.aw-flash.red { background: radial-gradient(ellipse at center, transparent 40%, rgba(220, 40, 40, 0.55)); }
+
+/* Boss HP bar */
+.aw-bossbar {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(420px, 70%);
+  z-index: 6;
+  pointer-events: none;
+}
+.aw-bossbar-label {
+  text-align: center;
+  color: #ffd7d7;
+  font-weight: bold;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+  margin-bottom: 4px;
+}
+.aw-bossbar-track {
+  height: 14px;
+  border-radius: 8px;
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  background: rgba(20, 20, 40, 0.6);
+  overflow: hidden;
+}
+.aw-bossbar-fill {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, #ff4d6d, #c9184a);
+  transition: width 0.4s;
+}
+
+/* Race timer */
+.aw-race {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(10, 40, 70, 0.75);
+  border: 1px solid #ffd166;
+  color: #ffe9a8;
+  border-radius: 12px;
+  padding: 6px 18px;
+  font-size: 1.05rem;
+  font-weight: bold;
+  z-index: 6;
+  pointer-events: none;
+}
+
+/* Spelling (bridge / runes) */
+.aw-spell-slots {
+  display: inline-block;
+  font-family: monospace;
+  font-size: 1.3rem;
+  letter-spacing: 2px;
+  color: #ffd166;
+  margin-left: 6px;
+}
+.aw-letters {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+.aw-letter {
+  min-width: 52px;
+  font-family: monospace;
+  font-size: 1.2rem;
+  font-weight: bold;
+  padding: 12px 8px;
+}
 
 /* Toast inside the world (e.g. island discovered) */
 .aw-world-toast {

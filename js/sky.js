@@ -134,9 +134,40 @@ const SkyGame = (() => {
         const q = SKY_QUESTS.find(x => x.id === id);
         if (q) openQuest(q);
       },
-      quizInfo: () => (active ? { id: active.q.id, step: active.step, n: active.q.n, open: quizOpen } : { open: quizOpen }),
+      quizInfo: () => (active ? { id: active.q.id, step: active.step, n: active.q.n, open: quizOpen, combat: !!active.combat } : { open: quizOpen }),
       interact,
       closeQuiz,
+      // combat hooks (Part 3)
+      mobs: () => mobs.filter(m => !m.gone).map((m, i) => ({
+        i: mobs.indexOf(m), id: m.def.id, hp: m.hp, dead: m.dead, boss: !!m.isBoss,
+        quest: m.questId, x: m.mesh.position.x, z: m.mesh.position.z,
+      })),
+      engage: i => openCombatQuiz(mobs[i]),
+      setHearts: n => { hearts = n; updateHudHearts(); },
+      hearts: () => hearts,
+      arena: () => (arenaActive ? { id: arenaActive.q.id, remaining: arenaActive.remaining } : null),
+      race: () => (raceActive ? { id: raceActive.q.id, idx: raceActive.idx, n: raceActive.q.n, time: raceActive.time } : null),
+      ringPos: i => {
+        const r = raceActive && raceActive.rings[i];
+        return r ? { x: r.x, y: r.y, z: r.z } : null;
+      },
+      runes: () => {
+        if (!runeActive) return null;
+        const isle = isleById(runeActive.q.island);
+        return {
+          word: runeActive.entry ? runeActive.entry.word : null,
+          wordIdx: runeActive.wordIdx,
+          collected: runeActive.collected.join(''),
+          orbs: runeActive.orbs.filter(o => !o.got).map(o => ({
+            letter: o.letter,
+            x: isle.pos[0] + o.sprite.position.x,
+            z: isle.pos[2] + o.sprite.position.z,
+          })),
+        };
+      },
+      boss: () => (bossActive ? { hp: bossActive.mob.hp, phase: bossActive.phase, waveR: bossActive.waveR, warnT: bossActive.warnT } : null),
+      damage: n => damagePlayer(n || 1),
+      spellWord: () => (active && active.spellEntry ? active.spellEntry.word.toUpperCase() : null),
     };
   }
 
@@ -238,6 +269,7 @@ const SkyGame = (() => {
     });
     SKY_PADS.forEach(buildPad);
     buildQuestObjects();
+    AMBIENT_MOBS.forEach(a => spawnMob(a.mob, a.island, a.dx, a.dz));
     buildPlayer();
     setupPointerControls();
 
@@ -623,12 +655,13 @@ const SkyGame = (() => {
         });
         break;
       case 'storm': {
-        const obelisk = new THREE.Mesh(geoBox(), matOf(0x2c2c40, 0x4a4aff));
-        obelisk.scale.set(1.6, 7, 1.6);
-        obelisk.position.y = 3.5;
+        // off-centre — the boss altar and colossus take the middle
+        const obelisk = new THREE.Mesh(geoBox(), matOf(0x2c2c40, 0x16165a));
+        obelisk.scale.set(1.4, 6, 1.4);
+        obelisk.position.set(isle.r * 0.55, 3, isle.r * 0.35);
         obelisk.castShadow = true;
         g.add(obelisk);
-        scatter(g, isle, rng, 6, 0.35, 0.85, r => {
+        scatter(g, isle, rng, 6, 0.45, 0.85, r => {
           const h = 1.5 + r() * 3;
           const shard = new THREE.Mesh(new THREE.ConeGeometry(0.5, h, 4), matOf(0x3c3c55, 0x2a2aaa));
           shard.position.y = h / 2;
@@ -780,8 +813,8 @@ const SkyGame = (() => {
     hard: { xp: 80, gems: 12, ans: 16 },
     boss: { xp: 150, gems: 25, ans: 16 },
   };
-  // quest types playable now; the rest arrive in Part 3 and show ⏳
-  const LIVE_TYPES = new Set(['chest', 'gate', 'npc', 'listen', 'pillars']);
+  const LIVE_TYPES = new Set(['chest', 'gate', 'npc', 'listen', 'pillars',
+    'runes', 'arena', 'bridge', 'race', 'boss']);
 
   const interactables = [];    // { q, x, z, isle, marker }
   const markerList = [];       // bobbing quest markers
@@ -992,6 +1025,907 @@ const SkyGame = (() => {
     els.hint.style.display = '';
   }
 
+  // ===================== combat & advanced quests (Part 3) =====================
+  const mobs = [];
+  let lastDamageAt = -100;
+  let bolt = null;             // { mesh, t, from, to, mob }
+  let arenaActive = null;      // { q, remaining }
+  let raceActive = null;       // { q, idx, time, rings, sinceQ }
+  let runeActive = null;       // { q, wordIdx, entry, orbs, collected }
+  let bossActive = null;       // { q, mob, phase, sinceSummon, shockT, warnT, waveR, waveHit }
+  let bossParts = null;
+  let shockRing = null, warnRing = null;
+  let raycaster = null;
+  let combatHud = null;        // { bossBar, bossFill, bossLabel, race }
+
+  const AMBIENT_MOBS = [
+    { mob: 'slime', island: 'isle_meadow', dx: -6, dz: 8 },
+    { mob: 'slime', island: 'isle_mushroom', dx: 5, dz: 4 },
+    { mob: 'slime', island: 'isle_falls', dx: 6, dz: -5 },
+    { mob: 'wisp', island: 'isle_crystal', dx: -4, dz: -6 },
+    { mob: 'wisp', island: 'isle_cloud', dx: -5, dz: -5 },
+    { mob: 'bat', island: 'isle_ruins', dx: -4, dz: -6 },
+  ];
+
+  function mobDef(id) { return SKY_MOBS.find(m => m.id === id); }
+
+  function makeMobMesh(def) {
+    const g = new THREE.Group();
+    const eyeMat = matOf(0xffffff);
+    const pupilMat = matOf(0x222233);
+    if (def.id === 'slime') {
+      const body = new THREE.Mesh(new THREE.SphereGeometry(0.75, 10, 8),
+        new THREE.MeshLambertMaterial({ color: def.color, transparent: true, opacity: 0.92 }));
+      body.scale.y = 0.72;
+      body.position.y = 0.55;
+      body.castShadow = true;
+      g.add(body);
+      g.userData.body = body;
+    } else if (def.id === 'wisp') {
+      const body = new THREE.Mesh(new THREE.ConeGeometry(0.55, 1.5, 8),
+        new THREE.MeshLambertMaterial({ color: def.color, emissive: 0x1a6a4a }));
+      body.position.y = 1.1;
+      body.castShadow = true;
+      g.add(body);
+      g.userData.body = body;
+    } else {
+      const body = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 6),
+        new THREE.MeshLambertMaterial({ color: def.color }));
+      body.position.y = 1.6;
+      body.castShadow = true;
+      g.add(body);
+      [-1, 1].forEach(s => {
+        const wing = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.08, 0.5), matOf(0x3a3050));
+        wing.position.set(s * 0.75, 1.7, 0);
+        g.add(wing);
+        (g.userData.wings = g.userData.wings || []).push(wing);
+      });
+      g.userData.body = body;
+    }
+    // eyes
+    [-0.22, 0.22].forEach(x => {
+      const eyeY = def.id === 'bat' ? 1.68 : (def.id === 'wisp' ? 1.35 : 0.72);
+      const eyeZ = def.id === 'slime' ? 0.62 : 0.42;
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.11, 6, 5), eyeMat);
+      eye.position.set(x, eyeY, eyeZ);
+      g.add(eye);
+      const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.055, 5, 4), pupilMat);
+      pupil.position.set(x, eyeY, eyeZ + 0.09);
+      g.add(pupil);
+    });
+    return g;
+  }
+
+  function spawnMob(defId, isleId, dx, dz, questId) {
+    const def = mobDef(defId);
+    const isle = isleById(isleId);
+    if (!def || !isle) return null;
+    const mesh = makeMobMesh(def);
+    const x = isle.pos[0] + dx, z = isle.pos[2] + dz;
+    mesh.position.set(x, isle.pos[1], z);
+    scene.add(mesh);
+    const mob = {
+      def, isle, mesh, hp: def.hp, dead: false, gone: false,
+      home: { x, z }, angle: Math.random() * 6.28,
+      cooldown: 0, boost: 0, shieldT: 0, fade: 0, questId: questId || null,
+    };
+    mesh.traverse(o => { o.userData.mobRef = mob; });
+    mesh.userData.mobRef = mob;
+    mobs.push(mob);
+    return mob;
+  }
+
+  function despawnQuestMobs(questId) {
+    for (const m of mobs) {
+      if (m.questId === questId && !m.gone) {
+        m.gone = true;
+        scene.remove(m.mesh);
+      }
+    }
+  }
+
+  function damagePlayer(n, sx, sz) {
+    if (!playing) return;
+    hearts -= n;
+    lastDamageAt = simTime;
+    els.flash.classList.add('red', 'on');
+    setTimeout(() => els.flash.classList.remove('on', 'red'), 350);
+    SoundManager.playWrong();
+    if (sx !== undefined) {
+      // knockback away from the attacker
+      const dx = pos.x - sx, dz = pos.z - sz;
+      const d = Math.hypot(dx, dz) || 1;
+      pos.x += (dx / d) * 2.2;
+      pos.z += (dz / d) * 2.2;
+      vy = 5;
+      grounded = false;
+    }
+    if (hearts <= 0) {
+      if (GameEngine.consumeBuff('revive')) {
+        hearts = SKY_CONFIG.maxHearts;
+        showWorldToast('💖 復活圖騰救了你！');
+      } else {
+        softKO();
+      }
+    }
+    updateHudHearts();
+  }
+
+  function softKO() {
+    showWorldToast('💫 你被擊倒了，在晨曦之島醒來…（任務進度保留）');
+    if (arenaActive) {
+      despawnQuestMobs(arenaActive.q.id);
+      arenaActive = null;
+    }
+    if (bossActive) resetBoss();
+    if (raceActive) cancelRace('');
+    hearts = SKY_CONFIG.maxHearts;
+    const dawn = SKY_ISLANDS[0];
+    pos.x = dawn.pos[0]; pos.z = dawn.pos[2]; pos.y = dawn.pos[1] + 2;
+    vy = 0;
+  }
+
+  // ---- combat quiz ----
+  function combatDiff(mob) {
+    if (mob.isBoss) return bossActive && bossActive.phase === 2 ? 'hard' : 'medium';
+    if (mob.questId) {
+      const q = SKY_QUESTS.find(x => x.id === mob.questId);
+      if (q) return q.diff;
+    }
+    return mob.def.diff;
+  }
+
+  function openCombatQuiz(mob) {
+    if (quizOpen || !mob || mob.dead) return;
+    const d = Math.hypot(pos.x - mob.mesh.position.x, pos.z - mob.mesh.position.z);
+    if (d > 14) { showWorldToast('🏃 再靠近一點才能攻擊！'); return; }
+    ensureQuizDom();
+    active = {
+      combat: mob,
+      q: { name: mob.def.name, diff: combatDiff(mob), n: mob.hp, type: 'combat' },
+      replay: false, wrongThis: false, anyWrong: false, step: 0, ttsText: null,
+    };
+    quizOpen = true;
+    keys.f = keys.b = keys.l = keys.r = 0;
+    joy.dx = joy.dy = 0;
+    GameEngine.setDeferLevelUp(true);
+    quiz.root.classList.add('on');
+    quiz.npc.style.display = 'none';
+    quiz.tts.style.display = 'none';
+    quiz.fb.textContent = '';
+    quiz.zh.textContent = '';
+    askCombat();
+  }
+
+  function askCombat() {
+    const mob = active && active.combat;
+    if (!mob || mob.dead) { closeQuiz(); return; }
+    active.wrongThis = false;
+    quiz.name.textContent = `⚔️ ${mob.def.name}`;
+    quiz.prog.textContent = '❤️'.repeat(Math.max(0, mob.hp));
+    quiz.fb.textContent = '';
+    quiz.fb.className = 'aw-quiz-feedback';
+    const useGrammar = mob.isBoss
+      ? bossActive && bossActive.phase === 2
+      : mob.def.quiz === 'grammar';
+    const diff = active.q.diff;
+    if (useGrammar) {
+      const entry = GRAMMAR_DATA[Math.floor(Math.random() * GRAMMAR_DATA.length)];
+      const options = shuffled(entry.options.slice());
+      quiz.prompt.innerHTML = entry.sentence.replace(/_+/g, '<span class="aw-blank">____</span>');
+      quiz.zh.textContent = entry.translation || '';
+      renderOptions(options, options.indexOf(entry.blank),
+        () => onCombatCorrect(mob, false, null, entry.explain),
+        null, () => onCombatWrong(mob));
+    } else {
+      const pool = vocabPool(diff);
+      const entry = pool[Math.floor(Math.random() * pool.length)];
+      const distract = pickN(pool.filter(e => e.word !== entry.word), 3).map(e => e.word);
+      const options = shuffled([entry.word, ...distract]);
+      quiz.prompt.innerHTML = `${entry.hint} ${entry.sentence.replace(/_+/g, '<span class="aw-blank">____</span>')}`;
+      quiz.zh.innerHTML = zhPretty(entry.zh);
+      renderOptions(options, options.indexOf(entry.word),
+        () => onCombatCorrect(mob, true, entry.word),
+        null, () => onCombatWrong(mob));
+    }
+  }
+
+  function onCombatCorrect(mob, isVocab, word, explain) {
+    awardAnswer(isVocab, word);
+    quiz.fb.textContent = explain ? `✨ 魔法彈發射！${explain}` : '✨ 魔法彈發射！';
+    quiz.fb.className = 'aw-quiz-feedback good';
+    fireBolt(mob);
+  }
+
+  function onCombatWrong(mob) {
+    // no HP loss for the player — the mob shields and gets a new question
+    mob.shieldT = 0.6;
+    mob.boost = 2;
+    quiz.fb.textContent = '🛡️ 怪物擋下了攻擊！換一題再試！';
+    quiz.fb.className = 'aw-quiz-feedback';
+    setTimeout(() => { if (active && active.combat === mob) askCombat(); }, 900);
+  }
+
+  function fireBolt(mob) {
+    if (!bolt) {
+      bolt = {
+        mesh: new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 6),
+          new THREE.MeshLambertMaterial({ color: 0xffe066, emissive: 0xcc8800 })),
+        t: -1, mob: null,
+      };
+      scene.add(bolt.mesh);
+      bolt.mesh.visible = false;
+    }
+    bolt.t = 0;
+    bolt.mob = mob;
+    bolt.from = { x: pos.x, y: pos.y + 1.5, z: pos.z };
+    bolt.mesh.visible = true;
+  }
+
+  function updateBolt(dt) {
+    if (!bolt || bolt.t < 0) return;
+    bolt.t += dt * 3.2;
+    const m = bolt.mob.mesh.position;
+    const ty = m.y + 1;
+    if (bolt.t >= 1) {
+      bolt.t = -1;
+      bolt.mesh.visible = false;
+      hitMob(bolt.mob);
+      return;
+    }
+    bolt.mesh.position.set(
+      bolt.from.x + (m.x - bolt.from.x) * bolt.t,
+      bolt.from.y + (ty - bolt.from.y) * bolt.t + Math.sin(bolt.t * Math.PI) * 1.2,
+      bolt.from.z + (m.z - bolt.from.z) * bolt.t
+    );
+  }
+
+  function hitMob(mob) {
+    if (mob.dead) return;
+    mob.hp -= 1;
+    if (mob.isBoss) { onBossHit(mob); return; }
+    if (mob.hp <= 0) {
+      killMob(mob);
+    } else if (active && active.combat === mob) {
+      setTimeout(() => { if (active && active.combat === mob) askCombat(); }, 500);
+    }
+  }
+
+  function killMob(mob) {
+    mob.dead = true;
+    GameEngine.addGems(2);
+    SoundManager.playCorrect();
+    showWorldToast(`⚔️ 擊敗 ${mob.def.name}！+2💎`);
+    if (active && active.combat === mob) closeQuiz();
+    if (mob.questId && arenaActive && arenaActive.q.id === mob.questId) {
+      arenaActive.remaining--;
+      if (arenaActive.remaining <= 0) {
+        const q = arenaActive.q;
+        arenaActive = null;
+        setTimeout(() => finishQuestDirect(q), 700);
+      } else {
+        showWorldToast(`⚔️ 還剩 ${arenaActive.remaining} 隻！`);
+      }
+    }
+  }
+
+  function updateMobs(dt) {
+    for (const mob of mobs) {
+      if (mob.gone) continue;
+      const isleTop = mob.isle.pos[1] + bobOf(mob.isle.id);
+      if (mob.dead) {
+        mob.fade += dt;
+        const s = Math.max(0.01, 1 - mob.fade * 1.8);
+        mob.mesh.scale.set(1 + mob.fade, s, 1 + mob.fade);
+        if (mob.fade > 0.55) { mob.gone = true; scene.remove(mob.mesh); }
+        continue;
+      }
+      if (mob.isBoss) continue; // boss animated in updateBoss
+      // idle animation
+      const b = mob.mesh.userData.body;
+      if (mob.def.id === 'slime' && b) b.position.y = 0.55 + Math.abs(Math.sin(simTime * 4 + mob.angle)) * 0.3;
+      if (mob.def.id === 'wisp' && b) b.position.y = 1.1 + Math.sin(simTime * 2.4 + mob.angle) * 0.25;
+      if (mob.mesh.userData.wings) {
+        mob.mesh.userData.wings.forEach((w, i) => { w.rotation.z = Math.sin(simTime * 10) * 0.5 * (i ? -1 : 1); });
+      }
+      if (mob.shieldT > 0) {
+        mob.shieldT -= dt;
+        if (b) b.material.emissive = new THREE.Color(mob.shieldT > 0 ? 0x888888 : 0x000000);
+      }
+      mob.mesh.position.y = isleTop;
+      if (quizOpen) continue;   // combat/quiz pauses mob AI (kid-friendly)
+      mob.cooldown -= dt;
+      mob.boost -= dt;
+
+      const dxp = pos.x - mob.mesh.position.x;
+      const dzp = pos.z - mob.mesh.position.z;
+      const distP = Math.hypot(dxp, dzp);
+      const sameLevel = Math.abs(pos.y - isleTop) < 6;
+      let vx = 0, vz = 0;
+      if (distP < 12 && sameLevel) {
+        const sp = mob.def.speed * (mob.boost > 0 ? 1.5 : 1);
+        vx = (dxp / (distP || 1)) * sp;
+        vz = (dzp / (distP || 1)) * sp;
+      } else {
+        mob.angle += dt * 0.5;
+        const tx = mob.home.x + Math.cos(mob.angle) * 3.5;
+        const tz = mob.home.z + Math.sin(mob.angle) * 3.5;
+        const dxh = tx - mob.mesh.position.x, dzh = tz - mob.mesh.position.z;
+        const dh = Math.hypot(dxh, dzh);
+        if (dh > 0.3) {
+          vx = (dxh / dh) * mob.def.speed * 0.45;
+          vz = (dzh / dh) * mob.def.speed * 0.45;
+        }
+      }
+      let nx = mob.mesh.position.x + vx * dt;
+      let nz = mob.mesh.position.z + vz * dt;
+      // stay on the island
+      const cx = mob.isle.pos[0], cz = mob.isle.pos[2];
+      const dc = Math.hypot(nx - cx, nz - cz);
+      const maxR = mob.isle.r - 1.2;
+      if (dc > maxR) {
+        nx = cx + ((nx - cx) / dc) * maxR;
+        nz = cz + ((nz - cz) / dc) * maxR;
+      }
+      mob.mesh.position.x = nx;
+      mob.mesh.position.z = nz;
+      if (vx || vz) mob.mesh.rotation.y = Math.atan2(vx, vz);
+
+      // contact damage
+      if (distP < 1.35 && sameLevel && Math.abs(pos.y - isleTop) < 2.4 && mob.cooldown <= 0) {
+        mob.cooldown = 2.5;
+        damagePlayer(1, mob.mesh.position.x, mob.mesh.position.z);
+      }
+    }
+  }
+
+  // ---- arena ----
+  function startArena(q) {
+    if (arenaActive && arenaActive.q.id === q.id) {
+      showWorldToast(`⚔️ 還剩 ${arenaActive.remaining} 隻，點擊怪物攻擊！`);
+      return;
+    }
+    if (arenaActive) despawnQuestMobs(arenaActive.q.id);
+    arenaActive = { q, remaining: q.n };
+    for (let i = 0; i < q.n; i++) {
+      const a = (i / q.n) * Math.PI * 2;
+      spawnMob(q.mob, q.island, q.dx + Math.cos(a) * 5, q.dz + Math.sin(a) * 5, q.id);
+    }
+    showWorldToast(`⚔️ ${q.name}：點擊怪物（或按 ⚡）用英語魔法擊敗 ${q.n} 隻！`);
+    SoundManager.playAchievement();
+  }
+
+  // finish a quest that has no quiz session running (arena / race / runes / boss)
+  function finishQuestDirect(q) {
+    ensureQuizDom();
+    active = { q, replay: isCleared(q), wrongThis: false, anyWrong: false, step: q.n, ttsText: null };
+    quizOpen = true;
+    GameEngine.setDeferLevelUp(true);
+    quiz.root.classList.add('on');
+    quiz.name.textContent = `📜 ${q.name}`;
+    quiz.npc.style.display = 'none';
+    quiz.tts.style.display = 'none';
+    completeQuest();
+  }
+
+  // ---- word spelling (bridge quest + rune arranging) ----
+  function pickWordEntry(diff, maxLen = 7) {
+    const pool = vocabPool(diff).filter(e => new RegExp(`^[A-Za-z]{3,${maxLen}}$`).test(e.word));
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+
+  function renderSpelling(entry, extraLetters, onDone) {
+    const word = entry.word.toUpperCase();
+    if (active) active.spellEntry = entry;
+    let idx = 0;
+    quiz.prompt.innerHTML = `${entry.hint} <span class="aw-spell-slots" id="sky-spell-slots"></span>`;
+    quiz.zh.innerHTML = zhPretty(entry.zh);
+    quiz.tts.style.display = 'none';
+    const slotsEl = quiz.prompt.querySelector('#sky-spell-slots');
+    const renderSlots = () => {
+      slotsEl.textContent = word.split('').map((c, i) => (i < idx ? c : '＿')).join(' ');
+    };
+    renderSlots();
+    const letters = shuffled([...word.split(''), ...(extraLetters || [])]);
+    quiz.opts.innerHTML = '';
+    const grid = document.createElement('div');
+    grid.className = 'aw-letters';
+    letters.forEach(ch => {
+      const b = document.createElement('button');
+      b.className = 'aw-opt aw-letter';
+      b.textContent = ch;
+      b.dataset.letter = ch;
+      b.addEventListener('click', () => {
+        if (!active || b.disabled) return;
+        if (ch === word[idx]) {
+          idx++;
+          b.disabled = true;
+          b.classList.add('right');
+          SoundManager.playCorrect();
+          renderSlots();
+          if (idx >= word.length) {
+            TTSManager.speak(entry.word, 'en-US');
+            quiz.fb.textContent = `✨ ${entry.word} — ${zhShort(entry)}`;
+            quiz.fb.className = 'aw-quiz-feedback good';
+            setTimeout(onDone, 900);
+          }
+        } else {
+          b.classList.add('wrong');
+          active.wrongThis = true;
+          active.anyWrong = true;
+          SoundManager.playWrong();
+          setTimeout(() => b.classList.remove('wrong'), 500);
+        }
+      });
+      grid.appendChild(b);
+    });
+    quiz.opts.appendChild(grid);
+  }
+
+  function askSpellWord() {
+    const entry = pickWordEntry(active.q.diff);
+    const decoys = pickN('ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').filter(c => !entry.word.toUpperCase().includes(c)), 3);
+    renderSpelling(entry, decoys, () => {
+      awardAnswer(true, entry.word);
+      active.step++;
+      renderProg();
+      if (active.q.type === 'bridge' && active.step < active.q.n) {
+        quiz.fb.textContent += '　🌉 橋又延伸了一段！';
+      }
+      setTimeout(nextStep, 600);
+    });
+  }
+
+  // ---- runes (collect letters in the world, then arrange) ----
+  function letterTexture(letter) {
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = 96;
+    const ctx = cv.getContext('2d');
+    ctx.fillStyle = 'rgba(80, 40, 160, 0.9)';
+    ctx.beginPath();
+    ctx.arc(48, 48, 42, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#d8b4ff';
+    ctx.lineWidth = 5;
+    ctx.stroke();
+    ctx.fillStyle = '#ffe9a8';
+    ctx.font = 'bold 52px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(letter, 48, 50);
+    return new THREE.CanvasTexture(cv);
+  }
+
+  function startRunes(q) {
+    if (runeActive && runeActive.q.id === q.id) {
+      const left = runeActive.orbs.filter(o => !o.got).length;
+      showWorldToast(left > 0 ? `🔤 還有 ${left} 個字母散落在島上！` : '🔤 字母都到手了，回符文石排列！');
+      if (left === 0) openRuneArrange();
+      return;
+    }
+    clearRunes();
+    runeActive = { q, wordIdx: 0, entry: null, orbs: [], collected: [] };
+    scatterRuneWord();
+  }
+
+  function clearRunes() {
+    if (!runeActive) return;
+    runeActive.orbs.forEach(o => { if (!o.got) o.sprite.parent?.remove(o.sprite); });
+    runeActive = null;
+  }
+
+  function scatterRuneWord() {
+    const q = runeActive.q;
+    const isle = isleById(q.island);
+    const g = islandGroups[q.island];
+    const entry = pickWordEntry(q.diff, 6);
+    runeActive.entry = entry;
+    runeActive.collected = [];
+    runeActive.orbs = [];
+    const word = entry.word.toUpperCase();
+    for (let i = 0; i < word.length; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const rr = isle.r * (0.25 + Math.random() * 0.6);
+      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: letterTexture(word[i]), transparent: true }));
+      sprite.scale.set(1.3, 1.3, 1);
+      sprite.position.set(Math.cos(a) * rr, 1.3, Math.sin(a) * rr);
+      g.add(sprite);
+      runeActive.orbs.push({ sprite, letter: word[i], got: false });
+    }
+    showWorldToast(`🔤 第 ${runeActive.wordIdx + 1}/${q.n} 組：收集島上 ${word.length} 個字母符文！`);
+  }
+
+  function updateRunePickup() {
+    if (!runeActive || quizOpen) return;
+    const isle = isleById(runeActive.q.island);
+    let left = 0;
+    for (const o of runeActive.orbs) {
+      if (o.got) continue;
+      const wx = isle.pos[0] + o.sprite.position.x;
+      const wz = isle.pos[2] + o.sprite.position.z;
+      if (Math.hypot(pos.x - wx, pos.z - wz) < 1.7 && Math.abs(pos.y - isle.pos[1]) < 4) {
+        o.got = true;
+        o.sprite.parent?.remove(o.sprite);
+        runeActive.collected.push(o.letter);
+        SoundManager.playCorrect();
+        const remaining = runeActive.orbs.filter(x => !x.got).length;
+        showWorldToast(remaining > 0
+          ? `🔤 拿到「${o.letter}」！還剩 ${remaining} 個`
+          : '🔤 字母收集完成！排列咒文吧！');
+        if (remaining === 0) setTimeout(openRuneArrange, 700);
+      } else {
+        left++;
+      }
+    }
+  }
+
+  function openRuneArrange() {
+    if (!runeActive || quizOpen) return;
+    const q = runeActive.q;
+    ensureQuizDom();
+    active = { q, replay: isCleared(q), wrongThis: false, anyWrong: false, step: runeActive.wordIdx, ttsText: null };
+    quizOpen = true;
+    keys.f = keys.b = keys.l = keys.r = 0;
+    joy.dx = joy.dy = 0;
+    GameEngine.setDeferLevelUp(true);
+    quiz.root.classList.add('on');
+    quiz.name.textContent = `📜 ${q.name}`;
+    quiz.npc.style.display = 'none';
+    quiz.fb.textContent = '';
+    quiz.fb.className = 'aw-quiz-feedback';
+    renderProg();
+    renderSpelling(runeActive.entry, [], () => {
+      awardAnswer(true, runeActive.entry.word);
+      runeActive.wordIdx++;
+      active.step = runeActive.wordIdx;
+      renderProg();
+      if (runeActive.wordIdx < q.n) {
+        closeQuiz();
+        scatterRuneWord();
+      } else {
+        runeActive = null;
+        completeQuest();
+      }
+    });
+  }
+
+  // ---- race ----
+  function startRace(q) {
+    if (raceActive) { showWorldToast('🏁 比賽進行中！穿過金色的環！'); return; }
+    ensureCombatHud();
+    const isle = isleById(q.island);
+    const rings = [];
+    const ringGeo = GEO.ring || (GEO.ring = new THREE.TorusGeometry(1.8, 0.16, 8, 22));
+    for (let i = 0; i < q.n; i++) {
+      const a = (i / q.n) * Math.PI * 2 * 1.4 + 0.6;
+      const rr = isle.r * (0.3 + 0.35 * ((i % 3) / 2));
+      const x = isle.pos[0] + Math.cos(a) * rr;
+      const z = isle.pos[2] + Math.sin(a) * rr;
+      const y = isle.pos[1] + 1.5 + (i % 2) * 0.9;
+      const mesh = new THREE.Mesh(ringGeo, new THREE.MeshLambertMaterial({ color: 0x8a8a8a }));
+      mesh.position.set(x, y, z);
+      mesh.rotation.y = a + Math.PI / 2;
+      scene.add(mesh);
+      rings.push({ mesh, x, y, z, passed: false });
+    }
+    raceActive = { q, idx: 0, time: q.time, rings, sinceQ: 0 };
+    highlightRing();
+    combatHud.race.style.display = '';
+    showWorldToast(`🏁 ${q.name}：${q.time} 秒內穿過 ${q.n} 個光環！`);
+    SoundManager.playAchievement();
+  }
+
+  function highlightRing() {
+    raceActive.rings.forEach((r, i) => {
+      if (r.passed) r.mesh.material.color.setHex(0x4ade80);
+      else if (i === raceActive.idx) {
+        r.mesh.material.color.setHex(0xffd166);
+        r.mesh.material.emissive = new THREE.Color(0x7a5200);
+      } else {
+        r.mesh.material.color.setHex(0x8a8a8a);
+        r.mesh.material.emissive = new THREE.Color(0x000000);
+      }
+    });
+  }
+
+  function cancelRace(msg) {
+    if (!raceActive) return;
+    raceActive.rings.forEach(r => scene.remove(r.mesh));
+    raceActive = null;
+    if (combatHud) combatHud.race.style.display = 'none';
+    if (msg) showWorldToast(msg);
+  }
+
+  function updateRace(dt) {
+    if (!raceActive || quizOpen) return;
+    raceActive.time -= dt;
+    if (raceActive.time <= 0) {
+      cancelRace('⏰ 時間到！再挑戰一次吧！');
+      return;
+    }
+    const r = raceActive.rings[raceActive.idx];
+    r.mesh.rotation.z += dt * 2;
+    const d = Math.hypot(pos.x - r.x, pos.y + 1 - r.y, pos.z - r.z);
+    if (d < 2) {
+      r.passed = true;
+      raceActive.idx++;
+      raceActive.sinceQ++;
+      SoundManager.playCorrect();
+      if (raceActive.idx >= raceActive.q.n) {
+        const q = raceActive.q;
+        cancelRace('');
+        finishQuestDirect(q);
+        return;
+      }
+      highlightRing();
+      if (raceActive.sinceQ >= 3) {
+        raceActive.sinceQ = 0;
+        openRaceQuestion();
+      }
+    }
+    combatHud.race.textContent = `⏱ ${Math.ceil(raceActive.time)}s　💫 ${raceActive.idx}/${raceActive.q.n}`;
+  }
+
+  function openRaceQuestion() {
+    const q = raceActive.q;
+    ensureQuizDom();
+    active = { q: { ...q, type: 'chest' }, replay: isCleared(q), wrongThis: false, anyWrong: false, step: 0, ttsText: null, raceBonus: true };
+    quizOpen = true;
+    GameEngine.setDeferLevelUp(true);
+    quiz.root.classList.add('on');
+    quiz.name.textContent = '💫 空中單字題（答對 +4 秒）';
+    quiz.prog.textContent = '';
+    quiz.npc.style.display = 'none';
+    quiz.fb.textContent = '';
+    const pool = vocabPool(q.diff);
+    const entry = pool[Math.floor(Math.random() * pool.length)];
+    const distract = pickN(pool.filter(e => e.word !== entry.word), 3).map(e => e.word);
+    const options = shuffled([entry.word, ...distract]);
+    quiz.prompt.innerHTML = `${entry.hint} ${entry.sentence.replace(/_+/g, '<span class="aw-blank">____</span>')}`;
+    quiz.zh.innerHTML = zhPretty(entry.zh);
+    renderOptions(options, options.indexOf(entry.word), () => {
+      awardAnswer(true, entry.word);
+      if (raceActive && !active.wrongThis) {
+        raceActive.time += 4;
+        quiz.fb.textContent = '✨ +4 秒！';
+        quiz.fb.className = 'aw-quiz-feedback good';
+      }
+      setTimeout(closeQuiz, 700);
+    });
+  }
+
+  // ---- boss ----
+  function ensureCombatHud() {
+    if (combatHud) return;
+    const bar = document.createElement('div');
+    bar.className = 'aw-bossbar';
+    bar.innerHTML = '<div class="aw-bossbar-label" id="sky-boss-label"></div><div class="aw-bossbar-track"><div class="aw-bossbar-fill" id="sky-boss-fill"></div></div>';
+    bar.style.display = 'none';
+    els.wrap.appendChild(bar);
+    const race = document.createElement('div');
+    race.className = 'aw-race';
+    race.style.display = 'none';
+    els.wrap.appendChild(race);
+    combatHud = {
+      bossBar: bar,
+      bossLabel: bar.querySelector('#sky-boss-label'),
+      bossFill: bar.querySelector('#sky-boss-fill'),
+      race,
+    };
+  }
+
+  function buildBossMesh(q) {
+    const isle = isleById(q.island);
+    const g = new THREE.Group();
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(3.6, 4.4, 2.6),
+      new THREE.MeshLambertMaterial({ color: 0x3c3c58, emissive: 0x14143a }));
+    torso.position.y = 4;
+    torso.castShadow = true;
+    g.add(torso);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(2, 1.9, 1.9),
+      new THREE.MeshLambertMaterial({ color: 0x4a4a68 }));
+    head.position.y = 7.2;
+    head.castShadow = true;
+    g.add(head);
+    const eyeMat = new THREE.MeshLambertMaterial({ color: 0x66aaff, emissive: 0x2255cc });
+    const eyes = [];
+    [-0.5, 0.5].forEach(x => {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.26, 8, 6), eyeMat);
+      eye.position.set(x, 7.35, 1);
+      g.add(eye);
+      eyes.push(eye);
+    });
+    [-2.4, 2.4].forEach(x => {
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(1, 3.6, 1),
+        new THREE.MeshLambertMaterial({ color: 0x34344e }));
+      arm.position.set(x, 4.2, 0);
+      arm.castShadow = true;
+      g.add(arm);
+    });
+    g.position.set(isle.pos[0], isle.pos[1], isle.pos[2] - 7);
+    scene.add(g);
+    bossParts = { group: g, eyeMat, torso };
+    return g;
+  }
+
+  function startBoss(q) {
+    ensureCombatHud();
+    const mesh = buildBossMesh(q);
+    const isle = isleById(q.island);
+    const mob = {
+      def: { id: 'boss', name: '暴風巨像', hp: q.n, quiz: 'boss', speed: 0, diff: 'hard' },
+      isle, mesh, hp: q.n, dead: false, gone: false, isBoss: true,
+      home: { x: mesh.position.x, z: mesh.position.z },
+      angle: 0, cooldown: 0, boost: 0, shieldT: 0, fade: 0, questId: q.id,
+    };
+    mesh.traverse(o => { o.userData.mobRef = mob; });
+    mobs.push(mob);
+    bossActive = { q, mob, phase: 1, sinceSummon: 0, shockT: 6, warnT: 0, waveR: -1, waveHit: false };
+    updateBossBar();
+    combatHud.bossBar.style.display = '';
+    showWorldToast('⛈️ 暴風巨像甦醒了！點擊它（或按 ⚡）用英語魔法攻擊！');
+    SoundManager.playAchievement();
+  }
+
+  function resetBoss() {
+    if (!bossActive) return;
+    bossActive.mob.gone = true;
+    scene.remove(bossActive.mob.mesh);
+    despawnQuestMobs(bossActive.q.id);
+    bossActive = null;
+    bossParts = null;
+    if (combatHud) combatHud.bossBar.style.display = 'none';
+    if (shockRing) shockRing.visible = false;
+    if (warnRing) warnRing.visible = false;
+  }
+
+  function engageBoss() {
+    if (bossActive) openCombatQuiz(bossActive.mob);
+  }
+
+  function updateBossBar() {
+    if (!combatHud || !bossActive) return;
+    const m = bossActive.mob;
+    combatHud.bossLabel.textContent = `⛈️ 暴風巨像 ${bossActive.phase === 2 ? '(狂暴!)' : ''}`;
+    combatHud.bossFill.style.width = Math.max(0, (m.hp / m.def.hp) * 100) + '%';
+  }
+
+  function onBossHit(mob) {
+    updateBossBar();
+    SoundManager.playCorrect();
+    if (mob.hp <= 0) { bossVictory(); return; }
+    if (bossActive.phase === 1 && mob.hp <= mob.def.hp / 2) {
+      bossActive.phase = 2;
+      bossParts.eyeMat.color.setHex(0xff4444);
+      bossParts.eyeMat.emissive.setHex(0xcc1111);
+      bossActive.shockT = 3;
+      updateBossBar();
+      showWorldToast('⛈️ 巨像狂暴化了！小心衝擊波，跳起來閃避！');
+    }
+    bossActive.sinceSummon++;
+    if (bossActive.phase === 1 && bossActive.sinceSummon >= 3) {
+      bossActive.sinceSummon = 0;
+      spawnMob('slime', bossActive.q.island, -6 + Math.random() * 4, 4, bossActive.q.id);
+      spawnMob('slime', bossActive.q.island, 6 - Math.random() * 4, 4, bossActive.q.id);
+      showWorldToast('⛈️ 巨像召喚了雲史萊姆！');
+    }
+    if (active && active.combat === mob) {
+      setTimeout(() => { if (active && active.combat === mob) askCombat(); }, 600);
+    }
+  }
+
+  function bossVictory() {
+    const q = bossActive.q;
+    bossActive.mob.dead = true;   // collapse animation via updateMobs
+    despawnQuestMobs(q.id);
+    if (combatHud) combatHud.bossBar.style.display = 'none';
+    if (shockRing) shockRing.visible = false;
+    if (warnRing) warnRing.visible = false;
+    // the sky clears
+    scene.fog.color.setHex(0xcfeeff);
+    hemiLight.intensity = 0.9;
+    bossActive = null;
+    bossParts = null;
+    if (quizOpen) closeQuiz();
+    showWorldToast('🎆 暴風平息了！天空之城重獲和平！');
+    setTimeout(() => finishQuestDirect(q), 1200);
+  }
+
+  function ensureShockRings() {
+    if (shockRing) return;
+    shockRing = new THREE.Mesh(
+      new THREE.TorusGeometry(1, 0.28, 6, 28),
+      new THREE.MeshLambertMaterial({ color: 0x88ccff, emissive: 0x2255cc })
+    );
+    shockRing.rotation.x = Math.PI / 2;
+    shockRing.visible = false;
+    scene.add(shockRing);
+    warnRing = new THREE.Mesh(
+      new THREE.TorusGeometry(6, 0.14, 6, 32),
+      new THREE.MeshLambertMaterial({ color: 0xff5555, emissive: 0xaa2222, transparent: true, opacity: 0.8 })
+    );
+    warnRing.rotation.x = Math.PI / 2;
+    warnRing.visible = false;
+    scene.add(warnRing);
+  }
+
+  function updateBoss(dt) {
+    if (!bossActive) return;
+    const mesh = bossActive.mob.mesh;
+    if (!bossActive.mob.dead) {
+      mesh.position.y = bossActive.mob.isle.pos[1] + bobOf(bossActive.mob.isle.id) + Math.sin(simTime * 0.8) * 0.3;
+      mesh.rotation.y = Math.sin(simTime * 0.4) * 0.15;
+    }
+    if (bossActive.phase !== 2 || quizOpen) return;
+    ensureShockRings();
+    const bx = mesh.position.x, bz = mesh.position.z;
+    const groundY = bossActive.mob.isle.pos[1] + bobOf(bossActive.mob.isle.id);
+    if (bossActive.waveR >= 0) {
+      // expanding shockwave
+      bossActive.waveR += dt * 11;
+      shockRing.scale.setScalar(bossActive.waveR);
+      shockRing.position.set(bx, groundY + 0.4, bz);
+      const pd = Math.hypot(pos.x - bx, pos.z - bz);
+      if (!bossActive.waveHit && Math.abs(pd - bossActive.waveR) < 1.4 &&
+          grounded && Math.abs(pos.y - groundY) < 2.5) {
+        bossActive.waveHit = true;
+        damagePlayer(1, bx, bz);
+      }
+      if (bossActive.waveR > 26) {
+        bossActive.waveR = -1;
+        shockRing.visible = false;
+        bossActive.shockT = 6.5;
+      }
+    } else if (bossActive.warnT > 0) {
+      bossActive.warnT -= dt;
+      warnRing.position.set(bx, groundY + 0.3, bz);
+      warnRing.material.opacity = 0.4 + Math.abs(Math.sin(simTime * 8)) * 0.5;
+      if (bossActive.warnT <= 0) {
+        warnRing.visible = false;
+        bossActive.waveR = 0.5;
+        bossActive.waveHit = false;
+        shockRing.visible = true;
+        shockRing.scale.setScalar(0.5);
+      }
+    } else {
+      bossActive.shockT -= dt;
+      if (bossActive.shockT <= 0) {
+        bossActive.warnT = 1.5;
+        warnRing.visible = true;
+        showWorldToast('⚠️ 衝擊波要來了，跳起來！');
+      }
+    }
+  }
+
+  // tap-to-attack: raycast mobs on a short, non-drag tap
+  function tapAttack(clientX, clientY) {
+    if (!raycaster) raycaster = new THREE.Raycaster();
+    const rect = renderer.domElement.getBoundingClientRect();
+    const ndc = {
+      x: ((clientX - rect.left) / rect.width) * 2 - 1,
+      y: -((clientY - rect.top) / rect.height) * 2 + 1,
+    };
+    raycaster.setFromCamera(ndc, camera);
+    const targets = mobs.filter(m => !m.dead && !m.gone).map(m => m.mesh);
+    if (!targets.length) return;
+    const hits = raycaster.intersectObjects(targets, true);
+    if (!hits.length) return;
+    let o = hits[0].object;
+    while (o && !o.userData.mobRef) o = o.parent;
+    const mob = o && o.userData.mobRef;
+    if (mob && !mob.dead) openCombatQuiz(mob);
+  }
+
+  function nearestMob(maxD) {
+    let best = null, bd = maxD;
+    for (const m of mobs) {
+      if (m.dead || m.gone) continue;
+      const d = Math.hypot(pos.x - m.mesh.position.x, pos.z - m.mesh.position.z);
+      if (d < bd) { bd = d; best = m; }
+    }
+    return best;
+  }
+
   // ===================== player =====================
   function emojiTexture(emoji, bg) {
     const cv = document.createElement('canvas');
@@ -1146,6 +2080,7 @@ const SkyGame = (() => {
     els.flash.classList.add('on');
     setTimeout(() => els.flash.classList.remove('on'), 420);
     SoundManager.playWrong();
+    lastDamageAt = simTime;
     const isle = isleById(lastGroundIsland) || SKY_ISLANDS[0];
     respawnAt(isle, true);
   }
@@ -1303,6 +2238,19 @@ const SkyGame = (() => {
     for (let i = 0; i < markerList.length; i++) {
       markerList[i].position.y = 4.3 + Math.sin(simTime * 2 + i) * 0.25;
     }
+    // combat & advanced quests
+    updateMobs(dt);
+    updateBolt(dt);
+    updateBoss(dt);
+    updateRace(dt);
+    updateRunePickup();
+    // slowly regain hearts out of combat
+    if (playing && hearts < SKY_CONFIG.maxHearts && simTime - lastDamageAt > 20) {
+      hearts++;
+      lastDamageAt = simTime;
+      updateHudHearts();
+      showWorldToast('💗 恢復了一顆心！');
+    }
     // drifting clouds (cheap: advance a third of them per frame)
     if (cloudMesh) {
       const m = new THREE.Matrix4();
@@ -1365,6 +2313,8 @@ const SkyGame = (() => {
   function interact() {
     if (quizOpen) return;
     if (!currentTarget) {
+      const mob = nearestMob(10);
+      if (mob) { openCombatQuiz(mob); return; }
       showWorldToast('🔍 附近沒有可以互動的東西，去找金色的「!」標記吧');
       return;
     }
@@ -1377,7 +2327,17 @@ const SkyGame = (() => {
       showWorldToast('⏳ 這個任務即將在後續更新開放！');
       return;
     }
-    openQuest(q);
+    if (raceActive && raceActive.q.id !== q.id) cancelRace('🏁 競速取消了');
+    switch (q.type) {
+      case 'arena': startArena(q); return;
+      case 'race': startRace(q); return;
+      case 'runes': startRunes(q); return;
+      case 'boss':
+        if (bossActive) engageBoss();
+        else startBoss(q);
+        return;
+      default: openQuest(q);
+    }
   }
 
   // ===================== quiz overlay =====================
@@ -1510,10 +2470,12 @@ const SkyGame = (() => {
       case 'npc': askDialog(); break;
       case 'listen': askListen(); break;
       case 'pillars': askPairs(); break;
+      case 'bridge': askSpellWord(); break;
+      case 'combat': askCombat(); break;
     }
   }
 
-  function renderOptions(options, correctIdx, onCorrect, labeler) {
+  function renderOptions(options, correctIdx, onCorrect, labeler, onWrong) {
     quiz.opts.innerHTML = '';
     options.forEach((opt, i) => {
       const b = document.createElement('button');
@@ -1533,6 +2495,7 @@ const SkyGame = (() => {
           active.wrongThis = true;
           active.anyWrong = true;
           SoundManager.playWrong();
+          onWrong?.();
         }
       });
       quiz.opts.appendChild(b);
@@ -1704,6 +2667,14 @@ const SkyGame = (() => {
       GameEngine.addXP(tier.xp);
       GameEngine.addGems(tier.gems);
       GameEngine.recordSkyQuest?.();
+      if (q.type === 'bridge') {
+        save.bridgeBuilt = true;
+        persist();
+        const b = SKY_BRIDGES.find(x => x.quest === q.id);
+        if (b) buildBridge(b);
+        showWorldToast('🌉 通往水晶尖峰的天空之橋出現了！');
+      }
+      if (q.type === 'boss') GameEngine.recordSkyBoss?.();
     }
     SoundManager.playQuestComplete();
     updateQuestMarkers();
@@ -1750,8 +2721,11 @@ const SkyGame = (() => {
         els.joyBase.style.top = (e.clientY - rect.top) + 'px';
         els.joyKnob.style.transform = 'translate(-50%, -50%)';
       } else {
-        // right side / mouse → look
-        lookPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        // right side / mouse → look (also candidate for a tap-attack)
+        lookPointers.set(e.pointerId, {
+          x: e.clientX, y: e.clientY,
+          sx: e.clientX, sy: e.clientY, t: performance.now(),
+        });
         if (lookPointers.size === 2) {
           const [a, b] = [...lookPointers.values()];
           pinchDist = Math.hypot(a.x - b.x, a.y - b.y);
@@ -1774,7 +2748,7 @@ const SkyGame = (() => {
       }
       if (!lookPointers.has(e.pointerId)) return;
       const prev = lookPointers.get(e.pointerId);
-      lookPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      lookPointers.set(e.pointerId, { ...prev, x: e.clientX, y: e.clientY });
       if (lookPointers.size === 1) {
         cam.theta -= (e.clientX - prev.x) * 0.0062;
         cam.phi += (e.clientY - prev.y) * 0.005;
@@ -1795,8 +2769,15 @@ const SkyGame = (() => {
         joy.dx = 0; joy.dy = 0;
         els.joyBase.style.display = 'none';
       }
+      const lp = lookPointers.get(e.pointerId);
       lookPointers.delete(e.pointerId);
       pinchDist = 0;
+      // short non-drag tap → try to attack a mob under the cursor
+      if (lp && playing && !quizOpen &&
+          Math.hypot(e.clientX - lp.sx, e.clientY - lp.sy) < 8 &&
+          performance.now() - lp.t < 400) {
+        tapAttack(e.clientX, e.clientY);
+      }
     };
     el.addEventListener('pointerup', release);
     el.addEventListener('pointercancel', release);
