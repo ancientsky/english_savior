@@ -196,6 +196,7 @@ const GameEngine = (() => {
       rpgTalks: 0,
       rpgChapters: 0,
       skyQuests: 0,
+      skyGalaxyQuests: 0,
       skyBossDown: false,
       // history
       learnedWordsList: [],
@@ -507,8 +508,9 @@ const GameEngine = (() => {
     checkAchievements();
   }
 
-  function recordSkyQuest() {
+  function recordSkyQuest(isGalaxy) {
     state.skyQuests = (state.skyQuests || 0) + 1;
+    if (isGalaxy) state.skyGalaxyQuests = (state.skyGalaxyQuests || 0) + 1;
     save();
     checkAchievements();
   }
