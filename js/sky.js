@@ -352,6 +352,7 @@ const SkyGame = (() => {
     buildSkyDome();
     buildLights();
     buildClouds();
+    initTextures();
     SKY_ISLANDS.forEach(buildIsland);
     SKY_BRIDGES.forEach(b => {
       if (b.quest && !isBridgeBuilt(b.quest)) return; // built by its quest
@@ -453,42 +454,114 @@ const SkyGame = (() => {
   const GEO = {};
   const MAT = {};
   function geoBox() { return GEO.box || (GEO.box = new THREE.BoxGeometry(1, 1, 1)); }
-  function matOf(color, emissive) {
-    const key = color + '_' + (emissive || 0);
+  function matOf(color, emissive, texKey) {
+    const key = color + '_' + (emissive || 0) + '_' + (texKey || '');
     if (!MAT[key]) {
-      MAT[key] = new THREE.MeshLambertMaterial({ color });
+      const opts = { color };
+      if (texKey && TEX[texKey]) opts.map = TEX[texKey];
+      MAT[key] = new THREE.MeshLambertMaterial(opts);
       if (emissive) { MAT[key].emissive = new THREE.Color(emissive); }
     }
     return MAT[key];
   }
 
+  // ---------- procedural surface textures (cosmetic-only, no new draw calls) ----------
+  // Neutral overlay approach: base = near-white with subtle speckles/streaks so the
+  // material's own `color` still shows through (Lambert multiplies map × color).
+  // One texture per PATTERN, not per color, so the MAT cache above still fully reuses.
+  const TEX = {};
+  function noiseTexture(key, base, spots, density, opts) {
+    if (TEX[key]) return TEX[key];
+    opts = opts || {};
+    const size = opts.size || 128;
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = size;
+    const ctx = cv.getContext('2d');
+    ctx.fillStyle = base;
+    ctx.fillRect(0, 0, size, size);
+    for (let i = 0; i < density; i++) {
+      const x = Math.random() * size, y = Math.random() * size;
+      ctx.fillStyle = spots[i % spots.length];
+      ctx.globalAlpha = 0.15 + Math.random() * 0.35;
+      if (opts.angular) {
+        // sparse angular flecks (crystal facets)
+        const s = 1.5 + Math.random() * 3;
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(Math.random() * Math.PI);
+        ctx.fillRect(-s / 2, -s / 4, s, s / 2);
+        ctx.restore();
+      } else {
+        const r = 1 + Math.random() * (opts.rmax || 2);
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    if (opts.streaks) {
+      const { color, count, len, random } = opts.streaks;
+      ctx.strokeStyle = color;
+      for (let i = 0; i < count; i++) {
+        const x = Math.random() * size, y = Math.random() * size;
+        const l = len * (0.5 + Math.random() * 0.9);
+        // default: mostly-vertical grain; `random: true` = short scattered cracks
+        const angle = random ? Math.random() * Math.PI * 2 : (Math.PI / 2 + (Math.random() - 0.5) * 0.3);
+        ctx.globalAlpha = 0.1 + Math.random() * 0.25;
+        ctx.lineWidth = 1 + Math.random() * 1.2;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + Math.cos(angle) * l, y + Math.sin(angle) * l);
+        ctx.stroke();
+      }
+    }
+    ctx.globalAlpha = 1;
+    const tex = new THREE.CanvasTexture(cv);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(opts.repeat || 4, opts.repeat || 4);
+    TEX[key] = tex;
+    return tex;
+  }
+
+  // build every recipe once, eagerly, before any island/bridge mesh is made
+  function initTextures() {
+    noiseTexture('grassTex', '#ffffff', ['#c2ceac', '#a9ba92', '#e4ecd4'], 300, { rmax: 5 });
+    noiseTexture('rockTex', '#ffffff', ['#9c9c9c', '#7e7e7e', '#c6c6c6'], 220,
+      { streaks: { color: '#606060', count: 40, len: 10, random: true } });
+    noiseTexture('woodTex', '#ffffff', ['#c9beac', '#ddd2bd'], 50,
+      { streaks: { color: '#8a6f4e', count: 60, len: 110 } });
+    noiseTexture('sandTex', '#ffffff', ['#dcc9a4', '#ccb68c', '#f0e6cc'], 420, { rmax: 3 });
+    noiseTexture('snowTex', '#ffffff', ['#b9d6f6', '#dceafc', '#a2c6ec'], 200, { rmax: 3 });
+    noiseTexture('crystalTex', '#ffffff', ['#dcdcff', '#c8c8f0'], 46,
+      { streaks: { color: '#b0b0e8', count: 20, len: 14, random: true }, angular: true });
+  }
+
   const ISLAND_STYLE = {
-    grass: { top: 0x62c95e, side: 0x7a5230 },
-    forest: { top: 0x3f8f4a, side: 0x6a4a2e },
-    water: { top: 0x6fcf6f, side: 0x77572f },
-    flower: { top: 0x7fd070, side: 0x7a5230 },
-    mushroom: { top: 0x9c7bb8, side: 0x5e4a3a },
-    ruin: { top: 0xb8b09a, side: 0x8a8272 },
-    crystal: { top: 0x8fd8e8, side: 0x5a7a99 },
-    cloud: { top: 0xf2f8ff, side: 0xd8e6f5 },
-    village: { top: 0x8fce62, side: 0x7a5230 },
-    ice: { top: 0xd8f0fa, side: 0x9ec3d8 },
-    lava: { top: 0x4a3a38, side: 0x35292a },
-    pillars: { top: 0xc9c3ae, side: 0x99917c },
-    bone: { top: 0xb8ad8f, side: 0x847a5e },
-    storm: { top: 0x5a5a72, side: 0x3c3c50 },
+    grass: { top: 0x62c95e, side: 0x7a5230, tex: 'grassTex' },
+    forest: { top: 0x3f8f4a, side: 0x6a4a2e, tex: 'grassTex' },
+    water: { top: 0x6fcf6f, side: 0x77572f, tex: 'grassTex' },
+    flower: { top: 0x7fd070, side: 0x7a5230, tex: 'grassTex' },
+    mushroom: { top: 0x9c7bb8, side: 0x5e4a3a, tex: 'grassTex' },
+    ruin: { top: 0xb8b09a, side: 0x8a8272, tex: 'rockTex' },
+    crystal: { top: 0x8fd8e8, side: 0x5a7a99, tex: 'crystalTex' },
+    cloud: { top: 0xf2f8ff, side: 0xd8e6f5, tex: null },
+    village: { top: 0x8fce62, side: 0x7a5230, tex: 'grassTex' },
+    ice: { top: 0xd8f0fa, side: 0x9ec3d8, tex: 'snowTex' },
+    lava: { top: 0x4a3a38, side: 0x35292a, tex: 'rockTex' },
+    pillars: { top: 0xc9c3ae, side: 0x99917c, tex: 'rockTex' },
+    bone: { top: 0xb8ad8f, side: 0x847a5e, tex: 'sandTex' },
+    storm: { top: 0x5a5a72, side: 0x3c3c50, tex: 'rockTex' },
     // galaxy biomes
-    nebula: { top: 0x4a3a7a, side: 0x2a2050 },
-    star: { top: 0x5a5aa0, side: 0x333366 },
-    moon: { top: 0xb8b8c8, side: 0x8a8a9a },
-    comet: { top: 0x3a4a6a, side: 0x24304a },
-    aurora: { top: 0x2a5a4a, side: 0x1a3a35 },
-    alien: { top: 0x6a4a8a, side: 0x44305a },
+    nebula: { top: 0x4a3a7a, side: 0x2a2050, tex: 'crystalTex' },
+    star: { top: 0x5a5aa0, side: 0x333366, tex: 'crystalTex' },
+    moon: { top: 0xb8b8c8, side: 0x8a8a9a, tex: 'rockTex' },
+    comet: { top: 0x3a4a6a, side: 0x24304a, tex: 'rockTex' },
+    aurora: { top: 0x2a5a4a, side: 0x1a3a35, tex: 'crystalTex' },
+    alien: { top: 0x6a4a8a, side: 0x44305a, tex: 'crystalTex' },
     // hidden secret realms
-    cave: { top: 0x3a3a4a, side: 0x242430 },
-    lake: { top: 0x4aa8d8, side: 0x2a6a8a },
-    mist: { top: 0x6a7a6a, side: 0x4a5a4a },
-    temple: { top: 0x2a2438, side: 0x1a1626 },
+    cave: { top: 0x3a3a4a, side: 0x242430, tex: 'rockTex' },
+    lake: { top: 0x4aa8d8, side: 0x2a6a8a, tex: null },
+    mist: { top: 0x6a7a6a, side: 0x4a5a4a, tex: 'rockTex' },
+    temple: { top: 0x2a2438, side: 0x1a1626, tex: 'crystalTex' },
   };
 
   function buildIsland(isle) {
@@ -501,7 +574,7 @@ const SkyGame = (() => {
     const discH = 2.2;
     const disc = new THREE.Mesh(
       new THREE.CylinderGeometry(isle.r, isle.r * 0.92, discH, 22),
-      matOf(style.top)
+      matOf(style.top, 0, style.tex)
     );
     disc.position.y = -discH / 2;
     disc.receiveShadow = true;
@@ -509,11 +582,11 @@ const SkyGame = (() => {
     disc.updateMatrix();
     g.add(disc);
 
-    // inverted rock cone below
+    // inverted rock cone below — always rocky regardless of the top biome
     const rockH = isle.r * (0.9 + rng() * 0.5);
     const rock = new THREE.Mesh(
       new THREE.ConeGeometry(isle.r * 0.9, rockH, 12),
-      matOf(style.side)
+      matOf(style.side, 0, 'rockTex')
     );
     rock.rotation.x = Math.PI;
     rock.position.y = -discH - rockH / 2 + 0.1;
@@ -526,7 +599,7 @@ const SkyGame = (() => {
     for (let i = 0; i < nRubble; i++) {
       const a = rng() * Math.PI * 2;
       const rr = isle.r * (0.55 + rng() * 0.5);
-      const chunk = new THREE.Mesh(new THREE.DodecahedronGeometry(0.8 + rng() * 1.6), matOf(style.side));
+      const chunk = new THREE.Mesh(new THREE.DodecahedronGeometry(0.8 + rng() * 1.6), matOf(style.side, 0, 'rockTex'));
       chunk.position.set(Math.cos(a) * rr, -discH - rockH * (0.55 + rng() * 0.6), Math.sin(a) * rr);
       chunk.matrixAutoUpdate = false;
       chunk.updateMatrix();
@@ -1041,7 +1114,7 @@ const SkyGame = (() => {
         const py = sy + (ey - sy) * t + Math.sin(i * 1.7) * wobble;
         const stone = new THREE.Mesh(
           GEO.step || (GEO.step = new THREE.CylinderGeometry(1.7, 1.4, 0.8, 9)),
-          matOf(0x9aa5a8)
+          matOf(0x9aa5a8, 0, 'rockTex')
         );
         stone.position.set(px, py - 0.4, pz);
         stone.receiveShadow = true;
@@ -1062,7 +1135,9 @@ const SkyGame = (() => {
       const pz = sz + (ez - sz) * tm;
       const py = sy + (ey - sy) * tm;
       const seg = new THREE.Mesh(geoBox(),
-        plank ? matOf(i % 2 ? 0xa8763e : 0x99672f) : matOf(i % 2 ? 0xa8a49a : 0x94908a));
+        plank
+          ? matOf(i % 2 ? 0xa8763e : 0x99672f, 0, 'woodTex')
+          : matOf(i % 2 ? 0xa8a49a : 0x94908a, 0, 'rockTex'));
       seg.scale.set(plank ? 2.6 : 3.2, 0.4, span / n + 0.25);
       seg.position.set(px, py - 0.2, pz);
       seg.rotation.y = yaw;
