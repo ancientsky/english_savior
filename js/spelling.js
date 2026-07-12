@@ -33,11 +33,52 @@ const SpellingGame = (() => {
 
   const SHAPES = ['box', 'tall', 'diamond', 'round', 'cactus'];
 
+  // A-Z only; used to auto-skip symbols/spaces in words like "MR." or "ICE CREAM"
+  const isLetter = ch => /[A-Z]/.test(ch);
+
+  // Biomes cycle every 3 completed words, recoloring ground/mountains/obstacles.
+  // The sky day/night cycle keeps running independently on top of this.
+  const BIOMES = [
+    {
+      key: 'grass', toast: null,
+      groundTop: '#3d6b1f', dirt: ['#4a3628', '#362518', '#1f1510'],
+      mountain: 'rgba(25,25,60,0.7)', cloudTint: [255, 255, 255],
+      obsColors: OBS_COLORS, deco: 'none',
+    },
+    {
+      key: 'desert', toast: '🏜️ 進入沙漠！',
+      groundTop: '#c2924a', dirt: ['#a9773a', '#7d5527', '#4a2f14'],
+      mountain: 'rgba(120,70,40,0.55)', cloudTint: [255, 235, 205],
+      obsColors: ['#e08a3c', '#d35400', '#f39c12', '#c0392b', '#e67e22', '#f1c40f', '#a04000', '#dc7633'],
+      deco: 'cactus',
+    },
+    {
+      key: 'snow', toast: '❄️ 進入雪地！',
+      groundTop: '#dbe9f0', dirt: ['#aebfd1', '#8195ab', '#54617a'],
+      mountain: 'rgba(200,215,230,0.6)', cloudTint: [235, 245, 255],
+      obsColors: ['#5dade2', '#85c1e9', '#48c9b0', '#aed6f1', '#2e86c1', '#d6eaf8', '#7fb3d5', '#3498db'],
+      deco: 'snowman',
+    },
+    {
+      key: 'volcano', toast: '🌋 進入火山！',
+      groundTop: '#3a2020', dirt: ['#3a1810', '#240d08', '#140503'],
+      mountain: 'rgba(80,20,10,0.7)', cloudTint: [210, 180, 180],
+      obsColors: ['#e74c3c', '#ff5722', '#c0392b', '#f39c12', '#ff7043', '#d35400', '#e67e22', '#b71c1c'],
+      deco: 'lava',
+    },
+  ];
+
+  const POWERUP_ICON = { shield: '🛡️', magnet: '🧲', slow: '⏳' };
+  const POWERUP_LABEL = { shield: '🛡️ 護盾！', magnet: '🧲 磁鐵！', slow: '⏳ 慢動作！' };
+  const MAGNET_DURATION = 6 * 60; // frame-units (dt≈1 per 60fps frame)
+  const SLOWMO_DURATION = 4 * 60;
+
   // ===== STATE =====
   let canvas, ctx;
   let state = 'idle'; // idle | running | gameover | complete
   let diff = 'easy';
   let hp, wordsCompleted, currentWord, letterIndex;
+  let spellTarget = '';   // sanitized spelling target (symbols kept, parens stripped)
   let gemsEarnedThisRound = 0;
   let obstacles, groundScroll, mountainScroll, speed, frameCount;
   let usedWords;
@@ -49,6 +90,10 @@ const SpellingGame = (() => {
   let charY, charVY, isJumping, runFrame;
   let jumpsUsed = 0;      // double jump support
   let landSquash = 0;     // squash & stretch timer
+  let ducking = false;
+  let touchDuckActive = false;
+  let touchStartY = 0;
+  let touchStartTime = 0;
 
   // Fun systems
   let combo = 0;              // consecutive correct letters
@@ -57,6 +102,18 @@ const SpellingGame = (() => {
   let gemCoinsCollected = 0;
   let nextGemAt = 0;
   let skyPhase = 0;           // 0 day → 1 sunset → 2 night → 3 dawn
+  let biomeIndex = 0;         // current BIOMES index
+
+  // Power-ups
+  let powerups = [];          // floating 🛡️/🧲/⏳ pickups
+  let nextPowerupAt = 0;
+  let shieldActive = false;
+  let magnetT = 0;
+  let slowT = 0;
+
+  // Flyers (ducking obstacles)
+  let flyers = [];
+  let nextFlyerAt = 0;
 
   // Effects
   let particles = [];
@@ -122,8 +179,11 @@ const SpellingGame = (() => {
 
     // Input
     document.addEventListener('keydown', onKey);
+    document.addEventListener('keyup', onKeyUp);
     canvas.addEventListener('click', onTap);
-    canvas.addEventListener('touchstart', e => { e.preventDefault(); onTap(e); });
+    canvas.addEventListener('touchstart', e => { e.preventDefault(); onTouchStart(e); }, { passive: false });
+    canvas.addEventListener('touchend', e => { e.preventDefault(); onTouchEnd(e); });
+    canvas.addEventListener('touchcancel', () => onTouchEnd());
     // The start overlay sits on top of the canvas, so "tap to start"
     // must listen on the overlay itself
     startScreen.addEventListener('click', onTap);
@@ -164,15 +224,53 @@ const SpellingGame = (() => {
   function onKey(e) {
     const zone = document.getElementById('zone-spelling');
     if (!zone || !zone.classList.contains('active')) return;
+    if (e.code === 'ArrowDown' || e.code === 'KeyS') {
+      e.preventDefault();
+      if (state === 'running') setDucking(true);
+      return;
+    }
     if (e.code !== 'Space' && e.code !== 'ArrowUp') return;
     e.preventDefault();
     handleInput();
+  }
+
+  function onKeyUp(e) {
+    if (e.code === 'ArrowDown' || e.code === 'KeyS') setDucking(false);
+  }
+
+  function setDucking(on) {
+    ducking = !!on;
   }
 
   function onTap(e) {
     const zone = document.getElementById('zone-spelling');
     if (!zone || !zone.classList.contains('active')) return;
     handleInput();
+  }
+
+  // Touch: holding the lower half of the canvas ducks, tapping the upper
+  // half (or a quick tap anywhere) jumps — kept forgiving for small fingers.
+  function onTouchStart(e) {
+    const zone = document.getElementById('zone-spelling');
+    if (!zone || !zone.classList.contains('active')) return;
+    const touch = e.touches && e.touches[0];
+    const rect = canvas.getBoundingClientRect();
+    touchStartY = touch ? touch.clientY - rect.top : 0;
+    touchStartTime = performance.now();
+    if (state !== 'running') { handleInput(); return; }
+    if (touchStartY > rect.height / 2) {
+      touchDuckActive = true;
+      setDucking(true);
+    } else {
+      handleInput();
+    }
+  }
+
+  function onTouchEnd() {
+    if (!touchDuckActive) return;
+    touchDuckActive = false;
+    setDucking(false);
+    if (performance.now() - touchStartTime < 150) handleInput(); // forgiving quick-tap jump
   }
 
   function handleInput() {
@@ -222,6 +320,16 @@ const SpellingGame = (() => {
     wordCompleteFlash = 0;
     lastTime = 0;
     gameTime = 0;
+    biomeIndex = 0;
+    powerups = [];
+    nextPowerupAt = (8 + Math.random() * 6) * 60;
+    shieldActive = false;
+    magnetT = 0;
+    slowT = 0;
+    flyers = [];
+    nextFlyerAt = 300 + Math.random() * 200;
+    ducking = false;
+    touchDuckActive = false;
 
     // Stop idle animation
     if (idleAnimId) { cancelAnimationFrame(idleAnimId); idleAnimId = null; }
@@ -247,14 +355,44 @@ const SpellingGame = (() => {
     }
     currentWord = available[Math.floor(Math.random() * available.length)];
     usedWords.push(currentWord.word);
+    // Sanitize the spelling target: drop parenthetical notes like
+    // "PE(PHYSICAL EDUCATION)" → "PE". The original word (with notes) is
+    // still used for GameEngine.recordWord() and TTS speech.
+    spellTarget = sanitizeTarget(currentWord.word);
     letterIndex = 0;
     distSinceCorrect = 0;
     damageThisWord = false;
+    // Auto-skip any leading symbols; in the rare case this finishes the
+    // word outright, wordComplete() already fired — don't re-render it.
+    if (skipNonLetters()) return;
     updateWordDisplay();
     // Hearing the word helps kids connect spelling to sound
     if (TTSManager.isSupported()) {
       TTSManager.speak(currentWord.word.toLowerCase(), 'en-US', 0.85);
     }
+  }
+
+  // Strip parenthetical notes, e.g. "PE(PHYSICAL EDUCATION)" → "PE"
+  function sanitizeTarget(word) {
+    return word.replace(/\s*\([^)]*\)\s*/g, '').trim();
+  }
+
+  // Advance past any non A-Z characters (spaces, periods, hyphens, quotes)
+  // in the spelling target — they can't be rendered as obstacles, so they
+  // auto-collect. Returns true if this completed the word (wordComplete()
+  // already fired).
+  function skipNonLetters() {
+    let skipped = false;
+    while (letterIndex < spellTarget.length && !isLetter(spellTarget[letterIndex])) {
+      letterIndex++;
+      skipped = true;
+    }
+    if (skipped) updateWordDisplay();
+    if (letterIndex >= spellTarget.length) {
+      wordComplete();
+      return true;
+    }
+    return false;
   }
 
   // Extract the concise meaning from either VOCAB_DATA zh format
@@ -310,9 +448,14 @@ const SpellingGame = (() => {
     frameCount++;
     gameTime += dt;
 
+    // Slow-mo powerup eases the whole world's scroll speed, not the spawn logic
+    if (slowT > 0) { slowT -= dt; if (slowT < 0) slowT = 0; }
+    if (magnetT > 0) { magnetT -= dt; if (magnetT < 0) magnetT = 0; }
+    const scrollSpeed = slowT > 0 ? speed * 0.55 : speed;
+
     // Scroll ground
-    mountainScroll += speed * dt;
-    groundScroll = (groundScroll + speed * dt) % 40;
+    mountainScroll += scrollSpeed * dt;
+    groundScroll = (groundScroll + scrollSpeed * dt) % 40;
 
     // Character physics (apex float: lower gravity near peak for longer hang time)
     if (isJumping) {
@@ -333,14 +476,25 @@ const SpellingGame = (() => {
     const targetPhase = Math.min(3, (wordsCompleted / WORDS_TO_WIN) * 3.6);
     skyPhase += (targetPhase - skyPhase) * 0.015 * dt;
 
-    // Fever trail once the combo is hot
-    if (combo >= 5 && frameCount % 3 === 0) {
+    // Combo transformation trail: tier scales with the streak length
+    const cTier = comboTier();
+    if (cTier >= 1 && frameCount % 3 === 0) {
+      let color;
+      if (cTier === 1) color = '#f5c518';
+      else if (cTier === 2) color = ['#ff6b35', '#ff9f45', '#ffcf5c'][frameCount % 3];
+      else color = ['#ff004c', '#ff8c00', '#ffee00', '#00ff6a', '#00b4ff', '#8c00ff'][frameCount % 6];
       particles.push({
-        x: CHAR_X + Math.random() * 10, y: charY - 20 - Math.random() * 20,
+        x: CHAR_X + Math.random() * 10 - (cTier >= 2 ? 8 : 0), y: charY - 20 - Math.random() * 20,
         vx: -2 - Math.random(), vy: (Math.random() - 0.5) * 1.5,
         life: 14 + Math.random() * 8,
-        color: ['#f5c518', '#ff6b81', '#4ecca3', '#00b4d8'][frameCount % 4],
+        color,
         size: 2 + Math.random() * 2,
+      });
+    }
+    if (cTier >= 3 && frameCount % 6 === 0) {
+      particles.push({
+        x: CHAR_X + Math.random() * 30, y: charY - 44 - Math.random() * 16,
+        vx: -1.5, vy: -0.4, life: 20, color: '#ffffff', size: 2.4, star: true,
       });
     }
 
@@ -350,7 +504,7 @@ const SpellingGame = (() => {
     }
 
     // Spawn obstacles
-    nextObstacleAt -= speed * dt;
+    nextObstacleAt -= scrollSpeed * dt;
     if (nextObstacleAt <= 0) {
       spawnObstacle();
       nextObstacleAt = cfg.gapMin + Math.random() * (cfg.gapMax - cfg.gapMin);
@@ -358,12 +512,53 @@ const SpellingGame = (() => {
 
     // Move obstacles
     for (let i = 0; i < obstacles.length; i++) {
-      obstacles[i].x -= speed * dt;
+      obstacles[i].x -= scrollSpeed * dt;
     }
     obstacles = obstacles.filter(o => o.x + o.w > -60);
 
+    // Flyers: head-height hazards that only ducking dodges (medium/hard only)
+    if (diff !== 'easy') {
+      nextFlyerAt -= scrollSpeed * dt;
+      if (nextFlyerAt <= 0) {
+        if (canSpawnFlyer()) {
+          spawnFlyer();
+          const base = diff === 'hard' ? 420 : 620;
+          nextFlyerAt = base + Math.random() * 280;
+        } else {
+          nextFlyerAt = 90; // gap blocked by a nearby correct letter — retry soon
+        }
+      }
+    }
+    for (let i = 0; i < flyers.length; i++) flyers[i].x -= scrollSpeed * dt;
+    flyers = flyers.filter(f => f.x + f.w > -60);
+    checkFlyerCollisions();
+
+    // Floating power-ups: 🛡️ shield / 🧲 magnet / ⏳ slow-mo (game-time spawn, not distance)
+    nextPowerupAt -= dt;
+    if (nextPowerupAt <= 0) {
+      const kinds = ['shield', 'magnet', 'slow'];
+      const kind = kinds[Math.floor(Math.random() * kinds.length)];
+      powerups.push({
+        x: CANVAS_W + 20, y: GROUND_Y - 78 - Math.random() * 28,
+        bob: Math.random() * Math.PI * 2, kind, hit: false,
+      });
+      nextPowerupAt = (8 + Math.random() * 6) * 60;
+    }
+    for (let i = powerups.length - 1; i >= 0; i--) {
+      const p = powerups[i];
+      p.x -= scrollSpeed * dt;
+      p.bob += 0.08 * dt;
+      if (!p.hit &&
+          Math.abs(p.x - (CHAR_X + 16)) < 26 &&
+          Math.abs((p.y + Math.sin(p.bob) * 5) - (charY - 30)) < 34) {
+        p.hit = true;
+        activatePowerup(p.kind);
+      }
+      if (p.hit || p.x < -30) powerups.splice(i, 1);
+    }
+
     // Floating gem coins: jump to collect (capped per round)
-    nextGemAt -= speed * dt;
+    nextGemAt -= scrollSpeed * dt;
     if (nextGemAt <= 0) {
       if (gemCoinsCollected + gemCoins.length < 5) {
         gemCoins.push({
@@ -377,8 +572,19 @@ const SpellingGame = (() => {
     }
     for (let i = gemCoins.length - 1; i >= 0; i--) {
       const g = gemCoins[i];
-      g.x -= speed * dt;
+      g.x -= scrollSpeed * dt;
       g.bob += 0.08 * dt;
+      // Magnet powerup pulls nearby coins toward the dino
+      if (magnetT > 0) {
+        const dx = (CHAR_X + 16) - g.x;
+        const dy = (charY - 30) - (g.y + Math.sin(g.bob) * 5);
+        const dist = Math.hypot(dx, dy);
+        if (dist < 180 && dist > 1) {
+          const pull = 3.5 * dt;
+          g.x += (dx / dist) * pull;
+          g.y += (dy / dist) * pull;
+        }
+      }
       if (!g.hit &&
           Math.abs(g.x - (CHAR_X + 16)) < 24 &&
           Math.abs((g.y + Math.sin(g.bob) * 5) - (charY - 30)) < 32) {
@@ -398,11 +604,11 @@ const SpellingGame = (() => {
       if (g.hit || g.x < -30) gemCoins.splice(i, 1);
     }
 
-    // Collision detection
+    // Collision detection (hitbox halves in height while ducking)
     const cx = CHAR_X + 2;
-    const cy = charY - 48;
     const cw = 30;
-    const ch = 46;
+    const ch = ducking ? 23 : 46;
+    const cy = charY - 2 - ch;
 
     for (let i = 0; i < obstacles.length; i++) {
       const obs = obstacles[i];
@@ -413,7 +619,7 @@ const SpellingGame = (() => {
         obs.hit = true;
         // Check letter match at collision time (not spawn-time flag)
         // so that stale obstacles are handled correctly after letterIndex changes
-        if (obs.letter === currentWord.word[letterIndex]) {
+        if (obs.letter === spellTarget[letterIndex]) {
           collectLetter(obs);
         } else {
           takeDamage(obs);
@@ -453,11 +659,75 @@ const SpellingGame = (() => {
     if (wordCompleteFlash > 0) wordCompleteFlash -= 0.03 * dt;
   }
 
+  // ===== COMBO TRANSFORMATIONS =====
+  function comboTier() {
+    if (combo >= 15) return 3;
+    if (combo >= 10) return 2;
+    if (combo >= 5) return 1;
+    return 0;
+  }
+
+  // ===== POWER-UPS =====
+  function activatePowerup(kind) {
+    if (kind === 'shield') {
+      shieldActive = true;
+    } else if (kind === 'magnet') {
+      magnetT = MAGNET_DURATION;
+    } else if (kind === 'slow') {
+      slowT = SLOWMO_DURATION;
+    }
+    SoundManager.playCorrect();
+    collectEffects.push({
+      letter: POWERUP_LABEL[kind], small: true,
+      x: CHAR_X + 60, y: charY - 95, life: 40,
+    });
+  }
+
+  // ===== FLYERS (duck to dodge) =====
+  function canSpawnFlyer() {
+    // Never spawn within ~250px of a live correct-letter obstacle
+    return !obstacles.some(o => o.isCorrect && !o.hit && Math.abs(o.x - (CANVAS_W + 20)) < 250);
+  }
+
+  function spawnFlyer() {
+    flyers.push({
+      x: CANVAS_W + 20, w: 34, h: 26,
+      y: GROUND_Y - 54 - Math.random() * 10,
+      hit: false,
+    });
+  }
+
+  function checkFlyerCollisions() {
+    for (let i = 0; i < flyers.length; i++) {
+      const f = flyers[i];
+      if (f.hit) continue;
+      const fx1 = f.x, fx2 = f.x + f.w;
+      const dx1 = CHAR_X + 2, dx2 = CHAR_X + 32;
+      if (fx2 > dx1 && fx1 < dx2) {
+        f.hit = true;
+        if (ducking) {
+          // Dodged! Small whoosh particles overhead.
+          for (let j = 0; j < 6; j++) {
+            particles.push({
+              x: f.x, y: f.y + f.h,
+              vx: -1 - Math.random(), vy: 0.5 + Math.random(),
+              life: 14, color: '#cfd8dc', size: 2,
+            });
+          }
+        } else {
+          takeDamage(f);
+        }
+      }
+    }
+  }
+
   function spawnObstacle() {
     const cfg = DIFF_CONFIG[diff];
     if (!currentWord) return;
-    const word = currentWord.word;
-    const nextLetter = word[letterIndex];
+    const nextLetter = spellTarget[letterIndex];
+    // Defensive guard: skipNonLetters() should always keep this an A-Z
+    // letter, but bail out rather than spawn a bogus "correct" obstacle.
+    if (!nextLetter || !isLetter(nextLetter)) return;
 
     // Decide correct vs distractor
     let isCorrect = false;
@@ -478,7 +748,8 @@ const SpellingGame = (() => {
     }
 
     const shapeType = SHAPES[Math.floor(Math.random() * SHAPES.length)];
-    const color = OBS_COLORS[Math.floor(Math.random() * OBS_COLORS.length)];
+    const palette = BIOMES[biomeIndex].obsColors;
+    const color = palette[Math.floor(Math.random() * palette.length)];
 
     let w, h;
     switch (shapeType) {
@@ -548,12 +819,34 @@ const SpellingGame = (() => {
 
     updateWordDisplay();
 
-    if (letterIndex >= currentWord.word.length) {
+    if (letterIndex >= spellTarget.length) {
       wordComplete();
+    } else {
+      // Auto-skip any trailing symbols before the next obstacle spawns;
+      // may itself complete the word if only symbols remain.
+      skipNonLetters();
     }
   }
 
   function takeDamage(obs) {
+    if (shieldActive) {
+      // Shield absorbs the hit: no HP loss, combo preserved, consumed once
+      shieldActive = false;
+      for (let i = 0; i < 12; i++) {
+        const a = (Math.PI * 2 * i) / 12;
+        particles.push({
+          x: CHAR_X + 16, y: charY - 25,
+          vx: Math.cos(a) * 2.4, vy: Math.sin(a) * 2.4 - 0.5,
+          life: 18 + Math.random() * 6, color: '#4fc3f7', size: 2.5,
+        });
+      }
+      collectEffects.push({
+        letter: '🛡️ 護盾擋下！', small: true,
+        x: CHAR_X + 60, y: charY - 90, life: 32,
+      });
+      return;
+    }
+
     hp--;
     combo = 0;
     damageThisWord = true;
@@ -618,6 +911,14 @@ const SpellingGame = (() => {
     // Speed ramps up a little with each word — builds excitement
     const cfgSpeed = DIFF_CONFIG[diff].speed;
     speed = Math.min(cfgSpeed + wordsCompleted * 0.07, cfgSpeed * 1.55);
+
+    // Biome cycles every 3 completed words: 草原→沙漠→雪地→火山→...
+    const newBiomeIndex = Math.floor(wordsCompleted / 3) % BIOMES.length;
+    if (newBiomeIndex !== biomeIndex) {
+      biomeIndex = newBiomeIndex;
+      const biome = BIOMES[biomeIndex];
+      if (biome.toast) GameEngine.showToast(biome.toast, 'info');
+    }
 
     updateHUD();
 
@@ -717,6 +1018,11 @@ const SpellingGame = (() => {
     drawMountains(mountainScroll);
     drawCloudsScene();
 
+    // Flyers (behind character/ground foreground elements, at head height)
+    for (let i = 0; i < flyers.length; i++) {
+      if (!flyers[i].hit) drawFlyer(flyers[i]);
+    }
+
     // Obstacles
     for (let i = 0; i < obstacles.length; i++) {
       if (!obstacles[i].hit) drawObstacle(obstacles[i]);
@@ -731,8 +1037,18 @@ const SpellingGame = (() => {
       ctx.fillText('💎', g.x, g.y + Math.sin(g.bob) * 5);
     }
 
+    // Floating power-ups
+    for (let i = 0; i < powerups.length; i++) {
+      const p = powerups[i];
+      drawPowerupPickup(p);
+    }
+
+    // Combo transformation aura (drawn behind the character)
+    const tier = comboTier();
+    if (tier >= 1) drawComboAura(tier);
+
     // Character
-    drawCharacterAt(CHAR_X, charY, runFrame, isJumping);
+    drawCharacterAt(CHAR_X, charY, runFrame, isJumping, ducking);
 
     // Ground (draw after character feet for proper layering)
     drawGround(groundScroll);
@@ -742,9 +1058,13 @@ const SpellingGame = (() => {
       const p = particles[i];
       ctx.globalAlpha = Math.max(0, p.life / 30);
       ctx.fillStyle = p.color;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-      ctx.fill();
+      if (p.star) {
+        drawSparkleStar(p.x, p.y, p.size * 1.8);
+      } else {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
     ctx.globalAlpha = 1;
 
@@ -775,7 +1095,16 @@ const SpellingGame = (() => {
       ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
     }
 
+    // Slow-mo vignette
+    if (slowT > 0) {
+      ctx.fillStyle = 'rgba(60, 120, 220, 0.12)';
+      ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+    }
+
     ctx.restore();
+
+    // Active-effect HUD (top-right of the canvas, unaffected by screen shake)
+    drawPowerupHud();
   }
 
   // Interpolated sky palette for the current phase of the day cycle
@@ -846,6 +1175,7 @@ const SpellingGame = (() => {
 
   function drawMountains(scroll) {
     const totalW = mountains.length * 120;
+    const color = BIOMES[biomeIndex].mountain;
     for (let i = 0; i < mountains.length; i++) {
       const m = mountains[i];
       let x = m.x - scroll * 0.15;
@@ -856,17 +1186,18 @@ const SpellingGame = (() => {
       ctx.lineTo(x + m.w / 2, GROUND_Y - m.h);
       ctx.lineTo(x + m.w, GROUND_Y);
       ctx.closePath();
-      ctx.fillStyle = 'rgba(25, 25, 60, 0.7)';
+      ctx.fillStyle = color;
       ctx.fill();
     }
   }
 
   function drawCloudsScene() {
-    // Clouds read brighter in daylight, faint at night
+    // Clouds read brighter in daylight, faint at night; tinted per biome
     const alpha = 0.1 + (1 - skyColors().night) * 0.35;
+    const t = BIOMES[biomeIndex].cloudTint;
     for (let i = 0; i < clouds.length; i++) {
       const c = clouds[i];
-      ctx.fillStyle = `rgba(255,255,255,${alpha.toFixed(2)})`;
+      ctx.fillStyle = `rgba(${t[0]},${t[1]},${t[2]},${alpha.toFixed(2)})`;
       ctx.beginPath(); ctx.ellipse(c.x, c.y, c.w / 2, 10, 0, 0, Math.PI * 2); ctx.fill();
       ctx.beginPath(); ctx.ellipse(c.x - c.w * 0.2, c.y + 5, c.w * 0.3, 7, 0, 0, Math.PI * 2); ctx.fill();
       ctx.beginPath(); ctx.ellipse(c.x + c.w * 0.25, c.y + 3, c.w * 0.25, 8, 0, 0, Math.PI * 2); ctx.fill();
@@ -874,19 +1205,25 @@ const SpellingGame = (() => {
   }
 
   function drawGround(scroll) {
-    // Grass top
-    ctx.fillStyle = '#3d6b1f';
+    const biome = BIOMES[biomeIndex];
+
+    // Ground top
+    ctx.fillStyle = biome.groundTop;
     ctx.fillRect(0, GROUND_Y - 2, CANVAS_W, 5);
 
-    // Dirt (gradient cached — building it per frame is wasted work)
-    if (!groundGrad) {
+    // Dirt (gradient cached per-biome — building it every frame is wasted work)
+    if (!groundGrad || groundGrad.biomeKey !== biome.key) {
       groundGrad = ctx.createLinearGradient(0, GROUND_Y, 0, CANVAS_H);
-      groundGrad.addColorStop(0, '#4a3628');
-      groundGrad.addColorStop(0.4, '#362518');
-      groundGrad.addColorStop(1, '#1f1510');
+      groundGrad.addColorStop(0, biome.dirt[0]);
+      groundGrad.addColorStop(0.4, biome.dirt[1]);
+      groundGrad.addColorStop(1, biome.dirt[2]);
+      groundGrad.biomeKey = biome.key;
     }
     ctx.fillStyle = groundGrad;
     ctx.fillRect(0, GROUND_Y + 3, CANVAS_W, GROUND_H);
+
+    // Biome decoration doodle, scrolling with the ground
+    drawBiomeDecoration(scroll, biome);
 
     // Scrolling ground details
     ctx.fillStyle = 'rgba(255,255,255,0.07)';
@@ -894,6 +1231,121 @@ const SpellingGame = (() => {
       ctx.fillRect(x, GROUND_Y + 12, 2, 1);
       ctx.fillRect(x + 18, GROUND_Y + 28, 3, 1);
     }
+  }
+
+  // One simple decoration doodle per biome, repeated along the scrolling ground
+  function drawBiomeDecoration(scroll, biome) {
+    if (biome.deco === 'none') return;
+    const period = 260;
+    for (let x = -(scroll % period); x < CANVAS_W + period; x += period) {
+      const dx = x + 60;
+      if (biome.deco === 'cactus') {
+        ctx.font = '26px serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText('🌵', dx, GROUND_Y + 1);
+      } else if (biome.deco === 'snowman') {
+        ctx.font = '24px serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText('⛄', dx, GROUND_Y + 1);
+      } else if (biome.deco === 'lava') {
+        const grad = ctx.createRadialGradient(dx, GROUND_Y - 4, 2, dx, GROUND_Y - 4, 26);
+        grad.addColorStop(0, 'rgba(255,140,0,0.85)');
+        grad.addColorStop(1, 'rgba(255,80,0,0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.ellipse(dx, GROUND_Y - 4, 26, 9, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+
+  // Flying obstacle — dodge by ducking; hits a standing or jumping dino
+  function drawFlyer(f) {
+    ctx.save();
+    ctx.font = '26px serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const flap = Math.floor(gameTime / 8) % 2 === 0 ? 0 : -5;
+    ctx.translate(f.x + f.w / 2, f.y + f.h / 2 + flap);
+    ctx.scale(-1, 1); // face left, toward the dino
+    ctx.fillText('🦅', 0, 0);
+    ctx.restore();
+  }
+
+  // Floating power-up pickup: glowing bubble with an emoji inside
+  function drawPowerupPickup(p) {
+    const y = p.y + Math.sin(p.bob) * 5;
+    ctx.save();
+    const grad = ctx.createRadialGradient(p.x, y, 2, p.x, y, 18);
+    grad.addColorStop(0, 'rgba(255,255,255,0.55)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(p.x, y, 18, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.font = '20px serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(POWERUP_ICON[p.kind], p.x, y);
+    ctx.restore();
+  }
+
+  // Golden/flame/rainbow glow behind the dino once its combo streak heats up
+  function drawComboAura(tier) {
+    const cx = CHAR_X + 16, cy = charY - 22;
+    let inner, r;
+    if (tier === 1) { inner = 'rgba(245,197,24,0.35)'; r = 40; }
+    else if (tier === 2) { inner = 'rgba(255,110,40,0.4)'; r = 50; }
+    else { const hue = (frameCount * 4) % 360; inner = `hsla(${hue},90%,60%,0.45)`; r = 58; }
+    const grad = ctx.createRadialGradient(cx, cy, 4, cx, cy, r);
+    grad.addColorStop(0, inner);
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Small 4-point sparkle used for the tier-3 combo star particles
+  function drawSparkleStar(x, y, r) {
+    ctx.save();
+    ctx.strokeStyle = ctx.fillStyle;
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(x - r, y); ctx.lineTo(x + r, y);
+    ctx.moveTo(x, y - r); ctx.lineTo(x, y + r);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // Top-right active-effect HUD: icon + remaining-time bar per active powerup
+  function drawPowerupHud() {
+    const items = [];
+    if (shieldActive) items.push({ icon: POWERUP_ICON.shield, t: 1, max: 1, color: '#4fc3f7' });
+    if (magnetT > 0) items.push({ icon: POWERUP_ICON.magnet, t: magnetT, max: MAGNET_DURATION, color: '#e91e63' });
+    if (slowT > 0) items.push({ icon: POWERUP_ICON.slow, t: slowT, max: SLOWMO_DURATION, color: '#7db8ff' });
+    if (!items.length) return;
+
+    ctx.save();
+    let y = 14;
+    for (const it of items) {
+      ctx.fillStyle = 'rgba(0,0,0,0.4)';
+      roundRect(ctx, CANVAS_W - 72, y - 12, 58, 20, 6);
+      ctx.fill();
+      ctx.font = '15px serif';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(it.icon, CANVAS_W - 66, y);
+      const pct = Math.max(0, Math.min(1, it.t / it.max));
+      ctx.fillStyle = 'rgba(255,255,255,0.18)';
+      ctx.fillRect(CANVAS_W - 40, y - 4, 28, 6);
+      ctx.fillStyle = it.color;
+      ctx.fillRect(CANVAS_W - 40, y - 4, 28 * pct, 6);
+      y += 26;
+    }
+    ctx.restore();
   }
 
   function drawObstacle(obs) {
@@ -953,13 +1405,14 @@ const SpellingGame = (() => {
     ctx.restore();
   }
 
-  function drawCharacterAt(x, y, frame, jumping) {
+  function drawCharacterAt(x, y, frame, jumping, duckState) {
     ctx.save();
 
     // Squash & stretch around the feet for lively motion
     let sxScale = 1, syScale = 1;
     if (landSquash > 0) { sxScale = 1.12; syScale = 0.85; }
     else if (jumping && charVY < -2.5) { sxScale = 0.94; syScale = 1.08; }
+    else if (duckState) { sxScale = 1.2; syScale = 0.6; }
     if (sxScale !== 1 || syScale !== 1) {
       ctx.translate(x + 16, y);
       ctx.scale(sxScale, syScale);
@@ -1079,21 +1532,75 @@ const SpellingGame = (() => {
 
   function updateWordDisplay() {
     if (!currentWord) return;
-    const word = currentWord.word;
+    const word = spellTarget;
     let html = '';
     for (let i = 0; i < word.length; i++) {
-      if (i < letterIndex) {
-        html += '<span class="sp-letter collected">' + word[i] + '</span>';
+      const ch = word[i];
+      if (i < letterIndex || !isLetter(ch)) {
+        // Already collected, or a symbol that auto-collects — the .next
+        // highlight must always land on a real letter.
+        html += '<span class="sp-letter collected">' + ch + '</span>';
       } else if (i === letterIndex) {
-        html += '<span class="sp-letter next">' + word[i] + '</span>';
+        html += '<span class="sp-letter next">' + ch + '</span>';
       } else {
-        html += '<span class="sp-letter">' + word[i] + '</span>';
+        html += '<span class="sp-letter">' + ch + '</span>';
       }
     }
     wordEl.innerHTML = html;
     // Concise meaning + emoji hint (raw zh can be a full sentence with ** markers)
     zhEl.textContent = `${currentWord.hint} ${shortZh(currentWord.zh)}`;
   }
+
+  // ===== TEST HOOKS (do not affect normal play) =====
+  window.__spTest = {
+    state: () => ({
+      playing: state === 'running',
+      letterIndex,
+      word: currentWord && currentWord.word,
+      target: spellTarget,
+      wordsCompleted,
+      hp,
+      combo,
+      biome: BIOMES[biomeIndex].key,
+      powerups: { shield: shieldActive, magnetT, slowT },
+      ducking,
+      flyers: flyers.length,
+      tier: comboTier(),
+    }),
+    forceWord: w => {
+      currentWord = { word: w, hint: '📝', zh: '測試 test word' };
+      usedWords.push(w);
+      spellTarget = sanitizeTarget(w);
+      letterIndex = 0;
+      damageThisWord = false;
+      distSinceCorrect = 0;
+      obstacles = [];
+      skipNonLetters();
+      updateWordDisplay();
+    },
+    collectNext: () => {
+      if (state !== 'running' || !currentWord) return false;
+      const letter = spellTarget[letterIndex];
+      if (!letter) return false;
+      collectLetter({ x: CHAR_X, w: 30, h: 40, letter, isCorrect: true, hit: false });
+      return true;
+    },
+    hitWrong: () => {
+      takeDamage({ x: CHAR_X, w: 30, h: 40, letter: '#', isCorrect: false, hit: false });
+    },
+    give: kind => activatePowerup(kind),
+    spawnFlyer: () => {
+      flyers.push({ x: CHAR_X + 40, w: 34, h: 26, y: GROUND_Y - 54, hit: false });
+    },
+    setDuck: on => setDucking(on),
+    start: d => {
+      if (d && DIFF_CONFIG[d]) {
+        diff = d;
+        document.querySelectorAll('.sp-diff-btn').forEach(b => b.classList.toggle('active', b.dataset.diff === d));
+      }
+      if (state !== 'running') startGame();
+    },
+  };
 
   return { init, onShow };
 })();
