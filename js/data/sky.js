@@ -54,6 +54,11 @@ const SKY_ISLANDS = [
   { id: 'isle_sc_lake', name: '鏡之湖', type: 'lake', pos: [380, 45, -360], r: 24, seed: 30, secret: true },
   { id: 'isle_sc_mist', name: '迷霧秘境', type: 'mist', pos: [-380, 85, -340], r: 19, seed: 31, secret: true },
   { id: 'isle_sc_temple', name: '星影神殿', type: 'temple', pos: [0, 130, 520], r: 22, seed: 32, secret: true },
+  // ===== 機關觸發的隱藏階梯秘境（透過源島上的神秘符文石啟動，見 SKY_SWITCHES）=====
+  { id: 'isle_sc_garden', name: '天空花園', type: 'garden', pos: [30, 36, -110], r: 18, seed: 33, secret: true },
+  { id: 'isle_sc_vault', name: '熔岩密室', type: 'vault', pos: [300, 35, -110], r: 16, seed: 34, secret: true },
+  { id: 'isle_sc_tree', name: '古樹之心', type: 'tree', pos: [-200, 44, -70], r: 19, seed: 35, secret: true },
+  { id: 'isle_sc_relic', name: '雲上遺跡', type: 'relic', pos: [-140, 65, 80], r: 17, seed: 36, secret: true },
 ];
 
 // Bridges / stepping stones between islands. style: plank | stone | stepstones
@@ -89,6 +94,11 @@ const SKY_BRIDGES = [
   { from: 'isle_gx_crown', to: 'isle_gx_twin', style: 'stepstones' },
   { from: 'isle_gx_twin', to: 'isle_gx_dragon', style: 'stepstones' },
   { from: 'isle_gx_crown', to: 'isle_gx_dragon', style: 'plank', quest: 'sqg_crown_bridge' },
+  // ===== 機關觸發的隱藏階梯（switch: 只有對應的 SKY_SWITCHES 啟動後才會建造）=====
+  { from: 'isle_meadow', to: 'isle_sc_garden', style: 'stepstones', switch: 'sw_garden' },
+  { from: 'isle_lava', to: 'isle_sc_vault', style: 'stepstones', switch: 'sw_vault' },
+  { from: 'isle_forest', to: 'isle_sc_tree', style: 'stepstones', switch: 'sw_tree' },
+  { from: 'isle_ruins', to: 'isle_sc_relic', style: 'stepstones', switch: 'sw_relic' },
 ];
 
 // Portals: special interactables that teleport between regions.
@@ -132,6 +142,17 @@ const SKY_PADS = [
   { island: 'isle_gx_hub', dx: 9, dz: -8, launch: 26 },
   { island: 'isle_gx_aurora', dx: -7, dz: 7, launch: 26 },
   { island: 'isle_gx_crown', dx: 6, dz: -6, launch: 28 },
+];
+
+// Hidden mechanisms (神秘符文石): interacting once builds the matching
+// SKY_BRIDGES `switch:` stepstone stairway to a secret realm island. Markers
+// stay invisible until discovered the same way as a secret portal (12u
+// proximity in checkSecretDiscovery, keyed by id in save.secretsFound).
+const SKY_SWITCHES = [
+  { id: 'sw_garden', island: 'isle_meadow', dx: -12, dz: 10, to: 'isle_sc_garden', name: '神秘符文石' },
+  { id: 'sw_vault', island: 'isle_lava', dx: 8, dz: -8, to: 'isle_sc_vault', name: '神秘符文石' },
+  { id: 'sw_tree', island: 'isle_forest', dx: -15, dz: 12, to: 'isle_sc_tree', name: '神秘符文石' },
+  { id: 'sw_relic', island: 'isle_ruins', dx: 14, dz: 10, to: 'isle_sc_relic', name: '神秘符文石' },
 ];
 
 // ===== Quests =====
@@ -269,6 +290,24 @@ const SKY_QUESTS = [
     intro: '守衛神殿的暗影騎士擋住了去路，準備迎戰！' },
   { id: 'sqh_temple_boss', island: 'isle_sc_temple', type: 'boss', name: '星影守護者', diff: 'boss', n: 10, dx: 0, dz: 0, hidden: true, lockSecret: 8,
     intro: '沉睡在神殿深處的星影守護者甦醒了！這是秘境最終的試煉！' },
+
+  // ===== 機關觸發的隱藏階梯秘境任務（找到神秘符文石並啟動機關後才能挑戰）=====
+  { id: 'sqh_garden_chest', island: 'isle_sc_garden', type: 'chest', name: '花園深處的寶箱', diff: 'hard', n: 5, dx: 6, dz: -6, hidden: true,
+    intro: '天空花園深處藏著一個爬滿藤蔓的寶箱，答對單字咒語就能打開它。' },
+  { id: 'sqh_garden_listen', island: 'isle_sc_garden', type: 'listen', name: '蝴蝶的低語', diff: 'hard', n: 6, dx: -6, dz: 6, hidden: true,
+    intro: '五彩蝴蝶振翅時似乎在唸著單字，仔細聽並選出正確答案！' },
+  { id: 'sqh_vault_arena', island: 'isle_sc_vault', type: 'arena', name: '烈焰惡靈的巢穴', diff: 'hard', n: 4, mob: 'ember', dx: -5, dz: 5, hidden: true,
+    intro: '熔岩密室深處竄出成群的烈焰惡靈，用最強的英語魔法擊退牠們！' },
+  { id: 'sqh_vault_runes', island: 'isle_sc_vault', type: 'runes', name: '熔岩符文', diff: 'hard', n: 6, dx: 6, dz: -5, hidden: true,
+    intro: '熾熱的符文字母散落在密室各處，收集它們拼出封印之語！' },
+  { id: 'sqh_tree_npc', island: 'isle_sc_tree', type: 'npc', name: '古樹精靈的低語', diff: 'hard', n: 5, dx: 6, dz: -6, npc: '🧝', hidden: true,
+    intro: '沉睡千年的古樹精靈甦醒了，想和你聊聊古老的語言。' },
+  { id: 'sqh_tree_pillars', island: 'isle_sc_tree', type: 'pillars', name: '年輪的記憶', diff: 'hard', n: 6, dx: -6, dz: 6, hidden: true,
+    intro: '古樹的年輪刻著單字與意義，把它們配對起來吧！' },
+  { id: 'sqh_relic_gate', island: 'isle_sc_relic', type: 'gate', name: '遺跡的試煉之門', diff: 'hard', n: 5, dx: 6, dz: -6, hidden: true,
+    intro: '雲端遺跡深處的破碎之門，只有精通文法的人才能通過。' },
+  { id: 'sqh_relic_race', island: 'isle_sc_relic', type: 'race', name: '浮空遺跡競速', diff: 'hard', n: 8, time: 40, dx: -6, dz: 6, hidden: true,
+    intro: '沿著遺跡間的光環快速穿梭，跟時間賽跑，找回遺失的榮耀！' },
 ];
 
 // ===== Mobs =====
@@ -284,6 +323,7 @@ const SKY_MOBS = [
   { id: 'knight', name: '暗影騎士', hp: 6, quiz: 'grammar', diff: 'hard', color: 0x241a30, speed: 5.2, shape: 'bat', scale: 1.35 },
   { id: 'golem', name: '水晶魔像', hp: 8, quiz: 'vocab', diff: 'hard', color: 0x8fd8f0, speed: 2, shape: 'slime', scale: 1.5 },
   { id: 'lurker', name: '深淵潛伏者', hp: 7, quiz: 'vocab', diff: 'hard', color: 0x1a5a5a, speed: 4, shape: 'wisp', scale: 1.3 },
+  { id: 'ember', name: '烈焰惡靈', hp: 7, quiz: 'vocab', diff: 'hard', color: 0xff5a1a, speed: 4.3, shape: 'wisp', scale: 1.4 },
 ];
 
 // Skin id → body tint for the voxel hero (head shows the emoji itself)
