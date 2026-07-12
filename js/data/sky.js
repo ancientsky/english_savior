@@ -49,6 +49,11 @@ const SKY_ISLANDS = [
   { id: 'isle_gx_void', name: '虛空邊境', type: 'comet', pos: [300, 136, 500], r: 13, seed: 26 },
   { id: 'isle_gx_crown', name: '星冠聖殿', type: 'aurora', pos: [430, 148, 570], r: 16, seed: 27 },
   { id: 'isle_gx_dragon', name: '暗星龍巢', type: 'alien', pos: [560, 140, 590], r: 20, seed: 28 },
+  // ===== 隱藏秘境（透過隱藏傳送門進入，需先在既有島嶼上發現入口）=====
+  { id: 'isle_sc_cave', name: '水晶洞窟', type: 'cave', pos: [-420, 30, 300], r: 20, seed: 29, secret: true },
+  { id: 'isle_sc_lake', name: '鏡之湖', type: 'lake', pos: [380, 45, -360], r: 24, seed: 30, secret: true },
+  { id: 'isle_sc_mist', name: '迷霧秘境', type: 'mist', pos: [-380, 85, -340], r: 19, seed: 31, secret: true },
+  { id: 'isle_sc_temple', name: '星影神殿', type: 'temple', pos: [0, 130, 520], r: 22, seed: 32, secret: true },
 ];
 
 // Bridges / stepping stones between islands. style: plank | stone | stepstones
@@ -93,6 +98,24 @@ const SKY_PORTALS = [
     lock: 22, name: '銀河傳送門' },
   { id: 'portal_hub', island: 'isle_gx_hub', dx: 0, dz: 9, to: 'isle_dawn',
     name: '回程傳送門' },
+
+  // ===== 隱藏傳送門（marker 藏到玩家靠近 12 格內才會顯現）=====
+  { id: 'portal_sc_cave_in', island: 'isle_dawn', dx: -18, dz: 12, to: 'isle_sc_cave',
+    name: '水晶洞窟入口', secret: true },
+  { id: 'portal_sc_cave_out', island: 'isle_sc_cave', dx: 0, dz: -16, to: 'isle_dawn',
+    name: '回到晨曦之島' },
+  { id: 'portal_sc_lake_in', island: 'isle_forest', dx: -14, dz: 14, to: 'isle_sc_lake',
+    name: '鏡之湖入口', secret: true },
+  { id: 'portal_sc_lake_out', island: 'isle_sc_lake', dx: 0, dz: -20, to: 'isle_forest',
+    name: '回到迷霧森林' },
+  { id: 'portal_sc_mist_in', island: 'isle_ice', dx: -10, dz: -10, to: 'isle_sc_mist',
+    name: '迷霧秘境入口', secret: true },
+  { id: 'portal_sc_mist_out', island: 'isle_sc_mist', dx: 0, dz: -15, to: 'isle_ice',
+    name: '回到冰霜之峰' },
+  { id: 'portal_sc_temple_in', island: 'isle_gx_moon', dx: 12, dz: 10, to: 'isle_sc_temple',
+    name: '星影神殿入口', secret: true },
+  { id: 'portal_sc_temple_out', island: 'isle_sc_temple', dx: 0, dz: -18, to: 'isle_gx_moon',
+    name: '回到月岩高地' },
 ];
 
 // Cloud jump pads: bouncy discs that launch the player upward.
@@ -224,6 +247,28 @@ const SKY_QUESTS = [
     intro: '暗星龍收藏的寶庫，只認得單字大師。' },
   { id: 'sqg_dragon_boss', island: 'isle_gx_dragon', type: 'boss', name: '星雲暗影龍', diff: 'boss', n: 10, dx: 0, dz: 0, lock: 48,
     intro: '吞噬星光的暗影龍甦醒了！這是銀河最終的英語試煉！' },
+
+  // ===== 隱藏秘境任務（找到隱藏傳送門後才能挑戰）=====
+  { id: 'sqh_cave_chest', island: 'isle_sc_cave', type: 'chest', name: '深洞的封印寶箱', diff: 'hard', n: 5, dx: -6, dz: 6, hidden: true,
+    intro: '洞窟深處的封印寶箱，被古老的單字咒語緊緊鎖住。' },
+  { id: 'sqh_cave_runes', island: 'isle_sc_cave', type: 'runes', name: '水晶洞的祕文', diff: 'hard', n: 6, dx: 6, dz: -6, hidden: true,
+    intro: '發光水晶間散落著祕文字母，拼出它們才能解開洞窟的秘密。' },
+  { id: 'sqh_cave_arena', island: 'isle_sc_cave', type: 'arena', name: '魔像的試煉', diff: 'hard', n: 4, mob: 'golem', dx: 8, dz: 6, hidden: true,
+    intro: '沉睡的水晶魔像甦醒了！用最強的英語魔法擊退牠們！' },
+  { id: 'sqh_lake_listen', island: 'isle_sc_lake', type: 'listen', name: '鏡湖的回音', diff: 'hard', n: 6, dx: -6, dz: 6, hidden: true,
+    intro: '湖面倒映著單字的聲音，仔細聽並選出正確答案！' },
+  { id: 'sqh_lake_pillars', island: 'isle_sc_lake', type: 'pillars', name: '湖畔配對石', diff: 'hard', n: 6, dx: 8, dz: 4, hidden: true,
+    intro: '把英文單字和中文意思配成對，湖水就會泛起漣漪！' },
+  { id: 'sqh_lake_race', island: 'isle_sc_lake', type: 'race', name: '鏡湖飛環', diff: 'hard', n: 8, time: 40, dx: -8, dz: -4, hidden: true,
+    intro: '沿著湖面上的光環全速飛行，限時挑戰你的極限！' },
+  { id: 'sqh_mist_npc', island: 'isle_sc_mist', type: 'npc', name: '迷霧中的低語', diff: 'hard', n: 5, dx: 6, dz: 6, npc: '👻', hidden: true,
+    intro: '迷霧深處傳來神秘的低語，鼓起勇氣用英語回應吧！' },
+  { id: 'sqh_mist_gate', island: 'isle_sc_mist', type: 'gate', name: '迷霧封印門', diff: 'hard', n: 5, dx: -6, dz: 6, hidden: true,
+    intro: '被濃霧籠罩的封印之門，只有精通文法的人才能通過。' },
+  { id: 'sqh_temple_arena', island: 'isle_sc_temple', type: 'arena', name: '神殿的暗影騎士', diff: 'hard', n: 5, mob: 'knight', dx: -8, dz: 6, hidden: true,
+    intro: '守衛神殿的暗影騎士擋住了去路，準備迎戰！' },
+  { id: 'sqh_temple_boss', island: 'isle_sc_temple', type: 'boss', name: '星影守護者', diff: 'boss', n: 10, dx: 0, dz: 0, hidden: true, lockSecret: 8,
+    intro: '沉睡在神殿深處的星影守護者甦醒了！這是秘境最終的試煉！' },
 ];
 
 // ===== Mobs =====
@@ -235,6 +280,10 @@ const SKY_MOBS = [
   // galaxy mobs
   { id: 'starling', name: '星光史萊姆', hp: 2, quiz: 'vocab', diff: 'medium', color: 0xffd166, speed: 3.4, shape: 'slime' },
   { id: 'shade', name: '暗影星靈', hp: 2, quiz: 'grammar', diff: 'medium', color: 0x8f6bff, speed: 4.2, shape: 'bat' },
+  // secret-realm elites (stronger stats + larger scale)
+  { id: 'knight', name: '暗影騎士', hp: 6, quiz: 'grammar', diff: 'hard', color: 0x241a30, speed: 5.2, shape: 'bat', scale: 1.35 },
+  { id: 'golem', name: '水晶魔像', hp: 8, quiz: 'vocab', diff: 'hard', color: 0x8fd8f0, speed: 2, shape: 'slime', scale: 1.5 },
+  { id: 'lurker', name: '深淵潛伏者', hp: 7, quiz: 'vocab', diff: 'hard', color: 0x1a5a5a, speed: 4, shape: 'wisp', scale: 1.3 },
 ];
 
 // Skin id → body tint for the voxel hero (head shows the emoji itself)

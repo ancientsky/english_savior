@@ -10,6 +10,7 @@ const SkyGame = (() => {
   let save = {
     completed: {},          // questId -> clear count
     bridgesBuilt: {},       // bridge-questId -> true (permanent quest bridges)
+    secretsFound: {},       // secret-portal id -> true (once discovered, stays visible)
     lastIsland: 'isle_dawn',
     bestRace: {},
     settings: {},
@@ -119,6 +120,7 @@ const SkyGame = (() => {
       if (raw) save = { ...save, ...JSON.parse(raw) };
     } catch { /* keep defaults */ }
     if (!save.bridgesBuilt) save.bridgesBuilt = {};
+    if (!save.secretsFound) save.secretsFound = {};
     // migrate the old single-bridge flag (pre-galaxy saves)
     if (save.bridgeBuilt) save.bridgesBuilt.sq_bridge_crystal = true;
   }
@@ -205,7 +207,7 @@ const SkyGame = (() => {
       // combat hooks (Part 3)
       mobs: () => mobs.filter(m => !m.gone).map((m, i) => ({
         i: mobs.indexOf(m), id: m.def.id, hp: m.hp, dead: m.dead, boss: !!m.isBoss,
-        quest: m.questId, x: m.mesh.position.x, z: m.mesh.position.z,
+        quest: m.questId, x: m.mesh.position.x, z: m.mesh.position.z, scale: m.def.scale || 1,
       })),
       engage: i => openCombatQuiz(mobs[i]),
       setHearts: n => { hearts = n; updateHudHearts(); },
@@ -236,6 +238,12 @@ const SkyGame = (() => {
       // perk hooks (Part 4)
       perks: () => ({ ...perks, maxHearts: maxHearts(), gliderOn, jumpBoostOn }),
       refreshEquipment,
+      // secret realm hooks (Part 6)
+      secretState: () => ({
+        found: { ...save.secretsFound },
+        secretCleared: secretCleared(),
+        portals: interactables.filter(it => it.q.type === 'portal').length,
+      }),
     };
   }
 
@@ -248,10 +256,10 @@ const SkyGame = (() => {
   }
 
   function renderStartScreen() {
-    const clearedCount = Object.keys(save.completed).length;
+    const clearedCount = totalCleared();
     els.startStats.innerHTML = `
       <div class="aw-stat"><span>🏝️</span><b>${SKY_ISLANDS.length}</b><small>座浮空島嶼</small></div>
-      <div class="aw-stat"><span>📜</span><b>${clearedCount} / ${SKY_QUESTS.length}</b><small>完成任務</small></div>
+      <div class="aw-stat"><span>📜</span><b>${clearedCount} / ${visibleQuestTotal()}</b><small>完成任務</small></div>
       <div class="aw-stat"><span>🌉</span><b>${SKY_BRIDGES.length}</b><small>空中橋樑</small></div>
     `;
     els.guide.innerHTML = isTouch
@@ -476,6 +484,11 @@ const SkyGame = (() => {
     comet: { top: 0x3a4a6a, side: 0x24304a },
     aurora: { top: 0x2a5a4a, side: 0x1a3a35 },
     alien: { top: 0x6a4a8a, side: 0x44305a },
+    // hidden secret realms
+    cave: { top: 0x3a3a4a, side: 0x242430 },
+    lake: { top: 0x4aa8d8, side: 0x2a6a8a },
+    mist: { top: 0x6a7a6a, side: 0x4a5a4a },
+    temple: { top: 0x2a2438, side: 0x1a1626 },
   };
 
   function buildIsland(isle) {
@@ -847,6 +860,130 @@ const SkyGame = (() => {
         });
         break;
       }
+      // ===== hidden secret realms =====
+      case 'cave':
+        // ring of tall dark rock walls around the rim (visual enclosure)
+        scatter(g, isle, rng, 14, 0.85, 0.95, r => {
+          const h = 5 + r() * 6;
+          const wall = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.2, h, 6), matOf(0x2a2a34));
+          wall.position.y = h / 2;
+          wall.castShadow = true;
+          return wall;
+        });
+        // stalactites hanging above (non-colliding decoration only)
+        scatter(g, isle, rng, 8, 0.1, 0.8, r => {
+          const h = 2 + r() * 2.5;
+          const stal = new THREE.Mesh(new THREE.ConeGeometry(0.4 + r() * 0.3, h, 6), matOf(0x333340));
+          stal.position.y = 8 + r() * 4;
+          stal.rotation.x = Math.PI;
+          return stal;
+        });
+        scatter(g, isle, rng, 7, 0.15, 0.8, r => makeCrystal(r, r() < 0.5 ? 0xb08fff : 0x66e8ff));
+        scatter(g, isle, rng, 5, 0.2, 0.75, r => {
+          const m = new THREE.Group();
+          const h = 0.5 + r() * 1;
+          const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.2, h, 6), matOf(0x6a5a7a));
+          stem.position.y = h / 2;
+          m.add(stem);
+          const cap = new THREE.Mesh(new THREE.SphereGeometry(0.4, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2),
+            new THREE.MeshLambertMaterial({ color: 0x8f6bb0, emissive: 0x2a1a3a }));
+          cap.position.y = h;
+          m.add(cap);
+          return m;
+        });
+        break;
+      case 'lake':
+        scatter(g, isle, rng, 12, 0.15, 0.8, r => {
+          const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.5 + r() * 0.3, 0.5 + r() * 0.3, 0.08, 10),
+            matOf(0x3e8a4a));
+          pad.position.y = 0.1;
+          return pad;
+        });
+        scatter(g, isle, rng, 10, 0.2, 0.85, r => {
+          const reed = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.08, 1.2 + r(), 5), matOf(0x5a8a4a));
+          reed.position.y = 0.6 + r() * 0.5;
+          return reed;
+        });
+        {
+          const pier = new THREE.Mesh(geoBox(), matOf(0x8a6a42));
+          pier.scale.set(1.6, 0.2, 6);
+          pier.position.set(isle.r * 0.3, 0.15, -isle.r * 0.3);
+          pier.castShadow = true;
+          g.add(pier);
+        }
+        scatter(g, isle, rng, 4, 0.3, 0.7, () => {
+          const mist = new THREE.Sprite(new THREE.SpriteMaterial({
+            color: 0xffffff, transparent: true, opacity: 0.35,
+          }));
+          mist.scale.set(3, 2, 1);
+          mist.position.y = 0.8;
+          return mist;
+        });
+        break;
+      case 'mist':
+        scatter(g, isle, rng, 8, 0.2, 0.88, r => {
+          const t = new THREE.Group();
+          const h = 2 + r() * 2;
+          const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.38, h, 6), matOf(0x3a332e));
+          trunk.position.y = h / 2;
+          trunk.rotation.z = (r() - 0.5) * 0.3;
+          t.add(trunk);
+          const canopy = new THREE.Mesh(new THREE.SphereGeometry(0.7 + r() * 0.4, 6, 5), matOf(0x4a5c48));
+          canopy.position.y = h + 0.3;
+          canopy.scale.y = 0.6;
+          t.add(canopy);
+          return t;
+        });
+        scatter(g, isle, rng, 5, 0.15, 0.85, () => {
+          const fog = new THREE.Sprite(new THREE.SpriteMaterial({
+            color: 0xd8e0d8, transparent: true, opacity: 0.3,
+          }));
+          fog.scale.set(4, 2.4, 1);
+          fog.position.y = 1;
+          return fog;
+        });
+        scatter(g, isle, rng, 10, 0.1, 0.9, r => {
+          const fly = new THREE.Mesh(new THREE.SphereGeometry(0.06, 5, 4),
+            new THREE.MeshLambertMaterial({ color: 0xd8ff8f, emissive: 0x8fbf3a }));
+          fly.position.y = 0.4 + r() * 1.2;
+          return fly;
+        });
+        break;
+      case 'temple': {
+        const trim = new THREE.Mesh(new THREE.TorusGeometry(isle.r * 0.94, 0.35, 6, 28),
+          matOf(0xd8b34a, 0x6a4a10));
+        trim.rotation.x = Math.PI / 2;
+        trim.position.y = 0.1;
+        g.add(trim);
+        scatter(g, isle, rng, 10, 0.55, 0.85, r => {
+          const p = new THREE.Group();
+          const h = 3 + r() * 1.5;
+          const col = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.5, h, 8), matOf(0x211d2c));
+          col.position.y = h / 2;
+          col.castShadow = true;
+          p.add(col);
+          const cap = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.3, 1.1), matOf(0xd8b34a, 0x4a3308));
+          cap.position.y = h + 0.15;
+          p.add(cap);
+          return p;
+        });
+        const altar = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 2.2, 1.1, 8), matOf(0x1a1626, 0x0a0812));
+        altar.position.y = 0.55;
+        altar.castShadow = true;
+        g.add(altar);
+        scatter(g, isle, rng, 4, 0.25, 0.5, () => {
+          const b = new THREE.Group();
+          const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.3, 0.6, 8), matOf(0x33291a));
+          bowl.position.y = 0.3;
+          b.add(bowl);
+          const flame = new THREE.Mesh(new THREE.ConeGeometry(0.25, 0.6, 6),
+            new THREE.MeshLambertMaterial({ color: 0xff8a3a, emissive: 0xcc4400 }));
+          flame.position.y = 0.85;
+          b.add(flame);
+          return b;
+        });
+        break;
+      }
     }
 
     // grass blades on green islands (InstancedMesh child → bobs with island)
@@ -1004,9 +1141,16 @@ const SkyGame = (() => {
   let quiz = null;             // quiz overlay DOM refs
   let active = null;           // running quest session
 
-  function totalCleared() { return Object.keys(save.completed).length; }
+  // totalCleared() drives the galaxy-portal lock math (22/45/48) — hidden
+  // secret-realm quests (sqh_) must never count toward it or that math shifts.
+  function totalCleared() { return Object.keys(save.completed).filter(k => !k.startsWith('sqh_')).length; }
+  function secretCleared() { return Object.keys(save.completed).filter(k => k.startsWith('sqh_')).length; }
+  function visibleQuestTotal() { return SKY_QUESTS.filter(q => !q.hidden).length; }
   function isCleared(q) { return (save.completed[q.id] || 0) > 0; }
-  function isLocked(q) { return q.lock && totalCleared() < q.lock; }
+  function isLocked(q) {
+    if (q.lockSecret) return secretCleared() < q.lockSecret;
+    return q.lock && totalCleared() < q.lock;
+  }
 
   function markerTexture(symbol, color) {
     const cv = document.createElement('canvas');
@@ -1227,12 +1371,30 @@ const SkyGame = (() => {
       }));
       marker.scale.set(1.6, 1.6, 1);
       marker.position.set(p.dx, 5.2, p.dz);
+      if (p.secret && !save.secretsFound[p.id]) marker.visible = false;
       g.add(marker);
       markerList.push(marker);
       interactables.push({
-        q, marker, markerSym: st.s,
+        q, marker, markerSym: st.s, secret: !!p.secret,
         x: isle.pos[0] + p.dx, z: isle.pos[2] + p.dz, isle,
       });
+    }
+  }
+
+  // reveal a hidden secret portal once the player wanders within range —
+  // called every frame from updateWorld() (cheap: ≤8 secret portals)
+  function checkSecretDiscovery() {
+    for (const it of interactables) {
+      if (!it.secret || save.secretsFound[it.q.id]) continue;
+      if (Math.abs(pos.y - it.isle.pos[1]) > 14) continue;
+      const d = Math.hypot(pos.x - it.x, pos.z - it.z);
+      if (d > 12) continue;
+      save.secretsFound[it.q.id] = true;
+      persist();
+      it.marker.visible = true;
+      showWorldToast('🔮 發現隱藏傳送門！');
+      SoundManager.playAchievement();
+      GameEngine.recordSkySecretFound?.();
     }
   }
 
@@ -1247,15 +1409,23 @@ const SkyGame = (() => {
     vy = 0;
     lastGroundIsland = target.id;
     SoundManager.playAchievement();
-    showWorldToast(q.to === 'isle_gx_hub'
-      ? '🌌 歡迎來到銀河空島！新的任務在等著你！'
-      : '🏝️ 回到了天空之城本土！');
+    try {
+      if (typeof MusicManager !== 'undefined') {
+        if (target.secret) MusicManager.play('mystic');
+        else MusicManager.playForZone('sky');
+      }
+    } catch (e) { /* mystic track may not exist yet — never block the portal */ }
+    showWorldToast(target.secret ? `🔮 你發現了「${target.name}」！`
+      : q.to === 'isle_gx_hub'
+        ? '🌌 歡迎來到銀河空島！新的任務在等著你！'
+        : '🏝️ 回到了天空之城本土！');
   }
 
   // nearest quest object in range → Ⓔ hint
   function updateInteractTarget() {
     let best = null, bestD = 4.5;
     for (const it of interactables) {
+      if (it.secret && !save.secretsFound[it.q.id]) continue; // not discovered yet
       if (Math.abs(pos.y - it.isle.pos[1]) > 8) continue;
       const d = Math.hypot(pos.x - it.x, pos.z - it.z);
       if (d < bestD) { bestD = d; best = it; }
@@ -1271,7 +1441,11 @@ const SkyGame = (() => {
         ? `🔒 ${q.name}（完成 ${q.lock} 個任務後開啟，還差 ${q.lock - totalCleared()} 個）`
         : `${key}　🌀 ${q.name}`;
     }
-    else if (isLocked(q)) label = `🔒 ${q.name}（再完成 ${q.lock - totalCleared()} 個任務解鎖）`;
+    else if (isLocked(q)) {
+      label = q.lockSecret
+        ? `🔒 ${q.name}（完成更多秘境任務解鎖，還差 ${q.lockSecret - secretCleared()} 個）`
+        : `🔒 ${q.name}（再完成 ${q.lock - totalCleared()} 個任務解鎖）`;
+    }
     else if (!LIVE_TYPES.has(q.type)) label = `⏳ ${q.name}（即將開放）`;
     else if (isCleared(q)) label = `${key}　🔁 再玩一次「${q.name}」`;
     else label = `${key}　📜 ${q.name}`;
@@ -1296,6 +1470,7 @@ const SkyGame = (() => {
     bone: '#d8cfae', storm: '#6a6a88',
     nebula: '#8a6acc', star: '#7a7ae0', moon: '#c8c8d8',
     comet: '#5a7ac8', aurora: '#4ae8b0', alien: '#b06ae8',
+    cave: '#3a3a4a', lake: '#4aa8d8', mist: '#6a7a6a', temple: '#2a2438',
   };
 
   function lowPower() { return !!save.settings.lowPower; }
@@ -1326,6 +1501,7 @@ const SkyGame = (() => {
     }
     // quest dots
     for (const it of interactables) {
+      if (it.secret && !save.secretsFound[it.q.id]) continue; // hidden until discovered
       const dx = (it.x - pos.x) * scale;
       const dz = (it.z - pos.z) * scale;
       if (Math.hypot(dx, dz) > C + 6) continue;
@@ -1427,8 +1603,21 @@ const SkyGame = (() => {
     let rows = '';
     for (const [isleId, qs] of groups) {
       const isle = isleById(isleId);
-      rows += `<div class="aw-j-island">🏝️ ${isle.name}</div>`;
+      // a secret realm is "revealed" once any secret portal into it has been
+      // found, or one of its quests is already cleared (can't clear without
+      // having found the portal first) — until then, mask the whole section
+      const revealed = !isle.secret || SKY_PORTALS.some(p => p.secret && p.to === isleId && save.secretsFound[p.id])
+        || qs.some(q => isCleared(q));
+      rows += `<div class="aw-j-island">${revealed ? `🏝️ ${isle.name}` : '❓ ？？？（秘境）'}</div>`;
       for (const q of qs) {
+        if (q.hidden && !revealed) {
+          rows += `
+            <div class="aw-j-row">
+              <span class="aw-j-icon">❓</span>
+              <span class="aw-j-name">？？？（秘境任務）</span>
+            </div>`;
+          continue;
+        }
         const cleared = isCleared(q);
         const locked = isLocked(q);
         const icon = cleared ? '✅' : (locked ? '🔒' : (q.type === 'boss' ? '⛈️' : '📜'));
@@ -1450,7 +1639,7 @@ const SkyGame = (() => {
     journalEl.innerHTML = `
       <div class="aw-j-card">
         <div class="aw-j-head">
-          <b>📜 任務日誌　${totalCleared()} / ${SKY_QUESTS.length}</b>
+          <b>📜 任務日誌　${totalCleared()} / ${visibleQuestTotal()}</b>
           <button class="aw-quiz-close" id="sky-j-close">✕</button>
         </div>
         <div class="aw-j-list">${rows}</div>
@@ -1512,6 +1701,15 @@ const SkyGame = (() => {
       const g = islandGroups[isle.id];
       if (g) g.visible = Math.hypot(isle.pos[0] - pos.x, isle.pos[2] - pos.z) < 340;
     }
+    // mobs live directly on `scene` (not inside their island's group), so they
+    // aren't covered by the culling above — hide them once their home island
+    // is far away too (they'd be invisible/unreachable behind that island's
+    // own cull anyway). Mob count is small (<25), so a full pass each frame is cheap.
+    for (const m of mobs) {
+      if (m.gone) continue;
+      const g = islandGroups[m.isle.id];
+      m.mesh.visible = !g || g.visible;
+    }
   }
 
   function watchFps(dt) {
@@ -1553,6 +1751,12 @@ const SkyGame = (() => {
     { mob: 'starling', island: 'isle_gx_aurora', dx: 0, dz: -8 },
     { mob: 'shade', island: 'isle_gx_void', dx: -4, dz: -4 },
     { mob: 'shade', island: 'isle_gx_twin', dx: 6, dz: 5 },
+    // secret realms (elites)
+    { mob: 'golem', island: 'isle_sc_cave', dx: -4, dz: -10 },
+    { mob: 'lurker', island: 'isle_sc_lake', dx: 6, dz: 10 },
+    { mob: 'knight', island: 'isle_sc_mist', dx: -4, dz: 4 },
+    { mob: 'lurker', island: 'isle_sc_mist', dx: 4, dz: -6 },
+    { mob: 'knight', island: 'isle_sc_temple', dx: 6, dz: -6 },
   ];
 
   function mobDef(id) { return SKY_MOBS.find(m => m.id === id); }
@@ -1602,6 +1806,7 @@ const SkyGame = (() => {
       pupil.position.set(x, eyeY, eyeZ + 0.09);
       g.add(pupil);
     });
+    if (def.scale) g.scale.setScalar(def.scale);
     return g;
   }
 
@@ -1901,8 +2106,8 @@ const SkyGame = (() => {
       mob.mesh.position.z = nz;
       if (vx || vz) mob.mesh.rotation.y = Math.atan2(vx, vz);
 
-      // contact damage
-      if (distP < 1.35 && sameLevel && Math.abs(pos.y - isleTop) < 2.4 && mob.cooldown <= 0) {
+      // contact damage (elites use a larger scaled-up hitbox to match their bigger mesh)
+      if (distP < 1.35 * (mob.def.scale || 1) && sameLevel && Math.abs(pos.y - isleTop) < 2.4 && mob.cooldown <= 0) {
         mob.cooldown = 2.5;
         damagePlayer(1, mob.mesh.position.x, mob.mesh.position.z);
       }
@@ -2267,6 +2472,13 @@ const SkyGame = (() => {
       rage: 0xff3366, rageEm: 0xcc1133, summon: 'shade', scale: 1.15,
       wake: '🐉 星雲暗影龍展開了羽翼！用你最強的英語迎戰！',
       win: '🎆 暗影散去，銀河的星光回來了！你是真正的英語傳說！',
+    },
+    sqh_temple_boss: {
+      name: '星影守護者', icon: '🌑', body: 0x1a1a2a, bodyEm: 0x0a0a15,
+      head: 0x2a2a3a, arm: 0x14141f, eye: 0xb08fff, eyeEm: 0x5a2a9a,
+      rage: 0xffd700, rageEm: 0xaa8800, summon: 'knight', scale: 1.2,
+      wake: '🌑 星影守護者甦醒了！古老的力量在神殿中匯聚！',
+      win: '🎆 星影散去，神殿重現光明！你成為傳說中的秘境英雄！',
     },
   };
   function bossDef(q) { return BOSS_DEFS[q.id] || BOSS_DEFS.sq_storm_boss; }
@@ -2832,6 +3044,7 @@ const SkyGame = (() => {
     updateBoss(dt);
     updateRace(dt);
     updateRunePickup();
+    checkSecretDiscovery();
     // slowly regain hearts out of combat
     if (playing && hearts < maxHearts() && simTime - lastDamageAt > 20) {
       hearts++;
@@ -2935,7 +3148,9 @@ const SkyGame = (() => {
       return;
     }
     if (isLocked(q)) {
-      showWorldToast(`🔒 再完成 ${q.lock - totalCleared()} 個任務就能挑戰「${q.name}」！`);
+      showWorldToast(q.lockSecret
+        ? `🔒 再完成 ${q.lockSecret - secretCleared()} 個秘境任務就能挑戰「${q.name}」！`
+        : `🔒 再完成 ${q.lock - totalCleared()} 個任務就能挑戰「${q.name}」！`);
       return;
     }
     if (!LIVE_TYPES.has(q.type)) {
@@ -3329,7 +3544,7 @@ const SkyGame = (() => {
     if (first) {
       GameEngine.addXP(Math.round(tier.xp * (perks.xpMult || 1)));
       skyAddGems(tier.gems);
-      GameEngine.recordSkyQuest?.(q.id.startsWith('sqg_'));
+      GameEngine.recordSkyQuest?.(q.id.startsWith('sqg_'), q.id.startsWith('sqh_'));
       if (q.type === 'bridge') {
         save.bridgesBuilt[q.id] = true;
         persist();
@@ -3340,7 +3555,10 @@ const SkyGame = (() => {
           showWorldToast(`🌉 通往${target ? target.name : '遠方'}的天空之橋出現了！`);
         }
       }
-      if (q.type === 'boss') GameEngine.recordSkyBoss?.();
+      if (q.type === 'boss') {
+        GameEngine.recordSkyBoss?.();
+        if (q.id === 'sqh_temple_boss') GameEngine.recordSkySecretBoss?.();
+      }
     }
     SoundManager.playQuestComplete();
     if (first) spawnConfetti(q.type === 'boss' ? 70 : 36);
