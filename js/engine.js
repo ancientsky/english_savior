@@ -146,6 +146,22 @@ const SoundManager = (() => {
 // Initialize sound manager
 SoundManager.init();
 
+// ===== 持有道具圖示列 =====
+// Maps a buff's `effect` id (see SHOP_ITEMS.consumables in js/data/game.js)
+// to the icon/name shown in the site-wide item bar (#item-bar).
+const BUFF_META = {
+  double_xp: { icon: '📜', name: '雙倍 XP' },
+  hint: { icon: '🔮', name: '提示水晶' },
+  revive: { icon: '🪶', name: '復活羽毛' },
+  lucky: { icon: '🍀', name: '幸運草' },
+  instant_xp: { icon: '⚡', name: '經驗藥水' },
+  gem_bonus: { icon: '💰', name: '寶石加成' },
+  streak_shield: { icon: '🛡️', name: '連勝護盾' },
+  double_gems: { icon: '⚗️', name: '雙倍寶石' },
+  glide: { icon: '🪂', name: '滑翔翼' },
+  jump_boost: { icon: '🌨️', name: '彈跳雲靴' },
+};
+
 const GameEngine = (() => {
   const SAVE_KEY = 'english_savior_save';
   const XP_PER_LEVEL = lvl => 80 + lvl * 20; // increases each level
@@ -745,6 +761,27 @@ const GameEngine = (() => {
     if (title) {
       document.getElementById('hud-name').textContent = title.display || '冒險者';
     }
+    renderItemBar();
+  }
+
+  // Renders the site-wide floating bar (#item-bar) showing every active
+  // buff/consumable with its remaining uses, so players can always see
+  // what's currently in effect no matter which game zone they're in.
+  function renderItemBar() {
+    const bar = document.getElementById('item-bar');
+    if (!bar) return;
+    const buffs = state.activeBuffs || [];
+    if (buffs.length === 0) {
+      bar.innerHTML = '';
+      bar.style.display = 'none';
+      return;
+    }
+    bar.style.display = 'flex';
+    bar.innerHTML = buffs.map(buff => {
+      const meta = BUFF_META[buff.type] || { icon: '✨', name: buff.type };
+      const title = `${meta.name}（剩 ${buff.uses} 次）`;
+      return `<span class="item-chip" title="${title}">${meta.icon}<span class="item-uses">${buff.uses}</span></span>`;
+    }).join('');
   }
 
   function updateStats() {
@@ -1199,6 +1236,7 @@ const GameEngine = (() => {
       const uses = item.uses || (item.effect === 'gem_bonus' ? 5 : 1);
       state.activeBuffs.push({ type: item.effect, uses: uses });
       save();
+      renderItemBar();
       showToast(`啟用 ${item.icon} ${item.name}！`, 'achievement');
     }
 
@@ -1218,6 +1256,7 @@ const GameEngine = (() => {
         state.activeBuffs = state.activeBuffs.filter(b => b !== buff);
       }
       save();
+      renderItemBar();
       return true;
     }
     return false;
@@ -1245,7 +1284,7 @@ const GameEngine = (() => {
     recordSkyQuest, recordSkyAnswer, recordSkyBoss,
     recordSkySecretFound, recordSkySecretBoss,
     recordPerfectGrammar, recordStreak,
-    updateHUD, updateStats,
+    updateHUD, updateStats, renderItemBar,
     showInventory, showAchievements, showToast,
     checkAchievements, checkDailyQuests,
     // Shop functions

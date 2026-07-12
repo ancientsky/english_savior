@@ -44,6 +44,50 @@ body {
   gap: 12px;
 }
 
+/* ===== 持有道具圖示列 (#item-bar) =====
+   Site-wide floating strip showing every active buff/consumable (with
+   remaining uses) no matter which game zone is on screen. Populated by
+   GameEngine.renderItemBar() (js/engine.js); hidden entirely when the
+   player has no active buffs. */
+#item-bar {
+  display: none;
+  position: fixed;
+  bottom: 12px;
+  right: 12px;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  z-index: 60; /* above zone content, below modals (z-index 200) and #hud (100) */
+  pointer-events: none;
+}
+
+.item-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  background: rgba(10, 20, 40, 0.75);
+  border: 1px solid rgba(255, 210, 110, 0.5);
+  border-radius: 10px;
+  padding: 4px 8px;
+  font-size: 1.1rem;
+  line-height: 1;
+  pointer-events: auto;
+}
+
+.item-uses {
+  margin-left: 3px;
+  font-family: var(--ui-font);
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: var(--gold);
+  vertical-align: super;
+}
+
+body.game-max #item-bar {
+  font-size: 0.95rem;
+}
+
 .hud-left, .hud-right {
   display: flex;
   align-items: center;
@@ -870,6 +914,10 @@ body {
   .inventory-grid { grid-template-columns: repeat(4, 1fr); }
   #hud { flex-wrap: wrap; justify-content: center; }
   .nav-tab { padding: 6px 10px; }
+
+  /* Item bar responsive */
+  #item-bar { bottom: 8px; right: 8px; gap: 4px; }
+  .item-chip { font-size: 0.95rem; padding: 3px 6px; }
 
   /* Shop responsive */
   .shop-modal { max-width: 95%; }
