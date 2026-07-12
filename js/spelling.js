@@ -455,7 +455,12 @@ const SpellingGame = (() => {
 
     // Scroll ground
     mountainScroll += scrollSpeed * dt;
-    groundScroll = (groundScroll + scrollSpeed * dt) % 40;
+    // Wrap at 5200 = lcm(40, 260) — the common multiple of the ground speckle
+    // period (40, drawGround) and the biome decoration period (260,
+    // drawBiomeDecoration) — so both patterns still wrap seamlessly, but the
+    // accumulator travels far enough that decorations actually scroll instead
+    // of being trapped inside a single 40px band.
+    groundScroll = (groundScroll + scrollSpeed * dt) % 5200;
 
     // Character physics (apex float: lower gravity near peak for longer hang time)
     if (isJumping) {
@@ -1227,35 +1232,50 @@ const SpellingGame = (() => {
 
     // Scrolling ground details
     ctx.fillStyle = 'rgba(255,255,255,0.07)';
-    for (let x = -scroll; x < CANVAS_W; x += 40) {
+    for (let x = -(scroll % 40); x < CANVAS_W; x += 40) {
       ctx.fillRect(x, GROUND_Y + 12, 2, 1);
       ctx.fillRect(x + 18, GROUND_Y + 28, 3, 1);
     }
+  }
+
+  // Cheap deterministic 0..1 hash so each decoration instance gets a stable
+  // (non-flickering) size/offset/glow variant while it slides across the screen.
+  function decoHash(k) {
+    const n = Math.imul(k, 2654435761) >>> 0;
+    return n / 4294967296;
   }
 
   // One simple decoration doodle per biome, repeated along the scrolling ground
   function drawBiomeDecoration(scroll, biome) {
     if (biome.deco === 'none') return;
     const period = 260;
+    // scroll is unbounded (wraps at 5200, a multiple of period) so world-space
+    // x for a given repeat is stable across frames — safe to derive a cycle
+    // index k from it for a per-instance (not per-frame) hash.
     for (let x = -(scroll % period); x < CANVAS_W + period; x += period) {
-      const dx = x + 60;
+      const k = Math.round((x + scroll) / period);
+      const h = decoHash(k);
+      const dx = x + 60 + (h - 0.5) * 40; // ±20px stable offset
       if (biome.deco === 'cactus') {
-        ctx.font = '26px serif';
+        const size = 26 * (0.8 + h * 0.4); // ±20%
+        ctx.font = `${size.toFixed(1)}px serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'bottom';
         ctx.fillText('🌵', dx, GROUND_Y + 1);
       } else if (biome.deco === 'snowman') {
-        ctx.font = '24px serif';
+        const size = 24 * (0.8 + h * 0.4); // ±20%
+        ctx.font = `${size.toFixed(1)}px serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'bottom';
         ctx.fillText('⛄', dx, GROUND_Y + 1);
       } else if (biome.deco === 'lava') {
-        const grad = ctx.createRadialGradient(dx, GROUND_Y - 4, 2, dx, GROUND_Y - 4, 26);
+        const r = 26 * (0.85 + h * 0.3); // ±30%
+        const grad = ctx.createRadialGradient(dx, GROUND_Y - 4, 2, dx, GROUND_Y - 4, r);
         grad.addColorStop(0, 'rgba(255,140,0,0.85)');
         grad.addColorStop(1, 'rgba(255,80,0,0)');
         ctx.fillStyle = grad;
         ctx.beginPath();
-        ctx.ellipse(dx, GROUND_Y - 4, 26, 9, 0, 0, Math.PI * 2);
+        ctx.ellipse(dx, GROUND_Y - 4, r, r * 9 / 26, 0, 0, Math.PI * 2);
         ctx.fill();
       }
     }
@@ -1566,6 +1586,7 @@ const SpellingGame = (() => {
       ducking,
       flyers: flyers.length,
       tier: comboTier(),
+      groundScroll,
     }),
     forceWord: w => {
       currentWord = { word: w, hint: '📝', zh: '測試 test word' };

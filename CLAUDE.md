@@ -31,7 +31,7 @@ css/
 js/
   app.js                — Navigation and initialization (DOMContentLoaded entry point)
   engine.js             — Core game engine (XP, levels, gems, inventory, achievements, shop, buff system, daily quest rewards, sound effects, localStorage save)
-  music.js              — Background music (MusicManager: 6 synthesized Web Audio tracks, zone→track map, crossfades, 🎵 toggle persisted as music_enabled)
+  music.js              — Background music (MusicManager: 18 synthesized Web Audio tracks, per-zone rotation playlists, crossfades, 🎵 toggle persisted as music_enabled)
   minecraft.js          — Minecraft-themed vocabulary crafting game
   roblox.js             — Roblox-themed grammar obstacle course
   youtube.js            — YouTube-themed reading comprehension with quizzes
@@ -44,7 +44,7 @@ js/
   speak.js              — Spell academy speaking game (Web Speech Recognition, honor-mode fallback)
   tower.js              — Tower of Saviors-style word boss battle (drag letter orbs to spell words; 12 bosses scale endlessly by floor)
   rpg.js                — Undertale-style 2D RPG engine for conversation practice (interprets RPG_CHAPTERS data)
-  sky.js                — Sky Citadel open-world 3D adventure (Three.js; islands/physics/camera/mobs/52 quests/2 bosses/galaxy portals/title perks/minimap)
+  sky.js                — Sky Citadel open-world 3D adventure (Three.js; islands/physics/camera/mobs/62 quests incl. 10 hidden/3 bosses/galaxy+secret portals/title perks/minimap)
   cloud.js              — Save backup: file export/import + optional Google Drive appDataFolder sync (owner fills GOOGLE_CLIENT_ID; see DEPLOYMENT.md)
   daily.js              — Daily quest tracking and rendering
   tts.js                — Text-to-speech module (Web Speech API)
@@ -59,8 +59,8 @@ js/
     empire.js           — Empire dialogues (EMPIRE_DIALOGUES) and daily-life English (EMPIRE_LIFE), easy/medium/hard
     empire2.js          — Conversation expansion pack #2 (+1,200 dialogues → 1,260, +800 life scenes → 856; loaded after empire.js)
     rpg.js              — RPG chapters (RPG_CHAPTERS, 9 chapters mapped to 課綱學習主題; maps, NPCs, dialogue scripts)
-    sky.js              — Sky Citadel world data (SKY_CONFIG, SKY_ISLANDS ×28 incl. 12 galaxy isles, SKY_BRIDGES, SKY_PADS, SKY_PORTALS, SKY_QUESTS ×52, SKY_MOBS ×5, SKY_SKIN_TINTS)
-    game.js             — Achievements (38, each with pts), daily quests (12), inventory items (8, usable as charms), shop items (consumables/skins/titles/themes), ACH_POINT_REWARDS, LEVEL_MILESTONES, CHARM_PERKS, SELL_PRICES
+    sky.js              — Sky Citadel world data (SKY_CONFIG, SKY_ISLANDS ×32 incl. 12 galaxy + 4 secret isles, SKY_BRIDGES, SKY_PADS, SKY_PORTALS ×10, SKY_QUESTS ×62 incl. 10 hidden sqh_, SKY_MOBS ×8, SKY_SKIN_TINTS)
+    game.js             — Achievements (41, each with pts; `hidden` ones show ??? until unlocked), daily quests (12), inventory items (8, usable as charms), shop items (consumables/skins/titles/themes), ACH_POINT_REWARDS, LEVEL_MILESTONES, CHARM_PERKS, SELL_PRICES
 reference/
   taiwan_elementary_1000_minecraft_flavor.csv  — Source word list reference
 ```
@@ -97,12 +97,12 @@ Each game module exports `{ init }`. `app.js` calls all `.init()` methods on `DO
 - **Empire dialogues**: add entries to `EMPIRE_DIALOGUES` in `js/data/empire.js` (easy/medium/hard). Each entry needs `q` (line spoken to the player), `qZh` (Chinese meaning), `a` (correct response), `wrong` (3 distractors).
 - **RPG chapters**: append entries to `RPG_CHAPTERS` in `js/data/rpg.js`. Each chapter needs `id`, `title`, `theme` (課綱學習主題), `icon`, tile emoji (`wall`/`deco`) and colours (`floor`/`path`), a 13×9 ASCII `map`, `spawn`, `npcs` (each with a `talk` script of say/ask entries), and a `boss`. The engine in js/rpg.js interprets everything — no code changes needed for new chapters.
 - **Empire life English**: add entries to `EMPIRE_LIFE` in `js/data/empire.js` (easy/medium/hard). Each entry needs `scene` (Chinese scenario), `q` (English question), `a`, `wrong` (3 distractors). Empire also reuses `VOCAB_DATA` and `GRAMMAR_DATA` for vocabulary/grammar questions.
-- **Sky quests**: add entries to `SKY_QUESTS` in `js/data/sky.js`. Each quest needs `id`, `island` (a SKY_ISLANDS id), `type` (`chest`/`gate`/`npc`/`listen`/`pillars`/`runes`/`arena`/`bridge`/`race`/`boss`), `name`, `diff` (`easy`/`medium`/`hard`/`boss` — sets the reward tier), `n` (questions/pairs/mobs/rings/words by type), `dx`/`dz` (position relative to the island centre), `intro`, and optionally `npc` (emoji), `mob` (SKY_MOBS id for arenas), `time` (race seconds), `lock` (total clears required). js/sky.js builds the quest object, marker and quiz flow automatically. New islands go in `SKY_ISLANDS` (id/name/type/pos/r/seed) and are decorated procedurally by type. The galaxy region (`isle_gx_*` islands, `sqg_*` quests, all `lock: 22`+) is reached through `SKY_PORTALS` after 22 total clears; its second boss is parameterized via BOSS_DEFS in js/sky.js.
+- **Sky quests**: add entries to `SKY_QUESTS` in `js/data/sky.js`. Each quest needs `id`, `island` (a SKY_ISLANDS id), `type` (`chest`/`gate`/`npc`/`listen`/`pillars`/`runes`/`arena`/`bridge`/`race`/`boss`), `name`, `diff` (`easy`/`medium`/`hard`/`boss` — sets the reward tier), `n` (questions/pairs/mobs/rings/words by type), `dx`/`dz` (position relative to the island centre), `intro`, and optionally `npc` (emoji), `mob` (SKY_MOBS id for arenas), `time` (race seconds), `lock` (total clears required). js/sky.js builds the quest object, marker and quiz flow automatically. New islands go in `SKY_ISLANDS` (id/name/type/pos/r/seed) and are decorated procedurally by type. The galaxy region (`isle_gx_*` islands, `sqg_*` quests, all `lock: 22`+) is reached through `SKY_PORTALS` after 22 total clears; bosses are parameterized via BOSS_DEFS in js/sky.js. The secret realm (`isle_sc_*` isles with `secret: true`, `sqh_*` quests with `hidden: true`) is entered through hidden portals that reveal within 12u proximity (persisted in `save.secretsFound`); hidden quests are masked as ??? in the journal, excluded from `totalCleared()` lock math, and tracked by the engine's `skySecretQuests`/`skySecretFound`/`skySecretBoss` counters for the 3 `hidden` achievements.
 - **Achievements/quests/items/shop**: edit `js/data/game.js`.
 
 ### Key Systems
 - **Gamification**: XP (dynamic scaling: 80 + level × 20 per level), gems (currency), streaks, achievements (each grants 15 gems + pts), daily quests
-- **Achievement points**: derived from unlocked achievements (10/20/40 pts tiers, 760 total); ACH_POINT_REWARDS thresholds grant exclusive titles/skins/themes (state.pointRewardsClaimed)
+- **Achievement points**: derived from unlocked achievements (10/20/40 pts tiers, 830 total); ACH_POINT_REWARDS thresholds grant exclusive titles/skins/themes (state.pointRewardsClaimed)
 - **Level milestones**: LEVEL_MILESTONES every 5 levels to 50 grant gems/items/exclusive unlocks (state.milestonesClaimed; granted in addXP via grantLevelMilestones)
 - **Shop**: Consumables (buffs, some with `uses`/`minLevel`), skins (13), titles (15), themes (6) — `unlock`-flagged items are never purchasable (granted by milestones/points/collection)
 - **Themes**: body[data-theme] overrides :root CSS vars (style.css); applyTheme() on load/equip; owned in state.owned.themes
@@ -112,7 +112,7 @@ Each game module exports `{ init }`. `app.js` calls all `.init()` methods on `DO
 - **Re-entrancy rule**: reward grants inside checkAchievements/checkPointRewards/grantLevelMilestones/checkCollectionReward mutate `state.gems`/`state.owned` directly — never call addGems/addXP there
 - **Cloud save**: js/cloud.js exports all 9 localStorage keys as a v1 JSON payload; file export/import always works; Google Drive appDataFolder sync activates only when GOOGLE_CLIENT_ID is set (GIS script lazy-loaded on sign-in — the sole external-script exception); the ID can live in the source or be injected at deploy time from the repo's Actions variable/secret GOOGLE_CLIENT_ID by .github/workflows/deploy.yml (requires Pages source = GitHub Actions)
 - **Sound**: Synthesized via Web Audio API (no audio files needed)
-- **Music**: js/music.js composes 6 looping tracks as data (chords/bass/melody) and renders them live with Web Audio (soft palette for learning screens, chiptune for battle); `MusicManager.playForZone()` runs on every zone switch (called in app.js switchZone), the sky boss fight swaps to the `boss` track; independent 🎵 HUD toggle persisted as localStorage `music_enabled`; playback starts only after the first user gesture (autoplay policy)
+- **Music**: js/music.js composes 18 looping tracks as data (chords/bass/melody) and renders them live with Web Audio (soft palette for learning screens, chiptune for battle); `ZONE_TRACKS` maps each zone to a playlist and `MusicManager.playForZone()` (run on every zone switch, called in app.js switchZone) rotates through it per visit; the sky boss fight swaps to the `boss` track, secret realms to `mystic`; independent 🎵 HUD toggle persisted as localStorage `music_enabled`; playback starts only after the first user gesture (autoplay policy)
 - **TTS**: Web Speech API for word pronunciation (en-US, zh-TW)
 - **Storage**: All state persisted in `localStorage` as JSON
 - **Level-up deferral**: `GameEngine.setDeferLevelUp(true/false)` prevents modal spam during rapid answer sequences; call `flushPendingLevelUps()` when the game round ends
@@ -153,7 +153,7 @@ python3 -m http.server 8000
 ```
 
 ### Cache busting
-All CSS/JS references in index.html carry a `?v=N` query string. GitHub Pages caches assets for 10 minutes, so a freshly deployed index.html can otherwise pair with stale cached JS/CSS (symptoms: a new game's zone shows but its dynamic UI is empty). **Bump the version number on every release that changes JS or CSS** (single `sed -i 's/?v=17/?v=18/g' index.html`-style edit).
+All CSS/JS references in index.html carry a `?v=N` query string. GitHub Pages caches assets for 10 minutes, so a freshly deployed index.html can otherwise pair with stale cached JS/CSS (symptoms: a new game's zone shows but its dynamic UI is empty). **Bump the version number on every release that changes JS or CSS** (single `sed -i 's/?v=18/?v=19/g' index.html`-style edit).
 
 ### Testing
 There is no automated test suite. Manual testing in a browser is the current workflow. Verify changes by opening `index.html` and exercising the affected game zone.

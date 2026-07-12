@@ -198,6 +198,9 @@ const GameEngine = (() => {
       skyQuests: 0,
       skyGalaxyQuests: 0,
       skyBossDown: false,
+      skySecretQuests: 0,
+      skySecretFound: 0,
+      skySecretBoss: false,
       // history
       learnedWordsList: [],
       // shop system
@@ -508,9 +511,10 @@ const GameEngine = (() => {
     checkAchievements();
   }
 
-  function recordSkyQuest(isGalaxy) {
+  function recordSkyQuest(isGalaxy, isSecret) {
     state.skyQuests = (state.skyQuests || 0) + 1;
     if (isGalaxy) state.skyGalaxyQuests = (state.skyGalaxyQuests || 0) + 1;
+    if (isSecret) state.skySecretQuests = (state.skySecretQuests || 0) + 1;
     save();
     checkAchievements();
   }
@@ -523,6 +527,18 @@ const GameEngine = (() => {
 
   function recordSkyBoss() {
     state.skyBossDown = true;
+    save();
+    checkAchievements();
+  }
+
+  function recordSkySecretFound() {
+    state.skySecretFound = (state.skySecretFound || 0) + 1;
+    save();
+    checkAchievements();
+  }
+
+  function recordSkySecretBoss() {
+    state.skySecretBoss = true;
     save();
     checkAchievements();
   }
@@ -948,13 +964,17 @@ const GameEngine = (() => {
     list.innerHTML = '';
     ACHIEVEMENTS.forEach(ach => {
       const unlocked = state.achievements.includes(ach.id);
+      const maskHidden = ach.hidden && !unlocked;
+      const icon = maskHidden ? '❓' : (unlocked ? ach.icon : '🔒');
+      const name = maskHidden ? '？？？' : ach.name;
+      const desc = maskHidden ? '神秘成就……解鎖後揭曉' : ach.desc;
       const el = document.createElement('div');
       el.className = 'ach-item' + (unlocked ? ' unlocked' : '');
       el.innerHTML = `
-        <span class="ach-icon">${unlocked ? ach.icon : '🔒'}</span>
+        <span class="ach-icon">${icon}</span>
         <div class="ach-info">
-          <h4>${ach.name} <span class="ach-pts-badge">+${ach.pts || 10}⭐</span></h4>
-          <p>${ach.desc}</p>
+          <h4>${name} <span class="ach-pts-badge">+${ach.pts || 10}⭐</span></h4>
+          <p>${desc}</p>
         </div>
         <span class="ach-status">${unlocked ? '已解鎖' : '未解鎖'}</span>
       `;
@@ -1223,6 +1243,7 @@ const GameEngine = (() => {
     recordTowerWord, recordTowerBoss,
     recordRpgTalk, recordRpgChapter,
     recordSkyQuest, recordSkyAnswer, recordSkyBoss,
+    recordSkySecretFound, recordSkySecretBoss,
     recordPerfectGrammar, recordStreak,
     updateHUD, updateStats,
     showInventory, showAchievements, showToast,
