@@ -161,11 +161,13 @@ const EmpireGame = (() => {
   }
 
   // ===== three.js scene =====
-  // Canvas is 2:1 but never taller than ~55% of the viewport, so the
+  // Canvas is 2:1 but never taller than ~55% of the viewport (62% in
+  // maximized mode, since the HUD/nav are hidden there), so the
   // question panel stays visible in fullscreen / maximized mode
   function canvasSize() {
     const w = els.wrap.clientWidth || 800;
-    const h = Math.max(300, Math.min(Math.round(w * 0.5), Math.round(window.innerHeight * 0.55)));
+    const maxH = document.body.classList.contains('game-max') ? 0.62 : 0.55;
+    const h = Math.max(300, Math.min(Math.round(w * 0.5), Math.round(window.innerHeight * maxH)));
     return { w, h };
   }
 

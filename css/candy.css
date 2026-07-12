@@ -333,7 +333,7 @@
 .candy-card .card-icon { filter: drop-shadow(0 0 6px rgba(255, 126, 185, 0.7)); }
 
 /* Maximized mode: keep the board a comfortable size, centered */
-body.game-max .cd-container { max-width: min(92vw, 76vh); }
+body.game-max .cd-container { max-width: min(96vw, 84vh); }
 
 @media (max-width: 480px) {
   .cd-quiz-options { grid-template-columns: 1fr; }

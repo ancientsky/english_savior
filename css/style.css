@@ -915,6 +915,27 @@ body.game-max .zone-fs-btn {
   color: var(--gold, #f5c518);
 }
 
+/* game-max：解除各遊戲內層容器的寬度上限，讓畫面真正滿版 */
+body.game-max .zone.active .mc-container,
+body.game-max .zone.active .rb-container,
+body.game-max .zone.active .yt-container,
+body.game-max .zone.active .ls-container,
+body.game-max .zone.active .emp-container,
+body.game-max .zone.active .bd-container,
+body.game-max .zone.active .sk-container,
+body.game-max .zone.active .tw-container,
+body.game-max .zone.active .rpg-container {
+  max-width: none;
+}
+
+/* 畫布比例遊戲：以視窗高度反推寬度上限，避免畫布高度爆出視窗 */
+body.game-max #zone-spelling.active .sp-container {
+  max-width: min(100%, calc((100vh - 170px) * 2.35));
+}
+body.game-max #zone-sling.active .sg-container {
+  max-width: min(100%, calc((100vh - 200px) * 2.1));
+}
+
 /* ===== 佈景主題（body[data-theme] 覆蓋 :root 變數；全部深色系，
    各遊戲專屬 CSS 不受影響）===== */
 body[data-theme="forest"] {
