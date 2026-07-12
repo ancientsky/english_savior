@@ -10,7 +10,8 @@ const SkyGame = (() => {
   let save = {
     completed: {},          // questId -> clear count
     bridgesBuilt: {},       // bridge-questId -> true (permanent quest bridges)
-    secretsFound: {},       // secret-portal id -> true (once discovered, stays visible)
+    secretsFound: {},       // secret-portal/switch id -> true (once discovered, stays visible)
+    stairsBuilt: {},        // switch id -> true (hidden stepstone stairway built)
     lastIsland: 'isle_dawn',
     bestRace: {},
     settings: {},
@@ -121,6 +122,7 @@ const SkyGame = (() => {
     } catch { /* keep defaults */ }
     if (!save.bridgesBuilt) save.bridgesBuilt = {};
     if (!save.secretsFound) save.secretsFound = {};
+    if (!save.stairsBuilt) save.stairsBuilt = {};
     // migrate the old single-bridge flag (pre-galaxy saves)
     if (save.bridgeBuilt) save.bridgesBuilt.sq_bridge_crystal = true;
   }
@@ -243,6 +245,8 @@ const SkyGame = (() => {
         found: { ...save.secretsFound },
         secretCleared: secretCleared(),
         portals: interactables.filter(it => it.q.type === 'portal').length,
+        switches: interactables.filter(it => it.q.type === 'switch').length,
+        stairsBuilt: { ...save.stairsBuilt },
       }),
     };
   }
@@ -356,11 +360,13 @@ const SkyGame = (() => {
     SKY_ISLANDS.forEach(buildIsland);
     SKY_BRIDGES.forEach(b => {
       if (b.quest && !isBridgeBuilt(b.quest)) return; // built by its quest
+      if (b.switch && !save.stairsBuilt[b.switch]) return; // built by its switch
       buildBridge(b);
     });
     SKY_PADS.forEach(buildPad);
     buildQuestObjects();
     buildPortals();
+    buildSwitches();
     AMBIENT_MOBS.forEach(a => spawnMob(a.mob, a.island, a.dx, a.dz));
     buildParticles();
     buildPlayer();
@@ -562,6 +568,11 @@ const SkyGame = (() => {
     lake: { top: 0x4aa8d8, side: 0x2a6a8a, tex: null },
     mist: { top: 0x6a7a6a, side: 0x4a5a4a, tex: 'rockTex' },
     temple: { top: 0x2a2438, side: 0x1a1626, tex: 'crystalTex' },
+    // mechanism-triggered hidden realms
+    garden: { top: 0xcfe8b8, side: 0x8a6a4a, tex: 'grassTex' },
+    vault: { top: 0x1a1414, side: 0x120e10, tex: 'rockTex' },
+    tree: { top: 0x8a6a3e, side: 0x5e4526, tex: 'woodTex' },
+    relic: { top: 0xe8dfc0, side: 0xb8ac86, tex: 'rockTex' },
   };
 
   function buildIsland(isle) {
@@ -1057,10 +1068,130 @@ const SkyGame = (() => {
         });
         break;
       }
+      // ===== mechanism-triggered hidden realms =====
+      case 'garden':
+        scatter(g, isle, rng, 20, 0.1, 0.9, r => {
+          const f = new THREE.Group();
+          const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.5, 4), matOf(0x5a9a4a));
+          stem.position.y = 0.25;
+          f.add(stem);
+          const bloom = new THREE.Mesh(new THREE.SphereGeometry(0.28, 6, 5),
+            matOf([0xffb0d0, 0xfff0a0, 0xd0b0ff, 0xffffff][Math.floor(r() * 4)]));
+          bloom.position.y = 0.65;
+          f.add(bloom);
+          return f;
+        });
+        // vine arches (torus halves)
+        scatter(g, isle, rng, 3, 0.55, 0.85, r => {
+          const arch = new THREE.Mesh(new THREE.TorusGeometry(1.6, 0.16, 6, 16, Math.PI), matOf(0x4a8a3a));
+          arch.rotation.x = Math.PI / 2;
+          arch.rotation.z = r() * Math.PI;
+          arch.position.y = 1.6;
+          return arch;
+        });
+        // butterfly sprites (small emissive quads; drift with the island's own bob)
+        scatter(g, isle, rng, 8, 0.2, 0.85, r => {
+          const b = new THREE.Mesh(new THREE.PlaneGeometry(0.35, 0.28),
+            new THREE.MeshLambertMaterial({
+              color: [0xffb0d0, 0x9fd8ff, 0xffe066][Math.floor(r() * 3)],
+              emissive: 0x442244, side: THREE.DoubleSide,
+            }));
+          b.position.y = 0.6 + r() * 1.4;
+          b.rotation.y = r() * Math.PI;
+          return b;
+        });
+        break;
+      case 'vault': {
+        const glow = new THREE.Mesh(new THREE.CylinderGeometry(isle.r * 0.3, isle.r * 0.3, 0.14, 14),
+          matOf(0xff5a1a, 0xdd3300));
+        glow.position.set(isle.r * 0.1, 0.08, -isle.r * 0.1);
+        g.add(glow);
+        scatter(g, isle, rng, 7, 0.2, 0.85, r => {
+          const h = 2 + r() * 3.5;
+          const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.6, h, 8), matOf(0x0e0a0c));
+          pillar.position.y = h / 2;
+          pillar.castShadow = true;
+          return pillar;
+        });
+        // red-orange emissive crack lines
+        scatter(g, isle, rng, 10, 0.1, 0.9, r => {
+          const crack = new THREE.Mesh(new THREE.BoxGeometry(0.9 + r() * 0.6, 0.04, 0.12),
+            new THREE.MeshLambertMaterial({ color: 0xff6a2a, emissive: 0xdd3300 }));
+          crack.position.y = 0.02;
+          crack.rotation.y = r() * Math.PI;
+          return crack;
+        });
+        scatter(g, isle, rng, 5, 0.2, 0.7, r => {
+          const ember = new THREE.Mesh(new THREE.SphereGeometry(0.08, 5, 4),
+            new THREE.MeshLambertMaterial({ color: 0xffb060, emissive: 0xff5500 }));
+          ember.position.y = 0.5 + r() * 1.5;
+          return ember;
+        });
+        break;
+      }
+      case 'tree':
+        // ring-pattern of the stump's growth rings
+        for (let i = 0; i < 3; i++) {
+          const ring = new THREE.Mesh(new THREE.TorusGeometry(isle.r * (0.3 + i * 0.22), 0.1, 6, 24),
+            matOf(0x6a4a2a, 0, 'woodTex'));
+          ring.rotation.x = Math.PI / 2;
+          ring.position.y = 0.15;
+          g.add(ring);
+        }
+        // branch platforms (non-colliding decor)
+        scatter(g, isle, rng, 6, 0.5, 0.85, r => {
+          const h = 1 + r() * 1.5;
+          const branch = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.4, h, 6), matOf(0x5e4526, 0, 'woodTex'));
+          branch.rotation.z = Math.PI / 2.4;
+          branch.position.y = 2 + r() * 2;
+          return branch;
+        });
+        scatter(g, isle, rng, 12, 0.1, 0.85, r => {
+          const moss = new THREE.Mesh(new THREE.SphereGeometry(0.12, 5, 4),
+            new THREE.MeshLambertMaterial({ color: 0x8fd870, emissive: 0x2a6a1a }));
+          moss.position.y = 0.1;
+          return moss;
+        });
+        break;
+      case 'relic': {
+        scatter(g, isle, rng, 8, 0.3, 0.85, r => {
+          const h = 1.5 + r() * 3;
+          const col = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.58, h, 9), matOf(0xe8dfc0));
+          col.position.y = h / 2;
+          col.rotation.z = (r() - 0.5) * 0.3;
+          col.castShadow = true;
+          return col;
+        });
+        // cracked statue: stacked boxes
+        {
+          const statue = new THREE.Group();
+          const base = new THREE.Mesh(geoBox(), matOf(0xd8cba0));
+          base.scale.set(1.4, 1, 1.4);
+          base.position.y = 0.5;
+          statue.add(base);
+          const torso = new THREE.Mesh(geoBox(), matOf(0xe8dfc0));
+          torso.scale.set(1, 1.6, 1);
+          torso.position.y = 1.8;
+          statue.add(torso);
+          const head = new THREE.Mesh(geoBox(), matOf(0xf0e8d0));
+          head.scale.set(0.7, 0.7, 0.7);
+          head.position.y = 2.95;
+          statue.add(head);
+          statue.traverse(o => { o.castShadow = true; });
+          g.add(statue);
+        }
+        // floating rubble (slow-bob small rocks)
+        scatter(g, isle, rng, 6, 0.2, 0.8, r => {
+          const rubble = new THREE.Mesh(new THREE.DodecahedronGeometry(0.3 + r() * 0.3), matOf(0xd0c39a));
+          rubble.position.y = 0.5 + r() * 2;
+          return rubble;
+        });
+        break;
+      }
     }
 
     // grass blades on green islands (InstancedMesh child → bobs with island)
-    if (['grass', 'forest', 'flower', 'village'].includes(isle.type)) {
+    if (['grass', 'forest', 'flower', 'village', 'garden'].includes(isle.type)) {
       const rng2 = mulberry32(isle.seed * 31 + 7);
       const N = 55;
       const gm = new THREE.InstancedMesh(
@@ -1244,6 +1375,9 @@ const SkyGame = (() => {
   function markerState(q) {
     if (q.type === 'portal') {
       return isLocked(q) ? { s: '🔒', c: '#cbd5e1' } : { s: '🌀', c: '#c77dff' };
+    }
+    if (q.type === 'switch') {
+      return save.stairsBuilt[q.id] ? { s: '✅', c: '#4ade80' } : { s: '⚙️', c: '#7fe8ff' };
     }
     if (isCleared(q)) return { s: '✓', c: '#4ade80' };
     if (isLocked(q)) return { s: '🔒', c: '#cbd5e1' };
@@ -1456,8 +1590,44 @@ const SkyGame = (() => {
     }
   }
 
-  // reveal a hidden secret portal once the player wanders within range —
-  // called every frame from updateWorld() (cheap: ≤8 secret portals)
+  // ---- hidden mechanisms (神秘符文石) that build a stepstone stairway ----
+  function buildSwitches() {
+    for (const sw of SKY_SWITCHES) {
+      const isle = isleById(sw.island);
+      const g = islandGroups[sw.island];
+      if (!isle || !g) continue;
+      const visual = new THREE.Group();
+      const stone = new THREE.Mesh(new THREE.DodecahedronGeometry(0.55), matOf(0x2a2a34));
+      stone.position.y = 0.4;
+      stone.castShadow = true;
+      visual.add(stone);
+      const shard = new THREE.Mesh(new THREE.OctahedronGeometry(0.32),
+        new THREE.MeshLambertMaterial({ color: 0x7fe8ff, emissive: 0x2a7a9a, map: TEX.crystalTex }));
+      shard.position.y = 1.05;
+      shard.scale.y = 1.5;
+      visual.add(shard);
+      visual.position.set(sw.dx, 0, sw.dz);
+      g.add(visual);
+
+      const q = { id: sw.id, type: 'switch', name: sw.name, to: sw.to };
+      const st = markerState(q);
+      const marker = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: markerTexture(st.s, st.c), transparent: true,
+      }));
+      marker.scale.set(1.4, 1.4, 1);
+      marker.position.set(sw.dx, 3.2, sw.dz);
+      if (!save.secretsFound[sw.id]) marker.visible = false;
+      g.add(marker);
+      markerList.push(marker);
+      interactables.push({
+        q, marker, markerSym: st.s, secret: true,
+        x: isle.pos[0] + sw.dx, z: isle.pos[2] + sw.dz, isle,
+      });
+    }
+  }
+
+  // reveal a hidden secret portal/switch once the player wanders within range —
+  // called every frame from updateWorld() (cheap: ≤12 secret interactables)
   function checkSecretDiscovery() {
     for (const it of interactables) {
       if (!it.secret || save.secretsFound[it.q.id]) continue;
@@ -1467,10 +1637,35 @@ const SkyGame = (() => {
       save.secretsFound[it.q.id] = true;
       persist();
       it.marker.visible = true;
-      showWorldToast('🔮 發現隱藏傳送門！');
+      showWorldToast(it.q.type === 'switch' ? '🔮 發現神秘機關！' : '🔮 發現隱藏傳送門！');
       SoundManager.playAchievement();
       GameEngine.recordSkySecretFound?.();
     }
+  }
+
+  // trigger a switch: builds its matching SKY_BRIDGES `switch:` stairway once
+  function interactSwitch(q) {
+    if (save.stairsBuilt[q.id]) {
+      showWorldToast('✅ 機關已啟動');
+      return;
+    }
+    save.stairsBuilt[q.id] = true;
+    persist();
+    const b = SKY_BRIDGES.find(x => x.switch === q.id);
+    if (b) {
+      buildBridge(b);
+      const target = isleById(b.to);
+      showWorldToast(`⚙️ 機關啟動！通往${target ? target.name : '秘境'}的隱藏階梯出現了！`);
+    } else {
+      showWorldToast('⚙️ 機關啟動！隱藏階梯出現了！');
+    }
+    SoundManager.playAchievement();
+    GameEngine.recordSkySwitch?.();
+    updateQuestMarkers();
+    // force the ⚡ hint label to refresh immediately (updateInteractTarget()
+    // only recomputes text when the nearest target *changes*, and the player
+    // is still standing on the same switch right after triggering it)
+    currentTarget = null;
   }
 
   function usePortal(q) {
@@ -1516,6 +1711,9 @@ const SkyGame = (() => {
         ? `🔒 ${q.name}（完成 ${q.lock} 個任務後開啟，還差 ${q.lock - totalCleared()} 個）`
         : `${key}　🌀 ${q.name}`;
     }
+    else if (q.type === 'switch') {
+      label = save.stairsBuilt[q.id] ? `✅ ${q.name}（已啟動）` : `${key}　⚙️ ${q.name}`;
+    }
     else if (isLocked(q)) {
       label = q.lockSecret
         ? `🔒 ${q.name}（完成更多秘境任務解鎖，還差 ${q.lockSecret - secretCleared()} 個）`
@@ -1546,6 +1744,7 @@ const SkyGame = (() => {
     nebula: '#8a6acc', star: '#7a7ae0', moon: '#c8c8d8',
     comet: '#5a7ac8', aurora: '#4ae8b0', alien: '#b06ae8',
     cave: '#3a3a4a', lake: '#4aa8d8', mist: '#6a7a6a', temple: '#2a2438',
+    garden: '#e8b8d8', vault: '#3a1410', tree: '#8a6a3e', relic: '#e8dfc0',
   };
 
   function lowPower() { return !!save.settings.lowPower; }
@@ -1621,15 +1820,26 @@ const SkyGame = (() => {
     ctx.stroke();
   }
 
+  function usesOf(buffs, type) {
+    const b = buffs.find(x => x.type === type && x.uses > 0);
+    return b ? b.uses : 0;
+  }
   function updateBuffBar() {
     if (!els.buffs) return;
+    const buffs = (GameEngine.getState().activeBuffs) || [];
     const chips = [];
-    if (gliderOn) chips.push('🪂');
-    if (jumpBoostOn) chips.push('🌨️');
-    if (GameEngine.hasBuff('revive')) chips.push('🪶');
-    if (GameEngine.hasBuff('hint')) chips.push('🔮');
-    if (GameEngine.hasBuff('double_xp')) chips.push('📜×2');
-    if (GameEngine.hasBuff('double_gems')) chips.push('⚗️');
+    // consumed-once-per-adventure buffs: show a ✓ (no numeric count applies)
+    if (gliderOn) chips.push('🪂<sup>✓</sup>');
+    if (jumpBoostOn) chips.push('🌨️<sup>✓</sup>');
+    // stackable consumables: show remaining uses
+    const revive = usesOf(buffs, 'revive');
+    if (revive) chips.push(`🪶<sup>×${revive}</sup>`);
+    const hint = usesOf(buffs, 'hint');
+    if (hint) chips.push(`🔮<sup>×${hint}</sup>`);
+    const dxp = usesOf(buffs, 'double_xp');
+    if (dxp) chips.push(`📜<sup>×${dxp}</sup>`);
+    const dgems = usesOf(buffs, 'double_gems');
+    if (dgems) chips.push(`⚗️<sup>×${dgems}</sup>`);
     els.buffs.innerHTML = chips.map(c => `<span class="aw-buff-chip">${c}</span>`).join('');
   }
 
@@ -1678,10 +1888,12 @@ const SkyGame = (() => {
     let rows = '';
     for (const [isleId, qs] of groups) {
       const isle = isleById(isleId);
-      // a secret realm is "revealed" once any secret portal into it has been
-      // found, or one of its quests is already cleared (can't clear without
-      // having found the portal first) — until then, mask the whole section
+      // a secret realm is "revealed" once any secret portal or hidden-stairway
+      // switch into it has been found, or one of its quests is already cleared
+      // (can't clear without having found the entrance first) — until then,
+      // mask the whole section
       const revealed = !isle.secret || SKY_PORTALS.some(p => p.secret && p.to === isleId && save.secretsFound[p.id])
+        || SKY_SWITCHES.some(sw => sw.to === isleId && save.secretsFound[sw.id])
         || qs.some(q => isCleared(q));
       rows += `<div class="aw-j-island">${revealed ? `🏝️ ${isle.name}` : '❓ ？？？（秘境）'}</div>`;
       for (const q of qs) {
@@ -3024,6 +3236,15 @@ const SkyGame = (() => {
           const isle = isleById(currentIsland);
           if (isle) {
             els.location.textContent = `🏝️ ${isle.name}`;
+            // secret realms (portal or hidden-stairway entry) swap to the mystic
+            // track; leaving one back to the normal per-zone rotation — this
+            // also covers the stairway-only realms that have no usePortal() call
+            try {
+              if (typeof MusicManager !== 'undefined') {
+                if (isle.secret) MusicManager.play('mystic');
+                else MusicManager.playForZone('sky');
+              }
+            } catch (e) { /* music optional — never block movement */ }
             if (save.lastIsland !== currentIsland) {
               save.lastIsland = currentIsland;
               persist();
@@ -3220,6 +3441,10 @@ const SkyGame = (() => {
       } else {
         usePortal(q);
       }
+      return;
+    }
+    if (q.type === 'switch') {
+      interactSwitch(q);
       return;
     }
     if (isLocked(q)) {

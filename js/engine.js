@@ -217,6 +217,7 @@ const GameEngine = (() => {
       skySecretQuests: 0,
       skySecretFound: 0,
       skySecretBoss: false,
+      skySwitches: 0,
       // history
       learnedWordsList: [],
       // shop system
@@ -555,6 +556,12 @@ const GameEngine = (() => {
 
   function recordSkySecretBoss() {
     state.skySecretBoss = true;
+    save();
+    checkAchievements();
+  }
+
+  function recordSkySwitch() {
+    state.skySwitches = (state.skySwitches || 0) + 1;
     save();
     checkAchievements();
   }
@@ -1282,7 +1289,7 @@ const GameEngine = (() => {
     recordTowerWord, recordTowerBoss,
     recordRpgTalk, recordRpgChapter,
     recordSkyQuest, recordSkyAnswer, recordSkyBoss,
-    recordSkySecretFound, recordSkySecretBoss,
+    recordSkySecretFound, recordSkySecretBoss, recordSkySwitch,
     recordPerfectGrammar, recordStreak,
     updateHUD, updateStats, renderItemBar,
     showInventory, showAchievements, showToast,
