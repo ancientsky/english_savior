@@ -9,7 +9,7 @@ const SkyGame = (() => {
   // ----- persistent progress (quests fill this in Part 2+) -----
   let save = {
     completed: {},          // questId -> clear count
-    bridgeBuilt: false,     // sq_bridge_crystal permanent bridge
+    bridgesBuilt: {},       // bridge-questId -> true (permanent quest bridges)
     lastIsland: 'isle_dawn',
     bestRace: {},
     settings: {},
@@ -23,6 +23,9 @@ const SkyGame = (() => {
   let hemiLight, sunLight, skyDome;
   let cloudMesh = null;
   const cloudData = [];
+  // altitude atmosphere: base sky ↔ deep-space purple (galaxy region sits high)
+  let fogBase = null, fogGalaxy = null, hemiBase = null, hemiGalaxy = null;
+  let galaxyBlend = -1;
 
   // ----- world -----
   const islandGroups = {};       // id -> THREE.Group
@@ -115,7 +118,12 @@ const SkyGame = (() => {
       const raw = localStorage.getItem(SAVE_KEY);
       if (raw) save = { ...save, ...JSON.parse(raw) };
     } catch { /* keep defaults */ }
+    if (!save.bridgesBuilt) save.bridgesBuilt = {};
+    // migrate the old single-bridge flag (pre-galaxy saves)
+    if (save.bridgeBuilt) save.bridgesBuilt.sq_bridge_crystal = true;
   }
+
+  function isBridgeBuilt(questId) { return !!save.bridgesBuilt[questId]; }
   function persist() {
     localStorage.setItem(SAVE_KEY, JSON.stringify(save));
   }
@@ -243,7 +251,7 @@ const SkyGame = (() => {
     const clearedCount = Object.keys(save.completed).length;
     els.startStats.innerHTML = `
       <div class="aw-stat"><span>🏝️</span><b>${SKY_ISLANDS.length}</b><small>座浮空島嶼</small></div>
-      <div class="aw-stat"><span>📜</span><b>${clearedCount} / 22</b><small>完成任務</small></div>
+      <div class="aw-stat"><span>📜</span><b>${clearedCount} / ${SKY_QUESTS.length}</b><small>完成任務</small></div>
       <div class="aw-stat"><span>🌉</span><b>${SKY_BRIDGES.length}</b><small>空中橋樑</small></div>
     `;
     els.guide.innerHTML = isTouch
@@ -326,6 +334,10 @@ const SkyGame = (() => {
 
     scene = new THREE.Scene();
     scene.fog = new THREE.Fog(SKY_CONFIG.fogColor, SKY_CONFIG.fogNear, SKY_CONFIG.fogFar);
+    fogBase = new THREE.Color(SKY_CONFIG.fogColor);
+    fogGalaxy = new THREE.Color(0x241a4e);
+    hemiBase = new THREE.Color(0xdfefff);
+    hemiGalaxy = new THREE.Color(0xb09ae8);
 
     camera = new THREE.PerspectiveCamera(55, w / h, 0.1, 1800);
 
@@ -334,11 +346,12 @@ const SkyGame = (() => {
     buildClouds();
     SKY_ISLANDS.forEach(buildIsland);
     SKY_BRIDGES.forEach(b => {
-      if (b.quest && !save.bridgeBuilt) return; // quest bridge appears in Part 2+
+      if (b.quest && !isBridgeBuilt(b.quest)) return; // built by its quest
       buildBridge(b);
     });
     SKY_PADS.forEach(buildPad);
     buildQuestObjects();
+    buildPortals();
     AMBIENT_MOBS.forEach(a => spawnMob(a.mob, a.island, a.dx, a.dz));
     buildParticles();
     buildPlayer();
@@ -456,6 +469,13 @@ const SkyGame = (() => {
     pillars: { top: 0xc9c3ae, side: 0x99917c },
     bone: { top: 0xb8ad8f, side: 0x847a5e },
     storm: { top: 0x5a5a72, side: 0x3c3c50 },
+    // galaxy biomes
+    nebula: { top: 0x4a3a7a, side: 0x2a2050 },
+    star: { top: 0x5a5aa0, side: 0x333366 },
+    moon: { top: 0xb8b8c8, side: 0x8a8a9a },
+    comet: { top: 0x3a4a6a, side: 0x24304a },
+    aurora: { top: 0x2a5a4a, side: 0x1a3a35 },
+    alien: { top: 0x6a4a8a, side: 0x44305a },
   };
 
   function buildIsland(isle) {
@@ -725,6 +745,92 @@ const SkyGame = (() => {
           return b;
         });
         break;
+      case 'nebula':
+        scatter(g, isle, rng, 8, 0.15, 0.88, r => makeCrystal(r, r() < 0.5 ? 0xff9de2 : 0xb08fff));
+        scatter(g, isle, rng, 5, 0.3, 0.85, r => {
+          const orb = new THREE.Mesh(new THREE.SphereGeometry(0.35 + r() * 0.3, 8, 6),
+            matOf(0xd8b4ff, 0x6a3aaa));
+          orb.position.y = 1 + r() * 2.5;
+          return orb;
+        });
+        break;
+      case 'star':
+        scatter(g, isle, rng, 7, 0.2, 0.85, r => {
+          const p = new THREE.Group();
+          const h = 1.5 + r() * 3.5;
+          const col = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.45, h, 6), matOf(0x44446a));
+          col.position.y = h / 2;
+          col.castShadow = true;
+          p.add(col);
+          const tip = new THREE.Mesh(new THREE.OctahedronGeometry(0.4), matOf(0xffe066, 0xaa8800));
+          tip.position.y = h + 0.4;
+          p.add(tip);
+          return p;
+        });
+        break;
+      case 'moon':
+        scatter(g, isle, rng, 6, 0.2, 0.8, r => {
+          const crater = new THREE.Mesh(new THREE.CylinderGeometry(1 + r() * 1.4, 1.2 + r() * 1.4, 0.22, 12),
+            matOf(0x8a8a9a));
+          crater.position.y = 0.1;
+          return crater;
+        });
+        scatter(g, isle, rng, 6, 0.3, 0.88, r => {
+          const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.5 + r() * 0.8), matOf(0x9a9aac));
+          rock.position.y = 0.4;
+          rock.castShadow = true;
+          return rock;
+        });
+        break;
+      case 'comet':
+        scatter(g, isle, rng, 8, 0.15, 0.88, r => {
+          const h = 1.2 + r() * 2.6;
+          const shard = new THREE.Mesh(new THREE.ConeGeometry(0.4 + r() * 0.3, h, 5), matOf(0x9fd4ff, 0x2255aa));
+          shard.position.y = h / 2;
+          shard.rotation.z = (r() - 0.5) * 0.5;
+          shard.castShadow = true;
+          return shard;
+        });
+        break;
+      case 'aurora':
+        scatter(g, isle, rng, 7, 0.2, 0.85, r => {
+          const h = 2.5 + r() * 4;
+          const beam = new THREE.Mesh(new THREE.ConeGeometry(0.5, h, 6),
+            new THREE.MeshLambertMaterial({
+              color: r() < 0.5 ? 0x4ae8b0 : 0x66ccff,
+              emissive: r() < 0.5 ? 0x0a5a3a : 0x0a3a6a,
+              transparent: true, opacity: 0.75,
+            }));
+          beam.position.y = h / 2;
+          return beam;
+        });
+        scatter(g, isle, rng, 6, 0.25, 0.9, r => {
+          const tuft = new THREE.Mesh(new THREE.SphereGeometry(0.28, 6, 5), matOf(0x7fe8c8));
+          tuft.position.y = 0.25;
+          return tuft;
+        });
+        break;
+      case 'alien':
+        scatter(g, isle, rng, 5, 0.2, 0.8, r => {
+          const m = new THREE.Group();
+          const h = 1 + r() * 2;
+          const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.3, h, 6), matOf(0xb8e8d8));
+          stem.position.y = h / 2;
+          m.add(stem);
+          const cap = new THREE.Mesh(new THREE.SphereGeometry(0.7 + r() * 0.5, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2),
+            matOf(r() < 0.5 ? 0xb06ae8 : 0x4ae8b0, 0x2a1a4a));
+          cap.position.y = h;
+          cap.castShadow = true;
+          m.add(cap);
+          return m;
+        });
+        scatter(g, isle, rng, 4, 0.35, 0.8, r => {
+          const dome = new THREE.Mesh(new THREE.SphereGeometry(1.4 + r() * 0.6, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+            matOf(0xcfd8e8, 0x223344));
+          dome.castShadow = true;
+          return dome;
+        });
+        break;
       case 'storm': {
         // off-centre — the boss altar and colossus take the middle
         const obelisk = new THREE.Mesh(geoBox(), matOf(0x2c2c40, 0x16165a));
@@ -889,7 +995,7 @@ const SkyGame = (() => {
     boss: { xp: 150, gems: 25, ans: 16 },
   };
   const LIVE_TYPES = new Set(['chest', 'gate', 'npc', 'listen', 'pillars',
-    'runes', 'arena', 'bridge', 'race', 'boss']);
+    'runes', 'arena', 'bridge', 'race', 'boss', 'portal']);
 
   const interactables = [];    // { q, x, z, isle, marker }
   const markerList = [];       // bobbing quest markers
@@ -917,6 +1023,9 @@ const SkyGame = (() => {
   }
 
   function markerState(q) {
+    if (q.type === 'portal') {
+      return isLocked(q) ? { s: '🔒', c: '#cbd5e1' } : { s: '🌀', c: '#c77dff' };
+    }
     if (isCleared(q)) return { s: '✓', c: '#4ade80' };
     if (isLocked(q)) return { s: '🔒', c: '#cbd5e1' };
     if (!LIVE_TYPES.has(q.type)) return { s: '⏳', c: '#cbd5e1' };
@@ -1078,6 +1187,71 @@ const SkyGame = (() => {
     }
   }
 
+  // ---- portals (dawn ↔ galaxy) ----
+  function buildPortals() {
+    for (const p of SKY_PORTALS) {
+      const isle = isleById(p.island);
+      const g = islandGroups[p.island];
+      if (!isle || !g) continue;
+      const visual = new THREE.Group();
+      const ring = new THREE.Mesh(
+        new THREE.TorusGeometry(1.7, 0.22, 8, 24),
+        matOf(0xb06ae8, 0x5a2a9a)
+      );
+      ring.position.y = 2.2;
+      ring.castShadow = true;
+      visual.add(ring);
+      const swirl = new THREE.Mesh(
+        new THREE.CircleGeometry(1.45, 20),
+        new THREE.MeshLambertMaterial({
+          color: 0x8f6bff, emissive: 0x3a1a7a,
+          transparent: true, opacity: 0.7, side: THREE.DoubleSide,
+        })
+      );
+      swirl.position.y = 2.2;
+      visual.add(swirl);
+      [-1.9, 1.9].forEach(x => {
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.3, 4.2, 6), matOf(0x44305a));
+        post.position.set(x, 2.1, 0);
+        post.castShadow = true;
+        visual.add(post);
+      });
+      visual.position.set(p.dx, 0, p.dz);
+      g.add(visual);
+      visual.userData.spin = ring;
+
+      const q = { id: p.id, type: 'portal', name: p.name, lock: p.lock, to: p.to };
+      const st = markerState(q);
+      const marker = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: markerTexture(st.s, st.c), transparent: true,
+      }));
+      marker.scale.set(1.6, 1.6, 1);
+      marker.position.set(p.dx, 5.2, p.dz);
+      g.add(marker);
+      markerList.push(marker);
+      interactables.push({
+        q, marker, markerSym: st.s,
+        x: isle.pos[0] + p.dx, z: isle.pos[2] + p.dz, isle,
+      });
+    }
+  }
+
+  function usePortal(q) {
+    const target = isleById(q.to);
+    if (!target) return;
+    els.flash.classList.add('on');
+    setTimeout(() => els.flash.classList.remove('on'), 420);
+    pos.x = target.pos[0];
+    pos.z = target.pos[2];
+    pos.y = target.pos[1] + bobOf(target.id) + 2;
+    vy = 0;
+    lastGroundIsland = target.id;
+    SoundManager.playAchievement();
+    showWorldToast(q.to === 'isle_gx_hub'
+      ? '🌌 歡迎來到銀河空島！新的任務在等著你！'
+      : '🏝️ 回到了天空之城本土！');
+  }
+
   // nearest quest object in range → Ⓔ hint
   function updateInteractTarget() {
     let best = null, bestD = 4.5;
@@ -1092,7 +1266,12 @@ const SkyGame = (() => {
     const q = best.q;
     const key = isTouch ? '點 ⚡' : '按 E';
     let label;
-    if (isLocked(q)) label = `🔒 ${q.name}（再完成 ${q.lock - totalCleared()} 個任務解鎖）`;
+    if (q.type === 'portal') {
+      label = isLocked(q)
+        ? `🔒 ${q.name}（完成 ${q.lock} 個任務後開啟，還差 ${q.lock - totalCleared()} 個）`
+        : `${key}　🌀 ${q.name}`;
+    }
+    else if (isLocked(q)) label = `🔒 ${q.name}（再完成 ${q.lock - totalCleared()} 個任務解鎖）`;
     else if (!LIVE_TYPES.has(q.type)) label = `⏳ ${q.name}（即將開放）`;
     else if (isCleared(q)) label = `${key}　🔁 再玩一次「${q.name}」`;
     else label = `${key}　📜 ${q.name}`;
@@ -1115,6 +1294,8 @@ const SkyGame = (() => {
     mushroom: '#9c7bb8', ruin: '#b8b09a', crystal: '#7fd8e8', cloud: '#eef6ff',
     village: '#8fce62', ice: '#cfeaf8', lava: '#e86a2a', pillars: '#c9c3ae',
     bone: '#d8cfae', storm: '#6a6a88',
+    nebula: '#8a6acc', star: '#7a7ae0', moon: '#c8c8d8',
+    comet: '#5a7ac8', aurora: '#4ae8b0', alien: '#b06ae8',
   };
 
   function lowPower() { return !!save.settings.lowPower; }
@@ -1367,15 +1548,21 @@ const SkyGame = (() => {
     { mob: 'wisp', island: 'isle_crystal', dx: -4, dz: -6 },
     { mob: 'wisp', island: 'isle_cloud', dx: -5, dz: -5 },
     { mob: 'bat', island: 'isle_ruins', dx: -4, dz: -6 },
+    // galaxy region
+    { mob: 'starling', island: 'isle_gx_nebula', dx: 6, dz: 6 },
+    { mob: 'starling', island: 'isle_gx_aurora', dx: 0, dz: -8 },
+    { mob: 'shade', island: 'isle_gx_void', dx: -4, dz: -4 },
+    { mob: 'shade', island: 'isle_gx_twin', dx: 6, dz: 5 },
   ];
 
   function mobDef(id) { return SKY_MOBS.find(m => m.id === id); }
 
   function makeMobMesh(def) {
+    const shape = def.shape || def.id;
     const g = new THREE.Group();
     const eyeMat = matOf(0xffffff);
     const pupilMat = matOf(0x222233);
-    if (def.id === 'slime') {
+    if (shape === 'slime') {
       const body = new THREE.Mesh(new THREE.SphereGeometry(0.75, 10, 8),
         new THREE.MeshLambertMaterial({ color: def.color, transparent: true, opacity: 0.92 }));
       body.scale.y = 0.72;
@@ -1383,7 +1570,7 @@ const SkyGame = (() => {
       body.castShadow = true;
       g.add(body);
       g.userData.body = body;
-    } else if (def.id === 'wisp') {
+    } else if (shape === 'wisp') {
       const body = new THREE.Mesh(new THREE.ConeGeometry(0.55, 1.5, 8),
         new THREE.MeshLambertMaterial({ color: def.color, emissive: 0x1a6a4a }));
       body.position.y = 1.1;
@@ -1406,8 +1593,8 @@ const SkyGame = (() => {
     }
     // eyes
     [-0.22, 0.22].forEach(x => {
-      const eyeY = def.id === 'bat' ? 1.68 : (def.id === 'wisp' ? 1.35 : 0.72);
-      const eyeZ = def.id === 'slime' ? 0.62 : 0.42;
+      const eyeY = shape === 'bat' ? 1.68 : (shape === 'wisp' ? 1.35 : 0.72);
+      const eyeZ = shape === 'slime' ? 0.62 : 0.42;
       const eye = new THREE.Mesh(new THREE.SphereGeometry(0.11, 6, 5), eyeMat);
       eye.position.set(x, eyeY, eyeZ);
       g.add(eye);
@@ -1665,8 +1852,9 @@ const SkyGame = (() => {
       if (mob.isBoss) continue; // boss animated in updateBoss
       // idle animation
       const b = mob.mesh.userData.body;
-      if (mob.def.id === 'slime' && b) b.position.y = 0.55 + Math.abs(Math.sin(simTime * 4 + mob.angle)) * 0.3;
-      if (mob.def.id === 'wisp' && b) b.position.y = 1.1 + Math.sin(simTime * 2.4 + mob.angle) * 0.25;
+      const shape = mob.def.shape || mob.def.id;
+      if (shape === 'slime' && b) b.position.y = 0.55 + Math.abs(Math.sin(simTime * 4 + mob.angle)) * 0.3;
+      if (shape === 'wisp' && b) b.position.y = 1.1 + Math.sin(simTime * 2.4 + mob.angle) * 0.25;
       if (mob.mesh.userData.wings) {
         mob.mesh.userData.wings.forEach((w, i) => { w.rotation.z = Math.sin(simTime * 10) * 0.5 * (i ? -1 : 1); });
       }
@@ -2064,34 +2252,63 @@ const SkyGame = (() => {
     };
   }
 
+  // per-boss looks & behaviour; mechanics (phases/summons/shockwaves) are shared
+  const BOSS_DEFS = {
+    sq_storm_boss: {
+      name: '暴風巨像', icon: '⛈️', body: 0x3c3c58, bodyEm: 0x14143a,
+      head: 0x4a4a68, arm: 0x34344e, eye: 0x66aaff, eyeEm: 0x2255cc,
+      rage: 0xff4444, rageEm: 0xcc1111, summon: 'slime', scale: 1,
+      wake: '⛈️ 暴風巨像甦醒了！點擊它（或按 ⚡）用英語魔法攻擊！',
+      win: '🎆 暴風平息了！天空之城重獲和平！',
+    },
+    sqg_dragon_boss: {
+      name: '星雲暗影龍', icon: '🐉', body: 0x2a1a4a, bodyEm: 0x12082a,
+      head: 0x3a2a5e, arm: 0x1f1238, eye: 0xff66ff, eyeEm: 0xaa22cc,
+      rage: 0xff3366, rageEm: 0xcc1133, summon: 'shade', scale: 1.15,
+      wake: '🐉 星雲暗影龍展開了羽翼！用你最強的英語迎戰！',
+      win: '🎆 暗影散去，銀河的星光回來了！你是真正的英語傳說！',
+    },
+  };
+  function bossDef(q) { return BOSS_DEFS[q.id] || BOSS_DEFS.sq_storm_boss; }
+
   function buildBossMesh(q) {
+    const d = bossDef(q);
     const isle = isleById(q.island);
     const g = new THREE.Group();
     const torso = new THREE.Mesh(new THREE.BoxGeometry(3.6, 4.4, 2.6),
-      new THREE.MeshLambertMaterial({ color: 0x3c3c58, emissive: 0x14143a }));
+      new THREE.MeshLambertMaterial({ color: d.body, emissive: d.bodyEm }));
     torso.position.y = 4;
     torso.castShadow = true;
     g.add(torso);
     const head = new THREE.Mesh(new THREE.BoxGeometry(2, 1.9, 1.9),
-      new THREE.MeshLambertMaterial({ color: 0x4a4a68 }));
+      new THREE.MeshLambertMaterial({ color: d.head }));
     head.position.y = 7.2;
     head.castShadow = true;
     g.add(head);
-    const eyeMat = new THREE.MeshLambertMaterial({ color: 0x66aaff, emissive: 0x2255cc });
-    const eyes = [];
+    const eyeMat = new THREE.MeshLambertMaterial({ color: d.eye, emissive: d.eyeEm });
     [-0.5, 0.5].forEach(x => {
       const eye = new THREE.Mesh(new THREE.SphereGeometry(0.26, 8, 6), eyeMat);
       eye.position.set(x, 7.35, 1);
       g.add(eye);
-      eyes.push(eye);
     });
     [-2.4, 2.4].forEach(x => {
       const arm = new THREE.Mesh(new THREE.BoxGeometry(1, 3.6, 1),
-        new THREE.MeshLambertMaterial({ color: 0x34344e }));
+        new THREE.MeshLambertMaterial({ color: d.arm }));
       arm.position.set(x, 4.2, 0);
       arm.castShadow = true;
       g.add(arm);
     });
+    // the dragon gets wings
+    if (q.id === 'sqg_dragon_boss') {
+      [-1, 1].forEach(s => {
+        const wing = new THREE.Mesh(new THREE.BoxGeometry(3.4, 2.4, 0.25),
+          new THREE.MeshLambertMaterial({ color: 0x3a2a5e, emissive: 0x1a0a3a, transparent: true, opacity: 0.9 }));
+        wing.position.set(s * 3.4, 5.6, -1);
+        wing.rotation.z = s * 0.5;
+        g.add(wing);
+      });
+    }
+    g.scale.setScalar(d.scale);
     g.position.set(isle.pos[0], isle.pos[1], isle.pos[2] - 7);
     scene.add(g);
     bossParts = { group: g, eyeMat, torso };
@@ -2100,10 +2317,11 @@ const SkyGame = (() => {
 
   function startBoss(q) {
     ensureCombatHud();
+    const d = bossDef(q);
     const mesh = buildBossMesh(q);
     const isle = isleById(q.island);
     const mob = {
-      def: { id: 'boss', name: '暴風巨像', hp: q.n, quiz: 'boss', speed: 0, diff: 'hard' },
+      def: { id: 'boss', name: d.name, hp: q.n, quiz: 'boss', speed: 0, diff: 'hard' },
       isle, mesh, hp: q.n, dead: false, gone: false, isBoss: true,
       home: { x: mesh.position.x, z: mesh.position.z },
       angle: 0, cooldown: 0, boost: 0, shieldT: 0, fade: 0, questId: q.id,
@@ -2113,7 +2331,7 @@ const SkyGame = (() => {
     bossActive = { q, mob, phase: 1, sinceSummon: 0, shockT: 6, warnT: 0, waveR: -1, waveHit: false };
     updateBossBar();
     combatHud.bossBar.style.display = '';
-    showWorldToast('⛈️ 暴風巨像甦醒了！點擊它（或按 ⚡）用英語魔法攻擊！');
+    showWorldToast(d.wake);
     SoundManager.playAchievement();
     if (typeof MusicManager !== 'undefined') MusicManager.play('boss');
   }
@@ -2138,7 +2356,8 @@ const SkyGame = (() => {
   function updateBossBar() {
     if (!combatHud || !bossActive) return;
     const m = bossActive.mob;
-    combatHud.bossLabel.textContent = `⛈️ 暴風巨像 ${bossActive.phase === 2 ? '(狂暴!)' : ''}`;
+    const d = bossDef(bossActive.q);
+    combatHud.bossLabel.textContent = `${d.icon} ${d.name} ${bossActive.phase === 2 ? '(狂暴!)' : ''}`;
     combatHud.bossFill.style.width = Math.max(0, (m.hp / m.def.hp) * 100) + '%';
   }
 
@@ -2146,20 +2365,21 @@ const SkyGame = (() => {
     updateBossBar();
     SoundManager.playCorrect();
     if (mob.hp <= 0) { bossVictory(); return; }
+    const d = bossDef(bossActive.q);
     if (bossActive.phase === 1 && mob.hp <= mob.def.hp / 2) {
       bossActive.phase = 2;
-      bossParts.eyeMat.color.setHex(0xff4444);
-      bossParts.eyeMat.emissive.setHex(0xcc1111);
+      bossParts.eyeMat.color.setHex(d.rage);
+      bossParts.eyeMat.emissive.setHex(d.rageEm);
       bossActive.shockT = 3;
       updateBossBar();
-      showWorldToast('⛈️ 巨像狂暴化了！小心衝擊波，跳起來閃避！');
+      showWorldToast(`${d.icon} ${d.name}狂暴化了！小心衝擊波，跳起來閃避！`);
     }
     bossActive.sinceSummon++;
     if (bossActive.phase === 1 && bossActive.sinceSummon >= 3) {
       bossActive.sinceSummon = 0;
-      spawnMob('slime', bossActive.q.island, -6 + Math.random() * 4, 4, bossActive.q.id);
-      spawnMob('slime', bossActive.q.island, 6 - Math.random() * 4, 4, bossActive.q.id);
-      showWorldToast('⛈️ 巨像召喚了雲史萊姆！');
+      spawnMob(d.summon, bossActive.q.island, -6 + Math.random() * 4, 4, bossActive.q.id);
+      spawnMob(d.summon, bossActive.q.island, 6 - Math.random() * 4, 4, bossActive.q.id);
+      showWorldToast(`${d.icon} ${d.name}召喚了${mobDef(d.summon).name}！`);
     }
     if (active && active.combat === mob) {
       setTimeout(() => { if (active && active.combat === mob) askCombat(); }, 600);
@@ -2173,14 +2393,15 @@ const SkyGame = (() => {
     if (combatHud) combatHud.bossBar.style.display = 'none';
     if (shockRing) shockRing.visible = false;
     if (warnRing) warnRing.visible = false;
-    // the sky clears
-    scene.fog.color.setHex(0xcfeeff);
-    hemiLight.intensity = 0.9;
+    // the sky clears (via the atmosphere base so the altitude blend keeps working)
+    fogBase.setHex(0xcfeeff);
+    galaxyBlend = -1;
+    const winMsg = bossDef(q).win;
     bossActive = null;
     bossParts = null;
     if (quizOpen) closeQuiz();
     if (typeof MusicManager !== 'undefined') MusicManager.playForZone('sky');
-    showWorldToast('🎆 暴風平息了！天空之城重獲和平！');
+    showWorldToast(winMsg);
     setTimeout(() => finishQuestDirect(q), 1200);
   }
 
@@ -2628,6 +2849,15 @@ const SkyGame = (() => {
     updateCulling();
     watchFps(dt);
     if (particles) particles.rotation.y += dt * 0.004;
+    // deep-space tint as the player climbs toward the galaxy region
+    const gt = Math.min(1, Math.max(0, (pos.y - 70) / 50));
+    if (Math.abs(gt - galaxyBlend) > 0.01) {
+      galaxyBlend = gt;
+      scene.fog.color.copy(fogBase).lerp(fogGalaxy, gt);
+      hemiLight.color.copy(hemiBase).lerp(hemiGalaxy, gt);
+      // darken the sky dome itself (color multiplies its gradient texture)
+      skyDome.material.color.setRGB(1 - gt * 0.55, 1 - gt * 0.62, 1 - gt * 0.3);
+    }
     // drifting clouds (cheap: advance a third of them per frame)
     if (cloudMesh) {
       const m = new THREE.Matrix4();
@@ -2696,6 +2926,14 @@ const SkyGame = (() => {
       return;
     }
     const q = currentTarget.q;
+    if (q.type === 'portal') {
+      if (isLocked(q)) {
+        showWorldToast(`🔒 銀河傳送門沉睡中⋯⋯再完成 ${q.lock - totalCleared()} 個任務就會甦醒！`);
+      } else {
+        usePortal(q);
+      }
+      return;
+    }
     if (isLocked(q)) {
       showWorldToast(`🔒 再完成 ${q.lock - totalCleared()} 個任務就能挑戰「${q.name}」！`);
       return;
@@ -3091,13 +3329,16 @@ const SkyGame = (() => {
     if (first) {
       GameEngine.addXP(Math.round(tier.xp * (perks.xpMult || 1)));
       skyAddGems(tier.gems);
-      GameEngine.recordSkyQuest?.();
+      GameEngine.recordSkyQuest?.(q.id.startsWith('sqg_'));
       if (q.type === 'bridge') {
-        save.bridgeBuilt = true;
+        save.bridgesBuilt[q.id] = true;
         persist();
         const b = SKY_BRIDGES.find(x => x.quest === q.id);
-        if (b) buildBridge(b);
-        showWorldToast('🌉 通往水晶尖峰的天空之橋出現了！');
+        if (b) {
+          buildBridge(b);
+          const target = isleById(b.to);
+          showWorldToast(`🌉 通往${target ? target.name : '遠方'}的天空之橋出現了！`);
+        }
       }
       if (q.type === 'boss') GameEngine.recordSkyBoss?.();
     }
@@ -3110,9 +3351,15 @@ const SkyGame = (() => {
     quiz.prompt.innerHTML = first
       ? `🎉 任務完成！<div class="aw-clear-reward">+${tier.xp} XP　+${tier.gems} 💎</div>`
       : '🎉 複習完成！繼續探索其他島嶼吧！';
-    quiz.zh.textContent = first && totalCleared() >= 12
-      ? '⛈️ 暴風之眼的封印鬆動了…'
+    const cleared = totalCleared();
+    quiz.zh.textContent = !first ? ''
+      : cleared >= 22 ? '🌌 銀河傳送門開啟了！去晨曦之島找 🌀 吧！'
+      : cleared >= 12 ? '⛈️ 暴風之眼的封印鬆動了…'
       : '';
+    if (first && cleared === 22) {
+      updateQuestMarkers();   // portal 🔒 → 🌀
+      showWorldToast('🌌 銀河傳送門開啟了！晨曦之島出現了神秘的漩渦！');
+    }
     quiz.fb.textContent = '';
     quiz.opts.innerHTML = '';
     const btn = document.createElement('button');
