@@ -37,7 +37,7 @@ js/
   youtube.js            — YouTube-themed reading comprehension with quizzes
   spelling.js           — Chrome Dino-style spelling runner (canvas; auto-skips non-letter chars in words like "MR.", power-ups/flyers+duck/biomes/combo transforms)
   listening.js          — Magical listening card game (Web Speech API)
-  empire.js             — Age of Empires-style 3D castle defense (Three.js)
+  empire.js             — Age of Empires-style 3D castle defense (Three.js; procedural textures/sky dome, per-age scenery rebuilds, combo & floating-reward juice, battle consumables fire_bomb/wall_repair/freeze_trap)
   candy.js              — Candy Crush-style match-3 with vocabulary quizzes
   sling.js              — Angry Birds-style word slingshot (canvas physics)
   builder.js            — Duolingo-style sentence builder (word-order game building 33 world landmarks with cultural facts)
@@ -153,7 +153,7 @@ python3 -m http.server 8000
 ```
 
 ### Cache busting
-All CSS/JS references in index.html carry a `?v=N` query string. GitHub Pages caches assets for 10 minutes, so a freshly deployed index.html can otherwise pair with stale cached JS/CSS (symptoms: a new game's zone shows but its dynamic UI is empty). **Bump the version number on every release that changes JS or CSS** (single `sed -i 's/?v=19/?v=20/g' index.html`-style edit).
+All CSS/JS references in index.html carry a `?v=N` query string. GitHub Pages caches assets for 10 minutes, so a freshly deployed index.html can otherwise pair with stale cached JS/CSS (symptoms: a new game's zone shows but its dynamic UI is empty). **Bump the version number on every release that changes JS or CSS** (single `sed -i 's/?v=20/?v=21/g' index.html`-style edit).
 
 ### Testing
 There is no automated test suite. Manual testing in a browser is the current workflow. Verify changes by opening `index.html` and exercising the affected game zone.
