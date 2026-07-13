@@ -33,6 +33,23 @@ const TowerGame = (() => {
     { emoji: '👹', name: '塔頂大魔王' },
   ];
 
+  // Elemental realms — cycle in lockstep with BOSSES (same index formula)
+  // and theme the battle stage/board via CSS custom properties.
+  const REALMS = [
+    { name: '翠綠森林', bgA: '#102a18', bgB: '#153a1e', glow: 'rgba(110, 230, 130, 0.22)', accent: '#5aeb78' },
+    { name: '烈焰荒地', bgA: '#2a130c', bgB: '#3a1810', glow: 'rgba(255, 110, 50, 0.24)', accent: '#ff7a3c' },
+    { name: '冰霜雪原', bgA: '#0d2030', bgB: '#123044', glow: 'rgba(140, 210, 255, 0.22)', accent: '#7fd8ff' },
+    { name: '雷電風暴', bgA: '#221a30', bgB: '#2c2140', glow: 'rgba(255, 224, 102, 0.22)', accent: '#ffe066' },
+    { name: '劇毒沼澤', bgA: '#182a16', bgB: '#221a30', glow: 'rgba(182, 255, 77, 0.2)', accent: '#b6ff4d' },
+    { name: '黃金沙漠', bgA: '#2e2410', bgB: '#3a2c12', glow: 'rgba(255, 206, 84, 0.25)', accent: '#ffce54' },
+    { name: '深海遺跡', bgA: '#0a1e30', bgB: '#0f2a40', glow: 'rgba(60, 200, 220, 0.22)', accent: '#22c1d9' },
+    { name: '暗影禁地', bgA: '#140b1c', bgB: '#1e1128', glow: 'rgba(178, 92, 255, 0.22)', accent: '#b25cff' },
+    { name: '熔岩地獄', bgA: '#240a08', bgB: '#1a0605', glow: 'rgba(255, 77, 46, 0.3)', accent: '#ff5030' },
+    { name: '天空之境', bgA: '#0a2432', bgB: '#123646', glow: 'rgba(92, 240, 255, 0.22)', accent: '#5cf0ff' },
+    { name: '血月荒野', bgA: '#240808', bgB: '#160404', glow: 'rgba(255, 46, 77, 0.28)', accent: '#ff2e4d' },
+    { name: '聖光聖殿', bgA: '#241c0a', bgB: '#2e2410', glow: 'rgba(255, 215, 106, 0.3)', accent: '#ffd76a' },
+  ];
+
   // Letter bag: frequency-weighted so words are easy to find
   const LETTER_BAG =
     'EEEEEEEEEEAAAAAAAAAIIIIIIIIOOOOOOOUUUUU' +
@@ -52,6 +69,7 @@ const TowerGame = (() => {
   let busy = false;         // during attack/refill animation
   let path = [];            // current trace: [{r, c}]
   let tracing = false;
+  let currentRealmIdx = 0;  // active elemental realm (index into REALMS)
 
   let els = {};
 
@@ -71,6 +89,8 @@ const TowerGame = (() => {
       quest: document.getElementById('tw-quest'),
       trace: document.getElementById('tw-trace'),
       board: document.getElementById('tw-board'),
+      traceSvg: document.getElementById('tw-trace-svg'),
+      traceLine: document.getElementById('tw-trace-line'),
       game: document.getElementById('tw-game'),
       startScreen: document.getElementById('tw-start-screen'),
       startBtn: document.getElementById('tw-start-btn'),
@@ -93,6 +113,7 @@ const TowerGame = (() => {
     els.board.addEventListener('pointercancel', onPointerUp);
 
     els.startFloor.textContent = `目前塔層：第 ${level} 層`;
+    if (els.traceSvg) els.traceSvg.setAttribute('viewBox', `0 0 ${COLS} ${ROWS}`);
 
     // Test hook: closure state + programmatic word submit
     window.__towerTest = {
@@ -111,6 +132,12 @@ const TowerGame = (() => {
       },
       isBusy: () => busy,
       wordPath: w => findWordPath(w.toUpperCase()),
+      realm: () => ({ idx: currentRealmIdx, name: REALMS[currentRealmIdx].name }),
+      traceActive: () => {
+        const pts = els.traceLine && els.traceLine.getAttribute('points');
+        if (!pts || !pts.trim()) return 0;
+        return pts.trim().split(/\s+/).length;
+      },
     };
   }
 
@@ -175,6 +202,19 @@ const TowerGame = (() => {
     };
   }
 
+  // Theme the stage/board via CSS custom properties on #tw-game so every
+  // descendant (stage + board + orbs' .active state) inherits the palette.
+  function applyRealm(idx) {
+    currentRealmIdx = idx;
+    const r = REALMS[idx];
+    const el = els.game;
+    if (!el) return;
+    el.style.setProperty('--tw-bgA', r.bgA);
+    el.style.setProperty('--tw-bgB', r.bgB);
+    el.style.setProperty('--tw-glow', r.glow);
+    el.style.setProperty('--tw-accent', r.accent);
+  }
+
   function startBattle() {
     buildDict();
     els.startScreen.style.display = 'none';
@@ -183,6 +223,7 @@ const TowerGame = (() => {
     els.game.style.display = 'block';
 
     boss = makeBoss();
+    applyRealm((level - 1) % REALMS.length);
     els.playerIcon.textContent = GameEngine.getEquippedSkin?.()?.icon || '🧑‍🎓';
     playerHp = PLAYER_MAX_HP;
     combo = 0;
@@ -382,7 +423,9 @@ const TowerGame = (() => {
 
   // ===== Rendering =====
   function renderBoard() {
-    els.board.innerHTML = '';
+    // Remove only the letter orbs — #tw-trace-svg (the drag-trace glow
+    // line) lives in the same container and must survive every re-render.
+    els.board.querySelectorAll('.tw-orb').forEach(el => el.remove());
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
         const d = document.createElement('div');
@@ -406,7 +449,7 @@ const TowerGame = (() => {
   }
 
   function updateHUD() {
-    els.floor.textContent = `🗼 第 ${level} 層`;
+    els.floor.textContent = `🗼 第 ${level} 層 · ${REALMS[currentRealmIdx].name}`;
     els.bossName.textContent = `${boss.name}`;
     els.boss.textContent = boss.emoji;
     const bp = Math.max(0, boss.hp / boss.maxHp);
@@ -500,6 +543,28 @@ const TowerGame = (() => {
       const el = cellEl(p);
       if (el) el.classList.add('active');
     });
+    updateTraceLine();
+  }
+
+  // Draw the glowing trace polyline through the traced orb centres.
+  // viewBox is "0 0 COLS ROWS" (see init), so plotting (c+0.5, r+0.5) needs
+  // no pixel measurement and stays correct across resizes/fullscreen.
+  function updateTraceLine() {
+    if (!els.traceLine) return;
+    if (path.length === 0) {
+      els.traceLine.setAttribute('points', '');
+      els.traceLine.classList.remove('quest', 'invalid', 'grow');
+      return;
+    }
+    els.traceLine.setAttribute('points', path.map(p => `${p.c + 0.5},${p.r + 0.5}`).join(' '));
+    const word = currentWord();
+    const isQuestWord = !!quest && word === quest.word;
+    els.traceLine.classList.toggle('quest', isQuestWord);
+    els.traceLine.classList.toggle(
+      'invalid',
+      !isQuestWord && word.length >= MIN_WORD_LEN && !!dict && !dict.has(word)
+    );
+    els.traceLine.classList.toggle('grow', path.length >= 5 || combo >= 3);
   }
 
   // ===== Combat resolution =====
@@ -508,6 +573,7 @@ const TowerGame = (() => {
     const word = currentWord();
     const p = path.slice();
     path = [];
+    updateTraceLine(); // path is now empty — clear the glow line immediately
 
     if (word.length < MIN_WORD_LEN || !dict.has(word)) {
       // Not a word — no turn used, but the combo chain breaks

@@ -4,6 +4,12 @@
   max-width: 720px;
   margin: 0 auto;
   padding: 16px;
+  /* Elemental-realm theme vars — defaults match the original look;
+     js/tower.js applyRealm() overrides these per floor on #tw-game. */
+  --tw-bgA: #241016;
+  --tw-bgB: #170a10;
+  --tw-glow: rgba(255, 90, 40, 0.18);
+  --tw-accent: #ffe678;
 }
 
 .tw-header {
@@ -67,12 +73,13 @@
   align-items: center;
   gap: 4px;
   background:
-    radial-gradient(ellipse at 50% 0%, rgba(255, 90, 40, 0.18), transparent 55%),
-    linear-gradient(180deg, #241016 0%, #170a10 100%);
+    radial-gradient(ellipse at 50% 0%, var(--tw-glow, rgba(255, 90, 40, 0.18)), transparent 55%),
+    linear-gradient(180deg, var(--tw-bgA, #241016) 0%, var(--tw-bgB, #170a10) 100%);
   border: 3px solid #a04828;
   border-radius: 12px 12px 0 0;
   padding: 12px 14px 10px;
   overflow: hidden;
+  transition: background 0.5s ease;
 }
 .tw-stage.hurt { animation: tw-hurt 0.45s; }
 @keyframes tw-hurt {
@@ -112,7 +119,7 @@
 .tw-boss-name {
   font-size: 0.95rem;
   font-weight: bold;
-  color: #ffb38a;
+  color: var(--tw-accent, #ffb38a);
 }
 
 .tw-bar-row {
@@ -250,19 +257,56 @@
 
 /* Orb board */
 .tw-board {
+  position: relative;
   display: grid;
   grid-template-columns: repeat(6, 1fr);
   gap: 6px;
   padding: 10px;
-  background: linear-gradient(180deg, #2a1a10, #1c110a);
+  background: linear-gradient(180deg, var(--tw-bgA, #2a1a10), var(--tw-bgB, #1c110a));
   border: 3px solid #a04828;
   border-top: none;
   border-radius: 0 0 12px 12px;
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
+  transition: background 0.5s ease;
 }
 .tw-board.shake { animation: tw-hurt 0.4s; }
+
+/* Drag-trace glow line (Tower of Saviors-style trail). viewBox is set in
+   JS to "0 0 COLS ROWS" so points map to orb centres with no pixel math.
+   Absolutely positioned → removed from grid auto-placement, so it never
+   competes with the 30 .tw-orb grid items for a cell. */
+.tw-trace-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 3;
+  overflow: visible;
+}
+.tw-trace-line {
+  fill: none;
+  stroke: var(--tw-accent, #ffe678);
+  stroke-width: 6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.8;
+  filter: drop-shadow(0 0 5px var(--tw-accent, #ffe678));
+  transition: stroke 0.15s, filter 0.15s;
+}
+.tw-trace-line.quest {
+  stroke: #ffe36e;
+  stroke-width: 9;
+  opacity: 0.95;
+  filter: drop-shadow(0 0 8px #ffe36e);
+}
+.tw-trace-line.invalid {
+  stroke: #ff5c5c;
+  filter: drop-shadow(0 0 6px #ff5c5c);
+}
+.tw-trace-line.grow:not(.quest) { stroke-width: 8; }
 
 .tw-orb {
   aspect-ratio: 1;
@@ -275,17 +319,65 @@
   cursor: pointer;
   color: #fff;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
-  box-shadow: inset 0 -4px 8px rgba(0, 0, 0, 0.35), inset 0 4px 8px rgba(255, 255, 255, 0.3);
-  transition: transform 0.08s;
+  box-shadow:
+    inset 0 -6px 10px rgba(0, 0, 0, 0.45),
+    inset 0 6px 10px rgba(255, 255, 255, 0.35),
+    inset 2px 2px 3px rgba(255, 255, 255, 0.25);
+  transition: transform 0.08s, box-shadow 0.15s;
+  animation: tw-orb-sheen 3.6s ease-in-out infinite;
 }
-.tw-orb.vowel { background: radial-gradient(circle at 32% 28%, #ffe08a, #e09b1a 70%); }
-.tw-orb.consonant { background: radial-gradient(circle at 32% 28%, #7fd4f0, #1f7aa8 70%); }
-.tw-orb.rare { background: radial-gradient(circle at 32% 28%, #d3a7ff, #7a3bbf 70%); }
+/* Stagger the idle sheen across the board so 30 orbs don't pulse in lockstep */
+.tw-orb:nth-child(3n+1) { animation-delay: 0s; }
+.tw-orb:nth-child(3n+2) { animation-delay: 0.6s; }
+.tw-orb:nth-child(3n+3) { animation-delay: 1.2s; }
+@keyframes tw-orb-sheen {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.12); }
+}
+
+/* Glossy spheres: a bright top-left specular highlight over the main
+   body gradient, with a darker rim so each family still reads as
+   gold / cyan / purple at a glance but looks 3D. */
+.tw-orb.vowel {
+  background:
+    radial-gradient(circle at 30% 22%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0) 24%),
+    radial-gradient(circle at 32% 28%, #fff2c4, #ffce54 42%, #c9860a 78%, #7a4d05 100%);
+}
+.tw-orb.consonant {
+  background:
+    radial-gradient(circle at 30% 22%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0) 24%),
+    radial-gradient(circle at 32% 28%, #eafcff, #7fd4f0 42%, #1f7aa8 78%, #0d3f52 100%);
+}
+.tw-orb.rare {
+  background:
+    radial-gradient(circle at 30% 22%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0) 24%),
+    radial-gradient(circle at 32% 28%, #f5e6ff, #d3a7ff 42%, #7a3bbf 78%, #3d1a63 100%);
+  /* Rare orbs get a constant pulsing glow instead of the generic idle
+     sheen (ports css/candy.css .cd-cell.star + cd-star-glow) so they
+     read as "special" among the board. */
+  animation: tw-rare-glow 1.2s infinite;
+}
+@keyframes tw-rare-glow {
+  0%, 100% {
+    box-shadow:
+      inset 0 -6px 10px rgba(0, 0, 0, 0.45),
+      inset 0 6px 10px rgba(255, 255, 255, 0.35),
+      0 0 8px rgba(211, 167, 255, 0.55);
+    filter: brightness(1);
+  }
+  50% {
+    box-shadow:
+      inset 0 -6px 10px rgba(0, 0, 0, 0.45),
+      inset 0 6px 10px rgba(255, 255, 255, 0.35),
+      0 0 18px rgba(211, 167, 255, 0.95);
+    filter: brightness(1.25);
+  }
+}
 
 .tw-orb.active {
   transform: scale(1.14);
-  box-shadow: 0 0 14px rgba(255, 230, 120, 0.95), inset 0 -4px 8px rgba(0, 0, 0, 0.35);
-  outline: 3px solid rgba(255, 230, 120, 0.9);
+  box-shadow: 0 0 14px var(--tw-accent, #ffe678), inset 0 -4px 8px rgba(0, 0, 0, 0.35);
+  outline: 3px solid var(--tw-accent, #ffe678);
 }
 .tw-orb.hinted {
   outline: 3px dashed #b48ae8;
