@@ -160,6 +160,9 @@ const BUFF_META = {
   double_gems: { icon: '⚗️', name: '雙倍寶石' },
   glide: { icon: '🪂', name: '滑翔翼' },
   jump_boost: { icon: '🌨️', name: '彈跳雲靴' },
+  fire_bomb: { icon: '🔥', name: '火焰彈' },
+  wall_repair: { icon: '🧱', name: '城牆工事' },
+  freeze_trap: { icon: '❄️', name: '冰凍陷阱' },
 };
 
 const GameEngine = (() => {

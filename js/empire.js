@@ -40,6 +40,7 @@ const EmpireGame = (() => {
   // ===== Battle state =====
   let battleActive = false;
   let castleHp = MAX_HP;
+  let castleHpCap = MAX_HP;  // raised (up to 13) for the battle by 城牆工事 (wall_repair)
   let enemies = [];          // live enemy objects
   let projectiles = [];
   let explosions = [];
@@ -54,6 +55,11 @@ const EmpireGame = (() => {
   let shakeTime = 0;
   let comboCount = 0;
   let comboBonusGiven = false;
+  // 消耗品：火焰彈／冰凍陷阱是「每場一次」的軍火，開戰時上膛（arm），
+  // 於下一次相關事件觸發時引爆並卸除（disarm）
+  let fireBombArmed = false;
+  let freezeTrapArmed = false;
+  let freezeUntil = 0;      // performance.now() timestamp; enemies frozen while now < this
 
   // ===== three.js =====
   let threeReady = false;
@@ -1356,15 +1362,62 @@ const EmpireGame = (() => {
 
     battleActive = true;
     castleHp = MAX_HP;
+    castleHpCap = MAX_HP;
+    fireBombArmed = false;
+    freezeTrapArmed = false;
+    freezeUntil = 0;
     comboCount = 0;
     comboBonusGiven = false;
     hideComboBadge();
     clearField();
     buildCastle(currentAge().id);
     GameEngine.setDeferLevelUp(true);
-    startWave();
+    applyBattleStartBuffs();
     updateHUD();
     if (!rafId) animate();
+  }
+
+  // Consumes the once-per-battle consumables (fire_bomb / castle_wall /
+  // freeze_trap) and announces every battle-relevant item still active
+  // (hint/double_xp/gem_bonus/revive/double_gems included) via one in-world
+  // toast, then a follow-up for the wall-repair HP bump. Both fire before
+  // startWave()'s own "⚔️ 第 X 波來襲" toast so the player gets a moment to
+  // read the loadout instead of it being instantly overwritten.
+  function applyBattleStartBuffs() {
+    const parts = [];
+    ['hint', 'double_xp', 'gem_bonus', 'revive', 'double_gems'].forEach(t => {
+      if (GameEngine.hasBuff(t)) parts.push(`${BUFF_META[t].icon} ${BUFF_META[t].name}`);
+    });
+
+    let wallApplied = false;
+    if (GameEngine.hasBuff('wall_repair')) {
+      GameEngine.consumeBuff('wall_repair');
+      castleHpCap = Math.min(13, MAX_HP + 3);
+      castleHp = Math.min(castleHpCap, castleHp + 3);
+      wallApplied = true;
+      parts.push(`${BUFF_META.wall_repair.icon} ${BUFF_META.wall_repair.name}`);
+    }
+    if (GameEngine.hasBuff('fire_bomb')) {
+      GameEngine.consumeBuff('fire_bomb');
+      fireBombArmed = true;
+      parts.push(`${BUFF_META.fire_bomb.icon} ${BUFF_META.fire_bomb.name}`);
+    }
+    if (GameEngine.hasBuff('freeze_trap')) {
+      GameEngine.consumeBuff('freeze_trap');
+      freezeTrapArmed = true;
+      parts.push(`${BUFF_META.freeze_trap.icon} ${BUFF_META.freeze_trap.name}`);
+    }
+    updateHUD();
+
+    if (parts.length === 0) {
+      startWave();
+      return;
+    }
+    showEmpToast(`🎒 本場道具：${parts.join('、')}`);
+    setTimeout(() => {
+      if (wallApplied) showEmpToast(`${BUFF_META.wall_repair.icon} 城牆工事！城堡生命 +3`);
+      setTimeout(() => { if (battleActive) startWave(); }, wallApplied ? 1800 : 1600);
+    }, 1600);
   }
 
   function startWave() {
@@ -1573,6 +1626,10 @@ const EmpireGame = (() => {
       GameEngine.consumeBuff('gem_bonus');
       GameEngine.showToast('💠 寶石探測器生效！+2 額外寶石', 'gem');
     }
+    // Check double_gems BEFORE addGems (which consumes it internally) so the
+    // floating text can flag the doubling even though the actual multiply
+    // happens inside GameEngine.addGems.
+    const doubleGemsActive = GameEngine.hasBuff('double_gems');
     GameEngine.addXP(xp);
     GameEngine.addGems(gems);
     GameEngine.recordEmpire();
@@ -1584,10 +1641,75 @@ const EmpireGame = (() => {
 
     const rewardPos = enemy.mesh.position.clone();
     spawnRewardText(`+${xp} XP`, rewardPos.clone().setX(rewardPos.x - 0.6), crit);
-    spawnRewardText(`💎+${gems}`, rewardPos.clone().setX(rewardPos.x + 0.6), crit);
+    const gemsShown = doubleGemsActive ? gems * 2 : gems;
+    const gemsLabel = doubleGemsActive ? `💎+${gemsShown} ×2` : `💎+${gems}`;
+    spawnRewardText(gemsLabel, rewardPos.clone().setX(rewardPos.x + 0.6), crit || doubleGemsActive);
 
     currentTarget = null; // next frame picks the new frontmost enemy
     hideQuestion();
+
+    // 🔥 Fire bomb: if armed, the NEXT kill that leaves ≥1 other enemy alive
+    // also detonates the nearest other living enemy for a half-value kill.
+    if (fireBombArmed) {
+      const others = enemies.filter(o => o !== enemy && !o.dying);
+      if (others.length > 0) {
+        fireBombArmed = false;
+        let nearest = null, nearestDist = Infinity;
+        others.forEach(o => {
+          const d = o.mesh.position.distanceTo(enemy.mesh.position);
+          if (d < nearestDist) { nearestDist = d; nearest = o; }
+        });
+        if (nearest) {
+          sfxThump();
+          spawnExplosion(nearest.mesh.position.clone().setY(1.2), {
+            count: 16, colors: [0xff6b35, 0xff2d00, 0xffcf5c], life: 0.8, grav: 12, spread: 10,
+          });
+          showEmpToast('🔥 火焰彈引爆！');
+          fireBombKill(nearest);
+        }
+      }
+    }
+  }
+
+  // 🔥 Fire bomb bonus kill: instantly kills `enemy` (reusing the normal
+  // death path — dust burst, dying animation, kill counting) and grants
+  // HALF the usual XP/gems since it wasn't earned by answering a question.
+  function fireBombKill(enemy) {
+    if (enemy.dying) return;
+    const question = enemy.question;
+
+    sfxThump();
+    spawnExplosion(enemy.mesh.position.clone().setY(0.3), {
+      count: 8, colors: [0x9a8365, 0xc2a878, 0x6b5a42], life: 0.6, grav: 10,
+      spread: 3, sizeMin: 0.1, sizeMax: 0.2,
+    });
+    if (enemy.type === 'ram') spawnWoodDebris(enemy.mesh.position.clone());
+
+    enemy.hp = 0;
+    enemy.dying = true;
+    enemy.dieT = 0;
+    progress.kills++;
+
+    const age = currentAge();
+    const xp = Math.max(1, Math.round(age.xp / 2));
+    const gems = 1;
+    const doubleGemsActive = GameEngine.hasBuff('double_gems');
+    GameEngine.addXP(xp);
+    GameEngine.addGems(gems);
+    GameEngine.recordEmpire();
+    if (question && question.type === 'vocab' && question.word) {
+      GameEngine.recordWord(question.word);
+    }
+    saveProgress();
+    updateHUD();
+
+    const rewardPos = enemy.mesh.position.clone();
+    spawnRewardText(`🔥+${xp} XP`, rewardPos.clone().setX(rewardPos.x - 0.6));
+    const gemsShown = doubleGemsActive ? gems * 2 : gems;
+    const gemsLabel = doubleGemsActive ? `💎+${gemsShown} ×2` : `💎+${gems}`;
+    spawnRewardText(gemsLabel, rewardPos.clone().setX(rewardPos.x + 0.6), doubleGemsActive);
+
+    if (currentTarget === enemy) { currentTarget = null; hideQuestion(); }
   }
 
   function fireProjectile(enemy) {
@@ -1650,12 +1772,22 @@ const EmpireGame = (() => {
     }
   }
 
-  function castleDamaged(dmg) {
+  // Returns true when the hit was fully absorbed by the freeze trap (the
+  // triggering enemy survives, gets pushed back and is NOT removed by the
+  // caller); false otherwise (revive-blocked or a normal HP loss).
+  function castleDamaged(dmg, enemy) {
+    // Freeze trap is the OUTER shield — checked before revive, since it
+    // prevents the hit from ever "landing" at all.
+    if (freezeTrapArmed && enemy) {
+      freezeTrapArmed = false;
+      triggerFreezeTrap(enemy);
+      return true;
+    }
     // Revive feather blocks one hit
     if (GameEngine.hasBuff('revive')) {
       GameEngine.consumeBuff('revive');
       GameEngine.showToast('🪶 復活羽毛擋下了這次攻擊！', 'achievement');
-      return;
+      return false;
     }
     castleHp = Math.max(0, castleHp - dmg);
     shakeTime = 0.5;
@@ -1664,6 +1796,22 @@ const EmpireGame = (() => {
     SoundManager.playWrong();
     updateHUD();
     if (castleHp <= 0) defeat();
+    return false;
+  }
+
+  // ❄️ Freeze trap: instead of losing HP, the whole battlefield freezes for
+  // 4s (enemies stop marching, tinted icy blue) and the triggering enemy is
+  // knocked back so it isn't instantly back at the castle line once thawed.
+  function triggerFreezeTrap(enemy) {
+    freezeUntil = performance.now() + 4000;
+    enemy.mesh.position.z -= 6;
+    enemy.rushUntil = 0;
+    spawnExplosion(enemy.mesh.position.clone().setY(1.2), {
+      count: 14, colors: [0xdff6ff, 0x8fd6ff, 0xffffff], life: 0.7, grav: 8, spread: 7,
+      sizeMin: 0.14, sizeMax: 0.28,
+    });
+    sfxThump();
+    showEmpToast('❄️ 冰凍陷阱發動！');
   }
 
   function waveCleared() {
@@ -1673,7 +1821,7 @@ const EmpireGame = (() => {
 
     let bonus = age.waveBonus;
     GameEngine.addGems(bonus);
-    castleHp = Math.min(MAX_HP, castleHp + 2);
+    castleHp = Math.min(castleHpCap, castleHp + 2);
     GameEngine.showToast(`🎉 第 ${progress.wave} 波防守成功！+${bonus} 💎，城堡修復 +2 ❤️`, 'achievement');
     SoundManager.playQuestComplete();
 
@@ -1729,7 +1877,9 @@ const EmpireGame = (() => {
 
   function updateHUD() {
     let hearts = '';
-    for (let i = 0; i < MAX_HP; i++) hearts += i < castleHp ? '❤️' : '🖤';
+    // Hearts row tracks castleHpCap so 城牆工事 (wall_repair, cap 13) renders
+    // the extra hearts instead of silently clipping the bonus HP.
+    for (let i = 0; i < castleHpCap; i++) hearts += i < castleHp ? '❤️' : '🖤';
     els.hp.textContent = hearts;
     els.wave.textContent = `第 ${progress.wave} 波`;
     els.kills.textContent = `⚔️ ${progress.kills}`;
@@ -1794,6 +1944,21 @@ const EmpireGame = (() => {
           }
           return;
         }
+
+        // ❄️ Freeze trap: tint every living enemy icy blue and hold them in
+        // place for the freeze window; restore the original tint on thaw.
+        const frozen = now < freezeUntil;
+        if (frozen) {
+          if (e.flashMat && e.frozenTint === undefined) {
+            e.frozenTint = e.flashMat.color.getHex();
+            e.flashMat.color.setHex(0x9fd8ff);
+          }
+          return;
+        } else if (e.frozenTint !== undefined) {
+          e.flashMat.color.setHex(e.frozenTint);
+          e.frozenTint = undefined;
+        }
+
         const rush = now < e.rushUntil ? 1.55 : 1;
         e.mesh.position.z += e.baseSpeed * rush * dt;
         e.walkT += dt * e.baseSpeed * rush * 3;
@@ -1819,11 +1984,13 @@ const EmpireGame = (() => {
 
         // Reached the castle
         if (e.mesh.position.z >= CASTLE_LINE_Z) {
-          scene.remove(e.mesh);
-          e.remove = true;
           if (currentTarget === e) { currentTarget = null; hideQuestion(); }
-          castleDamaged(e.damage);
-          GameEngine.showToast(`💥 ${ENEMY_TYPES[e.type].name} 攻擊了城堡！-${e.damage} ❤️`, 'error');
+          const absorbedByFreeze = castleDamaged(e.damage, e);
+          if (!absorbedByFreeze) {
+            scene.remove(e.mesh);
+            e.remove = true;
+            GameEngine.showToast(`💥 ${ENEMY_TYPES[e.type].name} 攻擊了城堡！-${e.damage} ❤️`, 'error');
+          }
         }
       });
       enemies = enemies.filter(e => !e.remove);
@@ -1991,11 +2158,16 @@ const EmpireGame = (() => {
     state: () => ({
       wave: progress.wave,
       castleHp,
+      castleHpCap,
+      kills: progress.kills,
       enemies: enemies.length,
       combo: comboCount,
       ageId: currentAge().id,
       queue: spawnQueue.length,
       sceneryAge: sceneryAgeBuilt,
+      fireBombArmed,
+      freezeTrapArmed,
+      frozen: performance.now() < freezeUntil,
     }),
     correctIndex: () => (currentQuestion ? currentQuestion.correctIndex : -1),
     answerCorrect: () => {
@@ -2016,6 +2188,28 @@ const EmpireGame = (() => {
       }
     },
     drawCalls: () => (renderer ? renderer.info.render.calls : 0),
+    // Test-only: pushes a buff straight into GameEngine's activeBuffs (as if
+    // bought + used) so tests don't have to drive the shop DOM every time.
+    giveBuff: (type, uses) => {
+      const st = GameEngine.getState();
+      st.activeBuffs.push({ type, uses: uses || 1 });
+      GameEngine.renderItemBar();
+    },
+    // Test-only: teleports the frontmost living enemy right up to the
+    // castle line so the next animate() tick triggers castleDamaged()
+    // (freeze trap / revive / normal HP loss) without waiting for the
+    // march.
+    forceBreach: () => {
+      const alive = enemies.filter(e => !e.dying);
+      if (alive.length === 0) return false;
+      alive.sort((a, b) => b.mesh.position.z - a.mesh.position.z);
+      alive[0].mesh.position.z = CASTLE_LINE_Z;
+      return true;
+    },
+    // Test-only: current z-position of every living enemy, keyed by array
+    // index (stable within a frame) — used to confirm freeze trap actually
+    // halts movement (samples should be identical across ~1s while frozen).
+    enemyPositions: () => enemies.filter(e => !e.dying).map(e => e.mesh.position.z),
   };
 
   return { init, onShow };
