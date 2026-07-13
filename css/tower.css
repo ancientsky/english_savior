@@ -362,7 +362,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: clamp(1rem, 4.6vw, 1.5rem);
+  font-size: clamp(1.1rem, 5vw, 1.65rem);
   font-weight: bold;
   border-radius: 50%;
   cursor: pointer;
@@ -437,8 +437,8 @@
    white, giving the orb a moodier "enchanted rune" feel instead of a
    flashbulb. */
 .tw-orb.charged {
-  animation: tw-charged-pulse 1.7s ease-in-out infinite;
-  outline: 2px solid rgba(255, 191, 92, 0.85);
+  animation: tw-charged-pulse 1.9s ease-in-out infinite;
+  outline: 2px solid rgba(255, 191, 92, 0.55);
   text-shadow:
     0 0 4px rgba(15, 6, 0, 0.95),
     0 0 8px rgba(15, 6, 0, 0.7),
@@ -451,8 +451,8 @@
   right: 0;
   font-size: 0.68em;
   line-height: 1;
-  color: #ffd77a;
-  text-shadow: 0 0 6px #b8730a, 0 0 3px #2a1400;
+  color: #e8b968;
+  text-shadow: 0 0 5px #9a5f08, 0 0 2px #2a1400;
   animation: tw-charged-sparkle 1.4s ease-in-out infinite;
   pointer-events: none;
 }
@@ -461,15 +461,15 @@
     box-shadow:
       inset 0 -6px 10px rgba(0, 0, 0, 0.5),
       inset 0 6px 10px rgba(255, 255, 255, 0.22),
-      inset 0 0 16px 4px rgba(45, 18, 65, 0.55),
-      0 0 8px 1px rgba(255, 180, 70, 0.5);
+      inset 0 0 16px 4px rgba(45, 18, 65, 0.6),
+      0 0 6px 1px rgba(255, 180, 70, 0.3);
   }
   50% {
     box-shadow:
       inset 0 -6px 10px rgba(0, 0, 0, 0.5),
       inset 0 6px 10px rgba(255, 255, 255, 0.22),
-      inset 0 0 10px 2px rgba(60, 26, 90, 0.4),
-      0 0 15px 4px rgba(255, 196, 90, 0.8);
+      inset 0 0 12px 3px rgba(60, 26, 90, 0.45),
+      0 0 10px 2px rgba(255, 196, 90, 0.5);
   }
 }
 @keyframes tw-charged-sparkle {
