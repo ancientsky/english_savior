@@ -33,6 +33,7 @@
 
 /* Start / win / lose screens: normal-flow panels (mobile safe) */
 .tw-screen {
+  position: relative; /* contains the absolute win-screen confetti overlay */
   display: flex;
   flex-direction: column;
   justify-content: safe center;
@@ -45,6 +46,7 @@
   border: 3px solid #a04828;
   border-radius: 12px;
   padding: 28px 16px;
+  overflow: hidden;
 }
 .tw-screen h3 { font-size: 1.4rem; color: #ff9d5c; }
 .tw-instructions { font-size: 0.85rem; color: #f0c8a8; margin: 0; }
@@ -96,6 +98,7 @@
 }
 .tw-boss.idle { animation: tw-bob 1.6s ease-in-out infinite alternate; }
 .tw-boss.hit { animation: tw-hit 0.5s; }
+.tw-boss.hit.crit { animation: tw-hit-crit 0.55s; }
 .tw-boss.attacking { animation: tw-lunge 0.5s; }
 .tw-boss.dying { animation: tw-die 0.9s forwards; }
 @keyframes tw-bob {
@@ -106,6 +109,12 @@
   0% { transform: scale(1); filter: brightness(1); }
   30% { transform: scale(0.82) rotate(-8deg); filter: brightness(2.5); }
   100% { transform: scale(1); }
+}
+@keyframes tw-hit-crit {
+  0% { transform: scale(1); filter: brightness(1); }
+  25% { transform: scale(0.7) rotate(-14deg); filter: brightness(3.2) saturate(1.6); }
+  55% { transform: scale(1.18) rotate(8deg); filter: brightness(2); }
+  100% { transform: scale(1); filter: brightness(1); }
 }
 @keyframes tw-lunge {
   0%, 100% { transform: translateY(0) scale(1); }
@@ -182,6 +191,29 @@
   font-size: 0.8rem;
   font-weight: bold;
   color: #ffce54;
+  transform-origin: center right;
+}
+/* Escalating pop animation at combo 3 / 5 / 8+ (ported from
+   js/empire.js showComboBadge tiers) — re-triggered by removing/re-adding
+   the .pop class (see updateComboBadge in js/tower.js). No new layout
+   height: transform-only, applied to the existing #tw-combo node. */
+.tw-combo.pop { animation: tw-combo-pop 0.6s ease-out; }
+.tw-combo.tier3 { color: #ffce54; text-shadow: 0 0 8px rgba(255, 206, 84, 0.8); }
+.tw-combo.tier5 {
+  color: #ff9d5c;
+  font-size: 0.92rem;
+  text-shadow: 0 0 10px rgba(255, 157, 92, 0.9);
+}
+.tw-combo.tier8 {
+  color: #ff5cf0;
+  font-size: 1.02rem;
+  text-shadow: 0 0 14px rgba(255, 92, 240, 0.95);
+}
+@keyframes tw-combo-pop {
+  0% { transform: scale(0.5); opacity: 0.4; }
+  30% { transform: scale(1.4); opacity: 1; }
+  60% { transform: scale(0.95); }
+  100% { transform: scale(1); }
 }
 
 /* Damage floaters */
@@ -197,13 +229,29 @@
   pointer-events: none;
   animation: tw-float-up 1.05s ease-out forwards;
   z-index: 5;
+  white-space: nowrap;
 }
 .tw-float.quest { color: #7dffb0; font-size: 1.9rem; }
 .tw-float.player { color: #ff6b6b; top: 60%; }
+.tw-float.crit {
+  font-size: 2rem;
+  background: linear-gradient(135deg, #ffe066, #ff3b3b);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.6));
+  animation: tw-float-up 1.05s ease-out forwards, tw-crit-shake 0.35s ease-out;
+}
 @keyframes tw-float-up {
   0% { opacity: 0; transform: translate(-50%, 12px) scale(0.7); }
   25% { opacity: 1; transform: translate(-50%, -6px) scale(1.15); }
   100% { opacity: 0; transform: translate(-50%, -46px) scale(1); }
+}
+@keyframes tw-crit-shake {
+  0%, 100% { margin-left: 0; }
+  25% { margin-left: -6px; }
+  50% { margin-left: 6px; }
+  75% { margin-left: -3px; }
 }
 
 /* Quest word bar */
@@ -309,6 +357,7 @@
 .tw-trace-line.grow:not(.quest) { stroke-width: 8; }
 
 .tw-orb {
+  position: relative; /* anchors the .charged ::before sparkle */
   aspect-ratio: 1;
   display: flex;
   align-items: center;
@@ -374,6 +423,48 @@
   }
 }
 
+/* 耀光珠 (charged orb) — a bright golden radiant overlay that reads on
+   TOP of any family colour (vowel/consonant/rare) so it's instantly
+   recognizable no matter what letter it lands on. Placed after .rare in
+   the cascade so it wins the shared `animation`/`box-shadow` properties
+   when an orb happens to be both rare and charged. */
+.tw-orb.charged {
+  animation: tw-charged-pulse 1s infinite;
+  outline: 2px solid rgba(255, 226, 110, 0.95);
+}
+.tw-orb.charged::before {
+  content: '✦';
+  position: absolute;
+  top: -3px;
+  right: 0;
+  font-size: 0.68em;
+  line-height: 1;
+  color: #fff8d8;
+  text-shadow: 0 0 6px #ffe45c, 0 0 3px #fff;
+  animation: tw-charged-sparkle 1.4s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes tw-charged-pulse {
+  0%, 100% {
+    box-shadow:
+      inset 0 -6px 10px rgba(0, 0, 0, 0.45),
+      inset 0 6px 10px rgba(255, 255, 255, 0.35),
+      0 0 10px 2px rgba(255, 224, 92, 0.85);
+    filter: brightness(1.05) saturate(1.1);
+  }
+  50% {
+    box-shadow:
+      inset 0 -6px 10px rgba(0, 0, 0, 0.45),
+      inset 0 6px 10px rgba(255, 255, 255, 0.35),
+      0 0 22px 6px rgba(255, 224, 92, 1);
+    filter: brightness(1.35) saturate(1.3);
+  }
+}
+@keyframes tw-charged-sparkle {
+  0%, 100% { opacity: 0.5; transform: scale(0.8) rotate(0deg); }
+  50% { opacity: 1; transform: scale(1.2) rotate(25deg); }
+}
+
 .tw-orb.active {
   transform: scale(1.14);
   box-shadow: 0 0 14px var(--tw-accent, #ffe678), inset 0 -4px 8px rgba(0, 0, 0, 0.35);
@@ -392,6 +483,86 @@
 @keyframes tw-drop {
   from { transform: translateY(-14px); opacity: 0.4; }
   to { transform: translateY(0); opacity: 1; }
+}
+
+/* Word-clear / boss-hit particle burst — position:absolute overlay dots,
+   direction driven by the --tw-px/--tw-py custom properties js/tower.js
+   sets inline per particle. Capped at PARTICLE_CAP live nodes in JS. */
+.tw-particle {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 6;
+  box-shadow: 0 0 6px currentColor;
+  animation: tw-particle-fly 0.6s ease-out forwards;
+}
+.tw-particle.big { width: 9px; height: 9px; }
+@keyframes tw-particle-fly {
+  0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  100% {
+    transform: translate(-50%, -50%) translate(var(--tw-px, 0), var(--tw-py, 0)) scale(0.3);
+    opacity: 0;
+  }
+}
+
+/* Realm-accent impact ring on a confirmed boss hit */
+.tw-hit-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border: 3px solid var(--tw-accent, #ffe678);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 6;
+  animation: tw-hit-ring-grow 0.5s ease-out forwards;
+}
+@keyframes tw-hit-ring-grow {
+  0% { width: 10px; height: 10px; margin: -5px 0 0 -5px; opacity: 0.9; }
+  100% { width: 140px; height: 140px; margin: -70px 0 0 -70px; opacity: 0; }
+}
+
+/* Whole-stage colour flash: accent gold on a crit, white on boss death.
+   A dedicated absolute overlay (not an animated background-color on
+   .tw-stage) because the stage's own background is opaque gradient
+   layers that would hide a background-color change entirely. */
+.tw-stage-flash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 8;
+  background: var(--tw-accent, #ffe678);
+  mix-blend-mode: screen;
+  animation: tw-stage-flash-fade 0.4s ease-out forwards;
+}
+.tw-stage-flash.death {
+  background: #fff;
+  animation-duration: 0.55s;
+}
+@keyframes tw-stage-flash-fade {
+  0% { opacity: 0.8; }
+  100% { opacity: 0; }
+}
+
+/* Victory confetti (ported from js/empire.js .emp-confetti / .emp-confetti-fall),
+   rendered inside #tw-win-screen — see towerConfetti() in js/tower.js. */
+.tw-confetti {
+  position: absolute;
+  top: -12px;
+  width: 10px;
+  height: 14px;
+  z-index: 7;
+  pointer-events: none;
+  animation: tw-confetti-fall 2s ease-in forwards;
+}
+@keyframes tw-confetti-fall {
+  0% { transform: translateY(0) rotate(0); opacity: 1; }
+  100% { transform: translateY(105vh) rotate(540deg); opacity: 0.6; }
 }
 
 /* Hub card accent */
