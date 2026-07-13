@@ -423,14 +423,26 @@
   }
 }
 
-/* 耀光珠 (charged orb) — a bright golden radiant overlay that reads on
-   TOP of any family colour (vowel/consonant/rare) so it's instantly
-   recognizable no matter what letter it lands on. Placed after .rare in
-   the cascade so it wins the shared `animation`/`box-shadow` properties
-   when an orb happens to be both rare and charged. */
+/* 耀光珠 (charged orb) — an arcane amber glow that reads on TOP of any
+   family colour (vowel/consonant/rare) so it's instantly recognizable no
+   matter what letter it lands on. Placed after .rare in the cascade so it
+   wins the shared `animation`/`box-shadow`/`text-shadow` properties when an
+   orb happens to be both rare and charged.
+   Deliberately does NOT use a whole-element `filter: brightness()` — that
+   used to wash the white letter out along with the background at the
+   pulse's peak. Instead the glow stays in the box-shadow/outline layer
+   (never touching the glyph itself) and the letter gets its own deep,
+   tight text-shadow so it stays crisp against the glow; a dim inner violet
+   vignette (inset box-shadow) keeps the center from reading as blown-out
+   white, giving the orb a moodier "enchanted rune" feel instead of a
+   flashbulb. */
 .tw-orb.charged {
-  animation: tw-charged-pulse 1s infinite;
-  outline: 2px solid rgba(255, 226, 110, 0.95);
+  animation: tw-charged-pulse 1.7s ease-in-out infinite;
+  outline: 2px solid rgba(255, 191, 92, 0.85);
+  text-shadow:
+    0 0 4px rgba(15, 6, 0, 0.95),
+    0 0 8px rgba(15, 6, 0, 0.7),
+    0 1px 2px rgba(0, 0, 0, 0.75);
 }
 .tw-orb.charged::before {
   content: '✦';
@@ -439,25 +451,25 @@
   right: 0;
   font-size: 0.68em;
   line-height: 1;
-  color: #fff8d8;
-  text-shadow: 0 0 6px #ffe45c, 0 0 3px #fff;
+  color: #ffd77a;
+  text-shadow: 0 0 6px #b8730a, 0 0 3px #2a1400;
   animation: tw-charged-sparkle 1.4s ease-in-out infinite;
   pointer-events: none;
 }
 @keyframes tw-charged-pulse {
   0%, 100% {
     box-shadow:
-      inset 0 -6px 10px rgba(0, 0, 0, 0.45),
-      inset 0 6px 10px rgba(255, 255, 255, 0.35),
-      0 0 10px 2px rgba(255, 224, 92, 0.85);
-    filter: brightness(1.05) saturate(1.1);
+      inset 0 -6px 10px rgba(0, 0, 0, 0.5),
+      inset 0 6px 10px rgba(255, 255, 255, 0.22),
+      inset 0 0 16px 4px rgba(45, 18, 65, 0.55),
+      0 0 8px 1px rgba(255, 180, 70, 0.5);
   }
   50% {
     box-shadow:
-      inset 0 -6px 10px rgba(0, 0, 0, 0.45),
-      inset 0 6px 10px rgba(255, 255, 255, 0.35),
-      0 0 22px 6px rgba(255, 224, 92, 1);
-    filter: brightness(1.35) saturate(1.3);
+      inset 0 -6px 10px rgba(0, 0, 0, 0.5),
+      inset 0 6px 10px rgba(255, 255, 255, 0.22),
+      inset 0 0 10px 2px rgba(60, 26, 90, 0.4),
+      0 0 15px 4px rgba(255, 196, 90, 0.8);
   }
 }
 @keyframes tw-charged-sparkle {
