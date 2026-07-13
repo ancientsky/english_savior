@@ -4,6 +4,12 @@
   max-width: 720px;
   margin: 0 auto;
   padding: 16px;
+  /* Elemental-realm theme vars — defaults match the original look;
+     js/tower.js applyRealm() overrides these per floor on #tw-game. */
+  --tw-bgA: #241016;
+  --tw-bgB: #170a10;
+  --tw-glow: rgba(255, 90, 40, 0.18);
+  --tw-accent: #ffe678;
 }
 
 .tw-header {
@@ -27,6 +33,7 @@
 
 /* Start / win / lose screens: normal-flow panels (mobile safe) */
 .tw-screen {
+  position: relative; /* contains the absolute win-screen confetti overlay */
   display: flex;
   flex-direction: column;
   justify-content: safe center;
@@ -39,6 +46,7 @@
   border: 3px solid #a04828;
   border-radius: 12px;
   padding: 28px 16px;
+  overflow: hidden;
 }
 .tw-screen h3 { font-size: 1.4rem; color: #ff9d5c; }
 .tw-instructions { font-size: 0.85rem; color: #f0c8a8; margin: 0; }
@@ -67,12 +75,13 @@
   align-items: center;
   gap: 4px;
   background:
-    radial-gradient(ellipse at 50% 0%, rgba(255, 90, 40, 0.18), transparent 55%),
-    linear-gradient(180deg, #241016 0%, #170a10 100%);
+    radial-gradient(ellipse at 50% 0%, var(--tw-glow, rgba(255, 90, 40, 0.18)), transparent 55%),
+    linear-gradient(180deg, var(--tw-bgA, #241016) 0%, var(--tw-bgB, #170a10) 100%);
   border: 3px solid #a04828;
   border-radius: 12px 12px 0 0;
   padding: 12px 14px 10px;
   overflow: hidden;
+  transition: background 0.5s ease;
 }
 .tw-stage.hurt { animation: tw-hurt 0.45s; }
 @keyframes tw-hurt {
@@ -89,6 +98,7 @@
 }
 .tw-boss.idle { animation: tw-bob 1.6s ease-in-out infinite alternate; }
 .tw-boss.hit { animation: tw-hit 0.5s; }
+.tw-boss.hit.crit { animation: tw-hit-crit 0.55s; }
 .tw-boss.attacking { animation: tw-lunge 0.5s; }
 .tw-boss.dying { animation: tw-die 0.9s forwards; }
 @keyframes tw-bob {
@@ -99,6 +109,12 @@
   0% { transform: scale(1); filter: brightness(1); }
   30% { transform: scale(0.82) rotate(-8deg); filter: brightness(2.5); }
   100% { transform: scale(1); }
+}
+@keyframes tw-hit-crit {
+  0% { transform: scale(1); filter: brightness(1); }
+  25% { transform: scale(0.7) rotate(-14deg); filter: brightness(3.2) saturate(1.6); }
+  55% { transform: scale(1.18) rotate(8deg); filter: brightness(2); }
+  100% { transform: scale(1); filter: brightness(1); }
 }
 @keyframes tw-lunge {
   0%, 100% { transform: translateY(0) scale(1); }
@@ -112,7 +128,7 @@
 .tw-boss-name {
   font-size: 0.95rem;
   font-weight: bold;
-  color: #ffb38a;
+  color: var(--tw-accent, #ffb38a);
 }
 
 .tw-bar-row {
@@ -175,6 +191,29 @@
   font-size: 0.8rem;
   font-weight: bold;
   color: #ffce54;
+  transform-origin: center right;
+}
+/* Escalating pop animation at combo 3 / 5 / 8+ (ported from
+   js/empire.js showComboBadge tiers) — re-triggered by removing/re-adding
+   the .pop class (see updateComboBadge in js/tower.js). No new layout
+   height: transform-only, applied to the existing #tw-combo node. */
+.tw-combo.pop { animation: tw-combo-pop 0.6s ease-out; }
+.tw-combo.tier3 { color: #ffce54; text-shadow: 0 0 8px rgba(255, 206, 84, 0.8); }
+.tw-combo.tier5 {
+  color: #ff9d5c;
+  font-size: 0.92rem;
+  text-shadow: 0 0 10px rgba(255, 157, 92, 0.9);
+}
+.tw-combo.tier8 {
+  color: #ff5cf0;
+  font-size: 1.02rem;
+  text-shadow: 0 0 14px rgba(255, 92, 240, 0.95);
+}
+@keyframes tw-combo-pop {
+  0% { transform: scale(0.5); opacity: 0.4; }
+  30% { transform: scale(1.4); opacity: 1; }
+  60% { transform: scale(0.95); }
+  100% { transform: scale(1); }
 }
 
 /* Damage floaters */
@@ -190,13 +229,29 @@
   pointer-events: none;
   animation: tw-float-up 1.05s ease-out forwards;
   z-index: 5;
+  white-space: nowrap;
 }
 .tw-float.quest { color: #7dffb0; font-size: 1.9rem; }
 .tw-float.player { color: #ff6b6b; top: 60%; }
+.tw-float.crit {
+  font-size: 2rem;
+  background: linear-gradient(135deg, #ffe066, #ff3b3b);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.6));
+  animation: tw-float-up 1.05s ease-out forwards, tw-crit-shake 0.35s ease-out;
+}
 @keyframes tw-float-up {
   0% { opacity: 0; transform: translate(-50%, 12px) scale(0.7); }
   25% { opacity: 1; transform: translate(-50%, -6px) scale(1.15); }
   100% { opacity: 0; transform: translate(-50%, -46px) scale(1); }
+}
+@keyframes tw-crit-shake {
+  0%, 100% { margin-left: 0; }
+  25% { margin-left: -6px; }
+  50% { margin-left: 6px; }
+  75% { margin-left: -3px; }
 }
 
 /* Quest word bar */
@@ -250,21 +305,59 @@
 
 /* Orb board */
 .tw-board {
+  position: relative;
   display: grid;
   grid-template-columns: repeat(6, 1fr);
   gap: 6px;
   padding: 10px;
-  background: linear-gradient(180deg, #2a1a10, #1c110a);
+  background: linear-gradient(180deg, var(--tw-bgA, #2a1a10), var(--tw-bgB, #1c110a));
   border: 3px solid #a04828;
   border-top: none;
   border-radius: 0 0 12px 12px;
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
+  transition: background 0.5s ease;
 }
 .tw-board.shake { animation: tw-hurt 0.4s; }
 
+/* Drag-trace glow line (Tower of Saviors-style trail). viewBox is set in
+   JS to "0 0 COLS ROWS" so points map to orb centres with no pixel math.
+   Absolutely positioned → removed from grid auto-placement, so it never
+   competes with the 30 .tw-orb grid items for a cell. */
+.tw-trace-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 3;
+  overflow: visible;
+}
+.tw-trace-line {
+  fill: none;
+  stroke: var(--tw-accent, #ffe678);
+  stroke-width: 6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.8;
+  filter: drop-shadow(0 0 5px var(--tw-accent, #ffe678));
+  transition: stroke 0.15s, filter 0.15s;
+}
+.tw-trace-line.quest {
+  stroke: #ffe36e;
+  stroke-width: 9;
+  opacity: 0.95;
+  filter: drop-shadow(0 0 8px #ffe36e);
+}
+.tw-trace-line.invalid {
+  stroke: #ff5c5c;
+  filter: drop-shadow(0 0 6px #ff5c5c);
+}
+.tw-trace-line.grow:not(.quest) { stroke-width: 8; }
+
 .tw-orb {
+  position: relative; /* anchors the .charged ::before sparkle */
   aspect-ratio: 1;
   display: flex;
   align-items: center;
@@ -275,17 +368,107 @@
   cursor: pointer;
   color: #fff;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
-  box-shadow: inset 0 -4px 8px rgba(0, 0, 0, 0.35), inset 0 4px 8px rgba(255, 255, 255, 0.3);
-  transition: transform 0.08s;
+  box-shadow:
+    inset 0 -6px 10px rgba(0, 0, 0, 0.45),
+    inset 0 6px 10px rgba(255, 255, 255, 0.35),
+    inset 2px 2px 3px rgba(255, 255, 255, 0.25);
+  transition: transform 0.08s, box-shadow 0.15s;
+  animation: tw-orb-sheen 3.6s ease-in-out infinite;
 }
-.tw-orb.vowel { background: radial-gradient(circle at 32% 28%, #ffe08a, #e09b1a 70%); }
-.tw-orb.consonant { background: radial-gradient(circle at 32% 28%, #7fd4f0, #1f7aa8 70%); }
-.tw-orb.rare { background: radial-gradient(circle at 32% 28%, #d3a7ff, #7a3bbf 70%); }
+/* Stagger the idle sheen across the board so 30 orbs don't pulse in lockstep */
+.tw-orb:nth-child(3n+1) { animation-delay: 0s; }
+.tw-orb:nth-child(3n+2) { animation-delay: 0.6s; }
+.tw-orb:nth-child(3n+3) { animation-delay: 1.2s; }
+@keyframes tw-orb-sheen {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.12); }
+}
+
+/* Glossy spheres: a bright top-left specular highlight over the main
+   body gradient, with a darker rim so each family still reads as
+   gold / cyan / purple at a glance but looks 3D. */
+.tw-orb.vowel {
+  background:
+    radial-gradient(circle at 30% 22%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0) 24%),
+    radial-gradient(circle at 32% 28%, #fff2c4, #ffce54 42%, #c9860a 78%, #7a4d05 100%);
+}
+.tw-orb.consonant {
+  background:
+    radial-gradient(circle at 30% 22%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0) 24%),
+    radial-gradient(circle at 32% 28%, #eafcff, #7fd4f0 42%, #1f7aa8 78%, #0d3f52 100%);
+}
+.tw-orb.rare {
+  background:
+    radial-gradient(circle at 30% 22%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0) 24%),
+    radial-gradient(circle at 32% 28%, #f5e6ff, #d3a7ff 42%, #7a3bbf 78%, #3d1a63 100%);
+  /* Rare orbs get a constant pulsing glow instead of the generic idle
+     sheen (ports css/candy.css .cd-cell.star + cd-star-glow) so they
+     read as "special" among the board. */
+  animation: tw-rare-glow 1.2s infinite;
+}
+@keyframes tw-rare-glow {
+  0%, 100% {
+    box-shadow:
+      inset 0 -6px 10px rgba(0, 0, 0, 0.45),
+      inset 0 6px 10px rgba(255, 255, 255, 0.35),
+      0 0 8px rgba(211, 167, 255, 0.55);
+    filter: brightness(1);
+  }
+  50% {
+    box-shadow:
+      inset 0 -6px 10px rgba(0, 0, 0, 0.45),
+      inset 0 6px 10px rgba(255, 255, 255, 0.35),
+      0 0 18px rgba(211, 167, 255, 0.95);
+    filter: brightness(1.25);
+  }
+}
+
+/* 耀光珠 (charged orb) — a bright golden radiant overlay that reads on
+   TOP of any family colour (vowel/consonant/rare) so it's instantly
+   recognizable no matter what letter it lands on. Placed after .rare in
+   the cascade so it wins the shared `animation`/`box-shadow` properties
+   when an orb happens to be both rare and charged. */
+.tw-orb.charged {
+  animation: tw-charged-pulse 1s infinite;
+  outline: 2px solid rgba(255, 226, 110, 0.95);
+}
+.tw-orb.charged::before {
+  content: '✦';
+  position: absolute;
+  top: -3px;
+  right: 0;
+  font-size: 0.68em;
+  line-height: 1;
+  color: #fff8d8;
+  text-shadow: 0 0 6px #ffe45c, 0 0 3px #fff;
+  animation: tw-charged-sparkle 1.4s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes tw-charged-pulse {
+  0%, 100% {
+    box-shadow:
+      inset 0 -6px 10px rgba(0, 0, 0, 0.45),
+      inset 0 6px 10px rgba(255, 255, 255, 0.35),
+      0 0 10px 2px rgba(255, 224, 92, 0.85);
+    filter: brightness(1.05) saturate(1.1);
+  }
+  50% {
+    box-shadow:
+      inset 0 -6px 10px rgba(0, 0, 0, 0.45),
+      inset 0 6px 10px rgba(255, 255, 255, 0.35),
+      0 0 22px 6px rgba(255, 224, 92, 1);
+    filter: brightness(1.35) saturate(1.3);
+  }
+}
+@keyframes tw-charged-sparkle {
+  0%, 100% { opacity: 0.5; transform: scale(0.8) rotate(0deg); }
+  50% { opacity: 1; transform: scale(1.2) rotate(25deg); }
+}
 
 .tw-orb.active {
   transform: scale(1.14);
-  box-shadow: 0 0 14px rgba(255, 230, 120, 0.95), inset 0 -4px 8px rgba(0, 0, 0, 0.35);
-  outline: 3px solid rgba(255, 230, 120, 0.9);
+  box-shadow: 0 0 14px var(--tw-accent, #ffe678), inset 0 -4px 8px rgba(0, 0, 0, 0.35);
+  outline: 3px solid var(--tw-accent, #ffe678);
 }
 .tw-orb.hinted {
   outline: 3px dashed #b48ae8;
@@ -300,6 +483,86 @@
 @keyframes tw-drop {
   from { transform: translateY(-14px); opacity: 0.4; }
   to { transform: translateY(0); opacity: 1; }
+}
+
+/* Word-clear / boss-hit particle burst — position:absolute overlay dots,
+   direction driven by the --tw-px/--tw-py custom properties js/tower.js
+   sets inline per particle. Capped at PARTICLE_CAP live nodes in JS. */
+.tw-particle {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 6;
+  box-shadow: 0 0 6px currentColor;
+  animation: tw-particle-fly 0.6s ease-out forwards;
+}
+.tw-particle.big { width: 9px; height: 9px; }
+@keyframes tw-particle-fly {
+  0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  100% {
+    transform: translate(-50%, -50%) translate(var(--tw-px, 0), var(--tw-py, 0)) scale(0.3);
+    opacity: 0;
+  }
+}
+
+/* Realm-accent impact ring on a confirmed boss hit */
+.tw-hit-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border: 3px solid var(--tw-accent, #ffe678);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 6;
+  animation: tw-hit-ring-grow 0.5s ease-out forwards;
+}
+@keyframes tw-hit-ring-grow {
+  0% { width: 10px; height: 10px; margin: -5px 0 0 -5px; opacity: 0.9; }
+  100% { width: 140px; height: 140px; margin: -70px 0 0 -70px; opacity: 0; }
+}
+
+/* Whole-stage colour flash: accent gold on a crit, white on boss death.
+   A dedicated absolute overlay (not an animated background-color on
+   .tw-stage) because the stage's own background is opaque gradient
+   layers that would hide a background-color change entirely. */
+.tw-stage-flash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 8;
+  background: var(--tw-accent, #ffe678);
+  mix-blend-mode: screen;
+  animation: tw-stage-flash-fade 0.4s ease-out forwards;
+}
+.tw-stage-flash.death {
+  background: #fff;
+  animation-duration: 0.55s;
+}
+@keyframes tw-stage-flash-fade {
+  0% { opacity: 0.8; }
+  100% { opacity: 0; }
+}
+
+/* Victory confetti (ported from js/empire.js .emp-confetti / .emp-confetti-fall),
+   rendered inside #tw-win-screen — see towerConfetti() in js/tower.js. */
+.tw-confetti {
+  position: absolute;
+  top: -12px;
+  width: 10px;
+  height: 14px;
+  z-index: 7;
+  pointer-events: none;
+  animation: tw-confetti-fall 2s ease-in forwards;
+}
+@keyframes tw-confetti-fall {
+  0% { transform: translateY(0) rotate(0); opacity: 1; }
+  100% { transform: translateY(105vh) rotate(540deg); opacity: 0.6; }
 }
 
 /* Hub card accent */

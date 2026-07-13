@@ -42,7 +42,7 @@ js/
   sling.js              — Angry Birds-style word slingshot (canvas physics)
   builder.js            — Duolingo-style sentence builder (word-order game building 33 world landmarks with cultural facts)
   speak.js              — Spell academy speaking game (Web Speech Recognition, honor-mode fallback)
-  tower.js              — Tower of Saviors-style word boss battle (drag letter orbs to spell words; 12 bosses scale endlessly by floor)
+  tower.js              — Tower of Saviors-style word boss battle (drag letter orbs to spell words; 12 bosses scale endlessly by floor; 12 elemental realm themes, glossy orbs + SVG drag-trail, charged orbs/crit-combo, particle FX)
   rpg.js                — Undertale-style 2D RPG engine for conversation practice (interprets RPG_CHAPTERS data)
   sky.js                — Sky Citadel open-world 3D adventure (Three.js; islands/physics/camera/mobs/62 quests incl. 10 hidden/3 bosses/galaxy+secret portals/title perks/minimap)
   cloud.js              — Save backup: file export/import + optional Google Drive appDataFolder sync (owner fills GOOGLE_CLIENT_ID; see DEPLOYMENT.md)
@@ -153,7 +153,7 @@ python3 -m http.server 8000
 ```
 
 ### Cache busting
-All CSS/JS references in index.html carry a `?v=N` query string. GitHub Pages caches assets for 10 minutes, so a freshly deployed index.html can otherwise pair with stale cached JS/CSS (symptoms: a new game's zone shows but its dynamic UI is empty). **Bump the version number on every release that changes JS or CSS** (single `sed -i 's/?v=20/?v=21/g' index.html`-style edit).
+All CSS/JS references in index.html carry a `?v=N` query string. GitHub Pages caches assets for 10 minutes, so a freshly deployed index.html can otherwise pair with stale cached JS/CSS (symptoms: a new game's zone shows but its dynamic UI is empty). **Bump the version number on every release that changes JS or CSS** (single `sed -i 's/?v=21/?v=22/g' index.html`-style edit).
 
 ### Testing
 There is no automated test suite. Manual testing in a browser is the current workflow. Verify changes by opening `index.html` and exercising the affected game zone.

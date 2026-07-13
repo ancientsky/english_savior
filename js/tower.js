@@ -33,6 +33,23 @@ const TowerGame = (() => {
     { emoji: '👹', name: '塔頂大魔王' },
   ];
 
+  // Elemental realms — cycle in lockstep with BOSSES (same index formula)
+  // and theme the battle stage/board via CSS custom properties.
+  const REALMS = [
+    { name: '翠綠森林', bgA: '#102a18', bgB: '#153a1e', glow: 'rgba(110, 230, 130, 0.22)', accent: '#5aeb78' },
+    { name: '烈焰荒地', bgA: '#2a130c', bgB: '#3a1810', glow: 'rgba(255, 110, 50, 0.24)', accent: '#ff7a3c' },
+    { name: '冰霜雪原', bgA: '#0d2030', bgB: '#123044', glow: 'rgba(140, 210, 255, 0.22)', accent: '#7fd8ff' },
+    { name: '雷電風暴', bgA: '#221a30', bgB: '#2c2140', glow: 'rgba(255, 224, 102, 0.22)', accent: '#ffe066' },
+    { name: '劇毒沼澤', bgA: '#182a16', bgB: '#221a30', glow: 'rgba(182, 255, 77, 0.2)', accent: '#b6ff4d' },
+    { name: '黃金沙漠', bgA: '#2e2410', bgB: '#3a2c12', glow: 'rgba(255, 206, 84, 0.25)', accent: '#ffce54' },
+    { name: '深海遺跡', bgA: '#0a1e30', bgB: '#0f2a40', glow: 'rgba(60, 200, 220, 0.22)', accent: '#22c1d9' },
+    { name: '暗影禁地', bgA: '#140b1c', bgB: '#1e1128', glow: 'rgba(178, 92, 255, 0.22)', accent: '#b25cff' },
+    { name: '熔岩地獄', bgA: '#240a08', bgB: '#1a0605', glow: 'rgba(255, 77, 46, 0.3)', accent: '#ff5030' },
+    { name: '天空之境', bgA: '#0a2432', bgB: '#123646', glow: 'rgba(92, 240, 255, 0.22)', accent: '#5cf0ff' },
+    { name: '血月荒野', bgA: '#240808', bgB: '#160404', glow: 'rgba(255, 46, 77, 0.28)', accent: '#ff2e4d' },
+    { name: '聖光聖殿', bgA: '#241c0a', bgB: '#2e2410', glow: 'rgba(255, 215, 106, 0.3)', accent: '#ffd76a' },
+  ];
+
   // Letter bag: frequency-weighted so words are easy to find
   const LETTER_BAG =
     'EEEEEEEEEEAAAAAAAAAIIIIIIIIOOOOOOOUUUUU' +
@@ -44,14 +61,20 @@ const TowerGame = (() => {
   let questPools = null;    // { easy: [...], medium: [...], hard: [...] }
 
   let board = [];           // ROWS×COLS letters
+  let charged = [];         // ROWS×COLS booleans — 耀光珠 (charged orbs), stays in sync with board through refill()
   let quest = null;         // { word, zh, hint }
   let boss = null;          // { emoji, name, hp, maxHp, atk, cd, cdLeft }
   let playerHp = 0;
   let combo = 0;
+  let lastComboRendered = 0; // combo value the badge last animated for (avoids re-popping on every updateHUD call)
+  let lastHit = null;        // { dmg, crit, chargedCount } of the most recent attack — test hook + debugging
   let playing = false;
   let busy = false;         // during attack/refill animation
   let path = [];            // current trace: [{r, c}]
   let tracing = false;
+  let currentRealmIdx = 0;  // active elemental realm (index into REALMS)
+  const PARTICLE_CAP = 60;   // live .tw-particle nodes ceiling (perf safety)
+  let liveParticleCount = 0;
 
   let els = {};
 
@@ -71,6 +94,8 @@ const TowerGame = (() => {
       quest: document.getElementById('tw-quest'),
       trace: document.getElementById('tw-trace'),
       board: document.getElementById('tw-board'),
+      traceSvg: document.getElementById('tw-trace-svg'),
+      traceLine: document.getElementById('tw-trace-line'),
       game: document.getElementById('tw-game'),
       startScreen: document.getElementById('tw-start-screen'),
       startBtn: document.getElementById('tw-start-btn'),
@@ -93,6 +118,7 @@ const TowerGame = (() => {
     els.board.addEventListener('pointercancel', onPointerUp);
 
     els.startFloor.textContent = `目前塔層：第 ${level} 層`;
+    if (els.traceSvg) els.traceSvg.setAttribute('viewBox', `0 0 ${COLS} ${ROWS}`);
 
     // Test hook: closure state + programmatic word submit
     window.__towerTest = {
@@ -111,6 +137,14 @@ const TowerGame = (() => {
       },
       isBusy: () => busy,
       wordPath: w => findWordPath(w.toUpperCase()),
+      realm: () => ({ idx: currentRealmIdx, name: REALMS[currentRealmIdx].name }),
+      traceActive: () => {
+        const pts = els.traceLine && els.traceLine.getAttribute('points');
+        if (!pts || !pts.trim()) return 0;
+        return pts.trim().split(/\s+/).length;
+      },
+      charged: () => charged.map(row => row.slice()),
+      lastHit: () => (lastHit ? { ...lastHit } : null),
     };
   }
 
@@ -175,6 +209,19 @@ const TowerGame = (() => {
     };
   }
 
+  // Theme the stage/board via CSS custom properties on #tw-game so every
+  // descendant (stage + board + orbs' .active state) inherits the palette.
+  function applyRealm(idx) {
+    currentRealmIdx = idx;
+    const r = REALMS[idx];
+    const el = els.game;
+    if (!el) return;
+    el.style.setProperty('--tw-bgA', r.bgA);
+    el.style.setProperty('--tw-bgB', r.bgB);
+    el.style.setProperty('--tw-glow', r.glow);
+    el.style.setProperty('--tw-accent', r.accent);
+  }
+
   function startBattle() {
     buildDict();
     els.startScreen.style.display = 'none';
@@ -183,9 +230,12 @@ const TowerGame = (() => {
     els.game.style.display = 'block';
 
     boss = makeBoss();
+    applyRealm((level - 1) % REALMS.length);
     els.playerIcon.textContent = GameEngine.getEquippedSkin?.()?.icon || '🧑‍🎓';
     playerHp = PLAYER_MAX_HP;
     combo = 0;
+    lastComboRendered = 0;
+    lastHit = null;
     playing = true;
     busy = false;
     path = [];
@@ -233,6 +283,7 @@ const TowerGame = (() => {
       level++;
       saveProgress();
       els.winScreen.style.display = 'flex';
+      towerConfetti(els.winScreen);
     } else {
       els.loseInfo.innerHTML =
         `${boss.emoji} <b>${boss.name}</b> 太強了……<br>` +
@@ -253,6 +304,8 @@ const TowerGame = (() => {
     for (let tries = 0; tries < 60; tries++) {
       board = Array.from({ length: ROWS }, () =>
         Array.from({ length: COLS }, randomLetter));
+      charged = Array.from({ length: ROWS }, () =>
+        Array.from({ length: COLS }, () => Math.random() < 0.12));
       if (!seedWord) return;
       if (seedPath(seedWord)) return;
     }
@@ -382,11 +435,13 @@ const TowerGame = (() => {
 
   // ===== Rendering =====
   function renderBoard() {
-    els.board.innerHTML = '';
+    // Remove only the letter orbs — #tw-trace-svg (the drag-trace glow
+    // line) lives in the same container and must survive every re-render.
+    els.board.querySelectorAll('.tw-orb').forEach(el => el.remove());
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
         const d = document.createElement('div');
-        d.className = 'tw-orb ' + orbClass(board[r][c]);
+        d.className = 'tw-orb ' + orbClass(board[r][c]) + (charged[r][c] ? ' charged' : '');
         d.dataset.r = r;
         d.dataset.c = c;
         d.textContent = board[r][c];
@@ -406,7 +461,7 @@ const TowerGame = (() => {
   }
 
   function updateHUD() {
-    els.floor.textContent = `🗼 第 ${level} 層`;
+    els.floor.textContent = `🗼 第 ${level} 層 · ${REALMS[currentRealmIdx].name}`;
     els.bossName.textContent = `${boss.name}`;
     els.boss.textContent = boss.emoji;
     const bp = Math.max(0, boss.hp / boss.maxHp);
@@ -418,7 +473,30 @@ const TowerGame = (() => {
     els.playerHpBar.style.width = (pp * 100) + '%';
     els.playerHpBar.classList.toggle('low', pp <= 0.3);
     els.playerHpText.textContent = `${Math.max(0, playerHp)} / ${PLAYER_MAX_HP}`;
-    els.combo.textContent = combo > 1 ? `🔥 COMBO ×${combo}` : '';
+    updateComboBadge();
+  }
+
+  // Escalating pop animation at combo 3 / 5 / 8+ (ported from js/empire.js
+  // showComboBadge tiers). Re-triggers the pop only when combo actually
+  // changed since the last render, so repeated updateHUD() calls for the
+  // same combo value (e.g. once after refill, once after the boss-turn
+  // check) don't replay the animation twice.
+  function updateComboBadge() {
+    if (combo === lastComboRendered) {
+      els.combo.textContent = combo > 1 ? `🔥 COMBO ×${combo}` : '';
+      return;
+    }
+    lastComboRendered = combo;
+    els.combo.classList.remove('pop', 'tier3', 'tier5', 'tier8');
+    if (combo <= 1) {
+      els.combo.textContent = '';
+      return;
+    }
+    els.combo.textContent = `🔥 COMBO ×${combo}`;
+    void els.combo.offsetWidth; // reflow so the pop animation restarts
+    const tier = combo >= 8 ? 'tier8' : combo >= 5 ? 'tier5' : combo >= 3 ? 'tier3' : '';
+    els.combo.classList.add('pop');
+    if (tier) els.combo.classList.add(tier);
   }
 
   function setTrace(word) {
@@ -500,6 +578,28 @@ const TowerGame = (() => {
       const el = cellEl(p);
       if (el) el.classList.add('active');
     });
+    updateTraceLine();
+  }
+
+  // Draw the glowing trace polyline through the traced orb centres.
+  // viewBox is "0 0 COLS ROWS" (see init), so plotting (c+0.5, r+0.5) needs
+  // no pixel measurement and stays correct across resizes/fullscreen.
+  function updateTraceLine() {
+    if (!els.traceLine) return;
+    if (path.length === 0) {
+      els.traceLine.setAttribute('points', '');
+      els.traceLine.classList.remove('quest', 'invalid', 'grow');
+      return;
+    }
+    els.traceLine.setAttribute('points', path.map(p => `${p.c + 0.5},${p.r + 0.5}`).join(' '));
+    const word = currentWord();
+    const isQuestWord = !!quest && word === quest.word;
+    els.traceLine.classList.toggle('quest', isQuestWord);
+    els.traceLine.classList.toggle(
+      'invalid',
+      !isQuestWord && word.length >= MIN_WORD_LEN && !!dict && !dict.has(word)
+    );
+    els.traceLine.classList.toggle('grow', path.length >= 5 || combo >= 3);
   }
 
   // ===== Combat resolution =====
@@ -508,6 +608,7 @@ const TowerGame = (() => {
     const word = currentWord();
     const p = path.slice();
     path = [];
+    updateTraceLine(); // path is now empty — clear the glow line immediately
 
     if (word.length < MIN_WORD_LEN || !dict.has(word)) {
       // Not a word — no turn used, but the combo chain breaks
@@ -529,30 +630,49 @@ const TowerGame = (() => {
     busy = true;
     const isQuest = word === quest.word;
     combo++;
-    const dmg = computeDamage(word, isQuest);
+    // 耀光珠 (charged orbs) caught in this path add +25% dmg each; combo>=3
+    // rolls a crit chance that scales up to 90% at combo 8+.
+    const chargedCount = p.filter(cell => charged[cell.r][cell.c]).length;
+    const critChance = combo >= 3 ? Math.min(0.9, 0.15 * (combo - 2)) : 0;
+    const crit = critChance > 0 && Math.random() < critChance;
+    const dmg = computeDamage(word, isQuest, chargedCount, crit);
+    lastHit = { dmg, crit, chargedCount };
 
     SoundManager.playCorrect();
     GameEngine.recordTowerWord();
     if (isQuest) GameEngine.recordWord(word);
 
-    // Orb clear animation
+    // Orb clear animation + a small particle burst per orb (bigger/gold
+    // for charged orbs) — position derived from the orb's live layout box
+    // so it lines up regardless of grid gaps/padding/board size.
     p.forEach((cell, i) => {
       const el = cellEl(cell);
       if (el) {
         el.classList.remove('active');
-        setTimeout(() => el.classList.add('cleared'), i * 60);
+        setTimeout(() => {
+          el.classList.add('cleared');
+          const pos = elPercent(el, els.board);
+          if (!pos) return;
+          if (charged[cell.r][cell.c]) {
+            burstParticles(els.board, pos.x, pos.y, { count: 14, big: true, colors: ['#fff4c2', '#ffe066', '#ffce54'] });
+          } else {
+            burstParticles(els.board, pos.x, pos.y, { count: 6, colors: familyColors(board[cell.r][cell.c]) });
+          }
+        }, i * 60);
       }
     });
     setTrace('');
     els.trace.textContent = isQuest
       ? `⭐ ${word}！任務單字雙倍傷害＋回血！`
-      : `⚔️ ${word}（${word.length} 字母）`;
+      : crit ? `⚡ ${word}（暴擊！）` : `⚔️ ${word}（${word.length} 字母）`;
 
     setTimeout(() => {
       // Boss takes the hit
       boss.hp -= dmg;
-      floatDamage(dmg, isQuest);
-      els.boss.className = 'tw-boss hit';
+      floatDamage(dmg, isQuest, false, crit);
+      spawnHitRing();
+      if (crit) stageFlash();
+      els.boss.className = 'tw-boss hit' + (crit ? ' crit' : '');
       setTimeout(() => { if (playing) els.boss.className = 'tw-boss idle'; }, 500);
 
       if (isQuest) {
@@ -565,6 +685,8 @@ const TowerGame = (() => {
       updateHUD();
 
       if (boss.hp <= 0) {
+        stageFlash('death');
+        burstParticles(els.stage, 50, 42, { count: 30, big: true, colors: ['#fff', '#ffe066', '#ffce54', '#7dffb0'] });
         els.boss.className = 'tw-boss dying';
         setTimeout(() => endBattle(true), 900);
         return;
@@ -585,11 +707,13 @@ const TowerGame = (() => {
     }, p.length * 60 + 320);
   }
 
-  function computeDamage(word, isQuest) {
+  function computeDamage(word, isQuest, chargedCount = 0, crit = false) {
     let dmg = 8 * word.length * (word.length - 1); // 3→48, 5→160, 8→448
-    dmg = Math.round(dmg * (1 + 0.15 * Math.min(combo - 1, 10)));
+    dmg *= (1 + 0.15 * Math.min(combo - 1, 10));
     if (isQuest) dmg *= 2;
-    return dmg;
+    if (chargedCount > 0) dmg *= (1 + 0.25 * chargedCount); // 耀光珠：+25% per charged orb in the path
+    if (crit) dmg *= 1.8;                                    // 暴擊：×1.8
+    return Math.round(dmg);
   }
 
   function bossAttack() {
@@ -619,12 +743,104 @@ const TowerGame = (() => {
     }
   }
 
-  function floatDamage(amount, isQuest, onPlayer) {
+  function floatDamage(amount, isQuest, onPlayer, crit) {
     const f = document.createElement('div');
-    f.className = 'tw-float' + (isQuest ? ' quest' : '') + (onPlayer ? ' player' : '');
-    f.textContent = onPlayer ? `-${amount}` : `-${amount}`;
+    f.className = 'tw-float' + (isQuest ? ' quest' : '') + (onPlayer ? ' player' : '') + (crit ? ' crit' : '');
+    f.textContent = crit ? `⚡ CRITICAL! -${amount}` : `-${amount}`;
     els.stage.appendChild(f);
     setTimeout(() => f.remove(), 1100);
+  }
+
+  // ===== Particles / celebration FX (all position:absolute overlays —
+  // never add block-level height, see game-max budget note in CLAUDE.md) =====
+
+  // Percentage position of `el`'s centre inside `container`'s box — driven
+  // by live layout (getBoundingClientRect), so it's correct regardless of
+  // the board's grid gaps/padding or any responsive resize/fullscreen.
+  function elPercent(el, container) {
+    if (!el || !container) return null;
+    const r = el.getBoundingClientRect();
+    const cr = container.getBoundingClientRect();
+    if (!cr.width || !cr.height) return null;
+    return {
+      x: ((r.left + r.width / 2 - cr.left) / cr.width) * 100,
+      y: ((r.top + r.height / 2 - cr.top) / cr.height) * 100,
+    };
+  }
+
+  function familyColors(letter) {
+    if ('AEIOU'.includes(letter)) return ['#ffe066', '#ffce54', '#fff2c4'];
+    if ('JQXZ'.includes(letter)) return ['#d3a7ff', '#b25cff', '#f5e6ff'];
+    return ['#7fd4f0', '#22c1d9', '#eafcff'];
+  }
+
+  // Short-lived radial burst of dots at (xPct, yPct) inside `container`.
+  // Capped at PARTICLE_CAP live nodes total (across board + stage) so a
+  // heavy combo sequence can never runaway the DOM.
+  function burstParticles(container, xPct, yPct, opts = {}) {
+    if (!container) return;
+    const { count = 6, colors = ['#ffe066'], big = false } = opts;
+    for (let i = 0; i < count; i++) {
+      if (liveParticleCount >= PARTICLE_CAP) break;
+      const el = document.createElement('div');
+      el.className = 'tw-particle' + (big ? ' big' : '');
+      const angle = Math.random() * Math.PI * 2;
+      const dist = (big ? 34 : 20) + Math.random() * (big ? 34 : 22);
+      el.style.left = xPct + '%';
+      el.style.top = yPct + '%';
+      el.style.setProperty('--tw-px', (Math.cos(angle) * dist).toFixed(1) + 'px');
+      el.style.setProperty('--tw-py', (Math.sin(angle) * dist).toFixed(1) + 'px');
+      el.style.background = colors[i % colors.length];
+      container.appendChild(el);
+      liveParticleCount++;
+      setTimeout(() => { el.remove(); liveParticleCount--; }, 650);
+    }
+  }
+
+  // Realm-accent impact ring at the boss's current position.
+  function spawnHitRing() {
+    const pos = elPercent(els.boss, els.stage);
+    if (!pos) return;
+    const ring = document.createElement('div');
+    ring.className = 'tw-hit-ring';
+    ring.style.left = pos.x + '%';
+    ring.style.top = pos.y + '%';
+    els.stage.appendChild(ring);
+    setTimeout(() => ring.remove(), 500);
+  }
+
+  // Brief full-stage colour flash — accent gold for a crit, white for a
+  // boss kill. A plain overlay div (not an animated background-color on
+  // .tw-stage itself) because the stage's own background is opaque
+  // gradient layers that would hide a background-color change entirely.
+  function stageFlash(kind) {
+    if (!els.stage) return;
+    const f = document.createElement('div');
+    f.className = 'tw-stage-flash' + (kind ? ' ' + kind : '');
+    els.stage.appendChild(f);
+    setTimeout(() => f.remove(), 550);
+  }
+
+  // Victory confetti — ported from js/empire.js empConfetti(). Rendered
+  // over the win screen (not #tw-stage): endBattle() hides #tw-game via
+  // display:none in the very same synchronous tick before any repaint, so
+  // anything appended to the stage at that point would never actually be
+  // seen — the win screen is the surface that's actually visible when the
+  // celebration plays.
+  function towerConfetti(container, n = 24) {
+    if (!container) return;
+    const colors = ['#ffd166', '#ff6b81', '#4ade80', '#7fd4ff', '#c77dff', '#fff'];
+    for (let i = 0; i < n; i++) {
+      const c = document.createElement('div');
+      c.className = 'tw-confetti';
+      c.style.left = 8 + Math.random() * 84 + '%';
+      c.style.background = colors[i % colors.length];
+      c.style.animationDelay = Math.random() * 0.4 + 's';
+      c.style.animationDuration = 1.3 + Math.random() * 0.9 + 's';
+      c.style.transform = `rotate(${Math.random() * 360}deg)`;
+      container.appendChild(c);
+      setTimeout(() => c.remove(), 2600);
+    }
   }
 
   // ===== Gravity refill =====
@@ -636,12 +852,28 @@ const TowerGame = (() => {
     for (const c in clearedByCol) {
       const col = Number(c);
       const gone = new Set(clearedByCol[c]);
+      // Walk bottom→top collecting survivors; keptCharged is pushed in
+      // perfect lockstep with kept so index i always refers to the same
+      // orb in both arrays — that's what keeps charged[][] glued to its
+      // letter as gravity shifts everything down the column.
       const kept = [];
+      const keptCharged = [];
       for (let r = ROWS - 1; r >= 0; r--) {
-        if (!gone.has(r)) kept.push(board[r][col]);
+        if (!gone.has(r)) {
+          kept.push(board[r][col]);
+          keptCharged.push(charged[r][col]);
+        }
       }
       for (let r = ROWS - 1; r >= 0; r--) {
-        board[r][col] = kept[ROWS - 1 - r] !== undefined ? kept[ROWS - 1 - r] : randomLetter();
+        const idx = ROWS - 1 - r;
+        if (kept[idx] !== undefined) {
+          board[r][col] = kept[idx];
+          charged[r][col] = keptCharged[idx];
+        } else {
+          // Freshly spawned top orb — new letter, new charged roll.
+          board[r][col] = randomLetter();
+          charged[r][col] = Math.random() < 0.12;
+        }
       }
     }
     renderBoard();
