@@ -159,6 +159,12 @@
   box-shadow: 0 0 16px rgba(255, 255, 255, 0.8);
 }
 
+/* Fish candy: aqua water ripple glow */
+.cd-cell.star.sp-fish {
+  background: radial-gradient(circle, rgba(0, 180, 216, 0.5), rgba(0, 180, 216, 0.12));
+  box-shadow: 0 0 14px rgba(0, 180, 216, 0.85);
+}
+
 /* NOTE: deliberately does NOT animate `transform` here (no scale breathing).
    Stars must keep a perfectly static bounding box at rest — kids need a
    stable tap target, and a continuously resizing box also breaks

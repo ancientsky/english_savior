@@ -23,7 +23,7 @@ const CandyGame = (() => {
   ];
 
   // ===== Persistent progress =====
-  let progress = { level: 1, bestLevel: 0, quizCorrect: 0, quizWrong: 0, totalCleared: 0 };
+  let progress = { level: 1, bestLevel: 0, quizCorrect: 0, quizWrong: 0, totalCleared: 0, hintsSeen: {} };
 
   // ===== Level state =====
   let board = [];          // board[r][c] = { type: index } | { type: STAR } | null
@@ -420,7 +420,24 @@ const CandyGame = (() => {
         }
       }
     }
-    return { cells, runs };
+    // 2x2 same-color squares (Candy Crush-style) → spawns a 🐟 fish special.
+    // Detected in addition to line runs; merging into `cells` means the
+    // existing swap-validity gate (attemptSwap checks matches.cells.size)
+    // and clearing/gravity logic cover squares for free.
+    const squares = [];
+    for (let r = 0; r < ROWS - 1; r++) {
+      for (let c = 0; c < COLS - 1; c++) {
+        const a = board[r][c], b = board[r][c + 1], d = board[r + 1][c], e = board[r + 1][c + 1];
+        if (a && b && d && e &&
+            a.type !== STAR && b.type !== STAR && d.type !== STAR && e.type !== STAR &&
+            a.type === b.type && a.type === d.type && a.type === e.type) {
+          const sqCells = [{ r, c }, { r, c: c + 1 }, { r: r + 1, c }, { r: r + 1, c: c + 1 }];
+          sqCells.forEach(p => cells.add(p.r + ',' + p.c));
+          squares.push({ cells: sqCells, type: a.type });
+        }
+      }
+    }
+    return { cells, runs, squares };
   }
 
   // Candy Crush-style special spawning:
@@ -428,9 +445,10 @@ const CandyGame = (() => {
   //   L/T intersection  → 🎁 wrapped (5×5 blast)
   //   exactly 4 in line → 🍭 striped (horizontal match clears its column,
   //                        vertical match clears its row — like the original)
-  function planSpecials(runs, swapPos) {
+  function planSpecials(runs, swapPos, squares) {
     const specials = [];
     const used = new Set();
+    const usedPos = new Set();
     const spawnAt = run =>
       swapPos && run.cells.some(p => p.r === swapPos.r && p.c === swapPos.c)
         ? swapPos
@@ -439,8 +457,10 @@ const CandyGame = (() => {
     // Rainbow first (most powerful)
     runs.forEach(run => {
       if (run.cells.length >= 5) {
-        specials.push({ pos: spawnAt(run), kind: 'rainbow' });
+        const pos = spawnAt(run);
+        specials.push({ pos, kind: 'rainbow' });
         used.add(run);
+        usedPos.add(pos.r + ',' + pos.c);
       }
     });
     // Wrapped: an H run crossing a V run of the same type
@@ -451,15 +471,27 @@ const CandyGame = (() => {
           specials.push({ pos: inter, kind: 'wrap' });
           used.add(h);
           used.add(v);
+          usedPos.add(inter.r + ',' + inter.c);
         }
       });
     });
     // Striped: remaining 4-in-a-line
     runs.forEach(run => {
       if (!used.has(run) && run.cells.length === 4) {
-        specials.push({ pos: spawnAt(run), kind: run.dir === 'h' ? 'stripeCol' : 'stripeRow' });
+        const pos = spawnAt(run);
+        specials.push({ pos, kind: run.dir === 'h' ? 'stripeCol' : 'stripeRow' });
         used.add(run);
+        usedPos.add(pos.r + ',' + pos.c);
       }
+    });
+    // Fish: a 2x2 same-color square (Candy Crush-style)
+    (squares || []).forEach(sq => {
+      const pos = swapPos && sq.cells.some(p => p.r === swapPos.r && p.c === swapPos.c)
+        ? swapPos
+        : sq.cells[0];
+      if (usedPos.has(pos.r + ',' + pos.c)) return; // don't double-spawn on one cell
+      specials.push({ pos, kind: 'fish' });
+      usedPos.add(pos.r + ',' + pos.c);
     });
     return specials;
   }
@@ -469,11 +501,12 @@ const CandyGame = (() => {
     stripeCol: { icon: '🍭', name: '條紋糖果', desc: '清除一整列', toast: '🍭 條紋糖果出現了！點它答題清除一整列！' },
     wrap:      { icon: '🎁', name: '包裝糖果', desc: '5×5 大爆炸', toast: '🎁 包裝糖果出現了！點它答題引爆 5×5！' },
     rainbow:   { icon: '🌈', name: '彩虹糖果', desc: '清除所有目標糖果', toast: '🌈 彩虹糖果出現了！點它答題清光目標糖果！' },
+    fish:      { icon: '🐟', name: '糖果魚', desc: '游走清除目標糖果', toast: '🐟 糖果魚出現了！點它答題，讓魚兒游去吃掉目標糖果！' },
   };
 
   // Remove matches, spawn stars, apply gravity, cascade until stable
   function resolveBoard(swapPos, onDone) {
-    const { cells, runs } = findMatches();
+    const { cells, runs, squares } = findMatches();
     if (cells.size === 0) {
       onDone();
       return;
@@ -490,7 +523,7 @@ const CandyGame = (() => {
     });
 
     // Candy Crush-style specials from this wave of matches
-    const specials = planSpecials(runs, swapPos);
+    const specials = planSpecials(runs, swapPos, squares);
 
     renderGoals();
     saveProgress();
@@ -543,8 +576,18 @@ const CandyGame = (() => {
       if (playing) renderBoard();
     }, 700);
 
-    showSpawnBubbles(positions);
-    showSpawnBanner(positions);
+    // The "tap me!" bubble + callout banner are a one-time teaching moment
+    // per special KIND — after a kid has seen it once, repeating it is just
+    // noise. The on-candy burst/ring (spawnFx above) and the achievement
+    // chime always play, every spawn, because those are satisfying rather
+    // than instructional.
+    const unseen = positions.filter(p => !progress.hintsSeen[p.kind]);
+    if (unseen.length > 0) {
+      showSpawnBubbles(unseen);
+      showSpawnBanner(unseen);
+      unseen.forEach(p => { progress.hintsSeen[p.kind] = true; });
+      saveProgress();
+    }
     SoundManager.playAchievement();
   }
 
@@ -565,7 +608,7 @@ const CandyGame = (() => {
   // Big colorful banner announcing what kind of special just spawned
   function showSpawnBanner(positions) {
     if (!els.spawnBanner) return;
-    const priority = { rainbow: 3, wrap: 2, stripeRow: 1, stripeCol: 1 };
+    const priority = { rainbow: 3, wrap: 2, fish: 2, stripeRow: 1, stripeCol: 1 };
     const top = positions.reduce((a, b) => (priority[b.kind] > priority[a.kind] ? b : a), positions[0]);
     const info = SPECIAL_INFO[top.kind] || SPECIAL_INFO.wrap;
     els.spawnBanner.textContent = positions.length > 1 ? `${info.toast}（×${positions.length}）` : info.toast;
@@ -827,6 +870,25 @@ const CandyGame = (() => {
           if (board[r][c] && board[r][c].type === targetType) targets.push({ r, c });
         }
       }
+    } else if (kind === 'fish') {
+      // 3 fish swim to 3 goal-color candies, each clearing itself + its
+      // 4 orthogonal neighbors. Prefers the current unfinished goal type.
+      const goal = goals.find(g => g.got < g.need);
+      const targetType = goal ? goal.type : mostCommonType();
+      const candidates = [];
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          if (board[r][c] && board[r][c].type === targetType) candidates.push({ r, c });
+        }
+      }
+      shuffleInPlace(candidates);
+      candidates.slice(0, 3).forEach(p => {
+        targets.push(p);
+        targets.push({ r: p.r - 1, c: p.c });
+        targets.push({ r: p.r + 1, c: p.c });
+        targets.push({ r: p.r, c: p.c - 1 });
+        targets.push({ r: p.r, c: p.c + 1 });
+      });
     }
 
     targets.forEach(p => {
