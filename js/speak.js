@@ -83,6 +83,8 @@ const SpeakGame = (() => {
       spell: () => (currentSpell ? { ...currentSpell } : null),
       forceTranscript: t => handleTranscript(t),
       isHonorMode: () => honorMode,
+      isListening: () => listening,
+      tapMic: () => toggleListen(),
     };
   }
 
@@ -179,7 +181,7 @@ const SpeakGame = (() => {
 
     els.honorBox.style.display = honorMode ? 'flex' : 'none';
     els.micBtn.style.display = honorMode ? 'none' : 'inline-flex';
-    setMicState(false);
+    stopListening(); // fully release any session before the next word's mic
     updateHUD();
 
     if (honorMode) playModel();
@@ -237,47 +239,91 @@ const SpeakGame = (() => {
   }
 
   // ===== Speech recognition =====
+  // The browser exposes a SINGLE global speech service, so only one
+  // SpeechRecognition session can be active at a time. The previous word's
+  // session can still be winding down when the player taps the wand for the
+  // next word, and start() then throws InvalidStateError. The old code
+  // swallowed that in a catch and left the button wedged on "唸出咒語" —
+  // tapping again just threw again until the old session finally released.
+  // Fix: (1) abort any lingering session before starting a fresh one,
+  // (2) auto-retry once after a short back-off if start() still throws, and
+  // (3) never let a desynced `listening` flag block the toggle.
   function toggleListen() {
-    if (listening) { stopListening(); return; }
+    if (listening && recognizer) { stopListening(); return; }
     if (!SR) return;
+    startListening(true);
+  }
+
+  function startListening(allowRetry) {
+    teardownRecognizer(); // release any half-dead session from the previous word
+    let rec;
     try {
-      recognizer = new SR();
-      recognizer.lang = 'en-US';
-      recognizer.interimResults = true;
-      recognizer.maxAlternatives = 3;
-      recognizer.onresult = ev => {
-        let transcript = '';
-        for (const res of ev.results) transcript += res[0].transcript + ' ';
-        els.heard.textContent = `👂 ${transcript.trim()}`;
-        if ([...ev.results].some(r => r.isFinal)) {
-          handleTranscript(transcript);
-        }
-      };
-      recognizer.onerror = ev => {
+      rec = new SR();
+    } catch { setMicState(false); return; }
+    recognizer = rec;
+    rec.lang = 'en-US';
+    rec.interimResults = true;
+    rec.maxAlternatives = 3;
+    rec.onresult = ev => {
+      let transcript = '';
+      for (const res of ev.results) transcript += res[0].transcript + ' ';
+      els.heard.textContent = `👂 ${transcript.trim()}`;
+      if ([...ev.results].some(r => r.isFinal)) {
+        handleTranscript(transcript);
+      }
+    };
+    rec.onerror = ev => {
+      if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') {
         stopListening();
-        if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') {
-          honorMode = true;
-          GameEngine.showToast('🎙️ 無法使用麥克風，改用榮譽模式（跟著唸、自己評分）', 'error');
-          els.honorBox.style.display = 'flex';
-          els.micBtn.style.display = 'none';
-          playModel();
-        } else if (ev.error !== 'aborted' && ev.error !== 'no-speech') {
-          els.heard.textContent = '😅 沒聽清楚，再按魔杖唸一次！';
-        }
-      };
-      recognizer.onend = () => setMicState(false);
-      recognizer.start();
+        honorMode = true;
+        GameEngine.showToast('🎙️ 無法使用麥克風，改用榮譽模式（跟著唸、自己評分）', 'error');
+        els.honorBox.style.display = 'flex';
+        els.micBtn.style.display = 'none';
+        playModel();
+      } else if (ev.error !== 'aborted' && ev.error !== 'no-speech') {
+        stopListening();
+        els.heard.textContent = '😅 沒聽清楚，再按魔杖唸一次！';
+      }
+      // 'aborted'/'no-speech' let the quiet onend below reset the button
+    };
+    rec.onend = () => {
+      if (rec === recognizer) recognizer = null;
+      setMicState(false);
+    };
+    try {
+      rec.start();
       setMicState(true);
     } catch {
+      // The old session hasn't released the mic yet. Drop this instance and,
+      // once, retry after a short back-off so the player never has to guess
+      // why the wand "won't press".
+      if (rec === recognizer) recognizer = null;
+      try { rec.abort(); } catch { /* noop */ }
       setMicState(false);
+      if (allowRetry && roundActive && !honorMode) {
+        els.heard.textContent = '🎙️ 麥克風準備中，馬上就好……';
+        setTimeout(() => {
+          if (roundActive && !listening && !honorMode) startListening(false);
+        }, 350);
+      } else {
+        els.heard.textContent = '🎙️ 再按一次魔杖，唸出咒語！';
+      }
     }
   }
 
+  function teardownRecognizer() {
+    if (!recognizer) return;
+    const rec = recognizer;
+    recognizer = null;
+    rec.onresult = null;
+    rec.onerror = null;
+    rec.onend = null;
+    // abort() frees the mic immediately; stop() would wait for a final result
+    try { rec.abort(); } catch { try { rec.stop(); } catch { /* already dead */ } }
+  }
+
   function stopListening() {
-    if (recognizer) {
-      try { recognizer.stop(); } catch { /* already stopped */ }
-      recognizer = null;
-    }
+    teardownRecognizer();
     setMicState(false);
   }
 
