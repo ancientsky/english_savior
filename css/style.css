@@ -986,6 +986,11 @@ body.game-max #zone-sling.active .sg-container {
 body.game-max #zone-tower.active .tw-container {
   max-width: min(100%, calc((100vh - 315px) * 1.19));
 }
+/* 英語冒險物語：地圖是 13/9 比例的 DOM 網格，對話框疊在地圖底部（不佔額外
+   高度），只要把容器寬度依視窗高度反推，整張地圖＋對話框就同屏不需捲動 */
+body.game-max #zone-rpg.active .rpg-container {
+  max-width: min(100%, calc((100vh - 210px) * (13 / 9)));
+}
 
 /* ===== 佈景主題（body[data-theme] 覆蓋 :root 變數；全部深色系，
    各遊戲專屬 CSS 不受影響）===== */

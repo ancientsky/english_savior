@@ -38,6 +38,12 @@ const CandyGame = (() => {
   let quizStarPos = null;
   let quizKind = 'wrap';
 
+  // Spawn-juice state: makes new special candies impossible to miss
+  let spawnFx = new Set();     // 'r,c' keys currently playing the one-shot spawn burst
+  let lastSpawnBatch = [];     // most recent spawn batch, exposed to tests: [{r,c,kind}]
+  let spawnFxTimer = null;
+  let bannerTimer = null;
+
   let els = {};
 
   function init() {
@@ -62,6 +68,8 @@ const CandyGame = (() => {
       quizWordEl: document.getElementById('cd-quiz-word'),
       quizOptions: document.getElementById('cd-quiz-options'),
       quizFeedback: document.getElementById('cd-quiz-feedback'),
+      fxLayer: document.getElementById('cd-fx-layer'),
+      spawnBanner: document.getElementById('cd-spawn-banner'),
     };
 
     loadProgress();
@@ -89,6 +97,7 @@ const CandyGame = (() => {
     window.__candyTest = {
       board: () => board.map(row => row.map(c => (c ? { ...c } : null))),
       setCell: (r, c, cell) => { board[r][c] = cell; renderBoard(); },
+      lastSpawn: () => lastSpawnBatch.map(p => ({ ...p })),
     };
   }
 
@@ -131,6 +140,7 @@ const CandyGame = (() => {
     els.quiz.style.display = 'none';
     els.board.style.display = 'grid';
     els.feedback.textContent = '';
+    clearSpawnFx();
 
     // Goals: 2 candy types (3 from level 6), counts grow with level
     const goalCount = level >= 6 ? 3 : 2;
@@ -151,6 +161,7 @@ const CandyGame = (() => {
 
   function levelClear() {
     playing = false;
+    clearSpawnFx();
     // Rewards scale with difficulty tier
     let xp = [30, 45, 60][tier()];
     let gems = [5, 8, 11][tier()];
@@ -181,6 +192,7 @@ const CandyGame = (() => {
 
   function levelFail() {
     playing = false;
+    clearSpawnFx();
     const done = goals.filter(g => g.got >= g.need).length;
     els.failInfo.innerHTML = `步數用完了！完成了 ${done} / ${goals.length} 個目標。<br><small>小提醒：一次消 4 顆會出現 ⭐ 魔法糖果，點它答題可以大爆炸！</small>`;
     els.board.style.display = 'none';
@@ -246,6 +258,7 @@ const CandyGame = (() => {
           if (cell.type === STAR) {
             const info = SPECIAL_INFO[cell.kind] || SPECIAL_INFO.wrap;
             div.classList.add('star', 'sp-' + (cell.kind || 'wrap'));
+            if (spawnFx.has(r + ',' + c)) div.classList.add('cd-spawn');
             div.textContent = info.icon;
             div.title = `${info.name}：${info.desc}（點我答題引爆！）`;
           } else {
@@ -489,15 +502,94 @@ const CandyGame = (() => {
         const [r, c] = key.split(',').map(Number);
         board[r][c] = null;
       });
+      // Mark new specials with a transient _new flag so we can find their
+      // FINAL resting position after gravity (gravity may slide them down
+      // if there were gaps below in the same column).
       specials.forEach(s => {
-        board[s.pos.r][s.pos.c] = { type: STAR, kind: s.kind };
-        GameEngine.showToast(SPECIAL_INFO[s.kind].toast, 'achievement');
+        board[s.pos.r][s.pos.c] = { type: STAR, kind: s.kind, _new: true };
       });
       const fell = applyGravity();
+      const spawned = collectNewSpecials();
+      if (spawned.length) registerSpawn(spawned);
       renderBoard({ fall: fell });
       // Cascade
       setTimeout(() => resolveBoard(null, onDone), 220);
     }, 240);
+  }
+
+  // Find cells whose _new flag was just set (post-gravity final position),
+  // clearing the flag so they aren't picked up again next cascade wave.
+  function collectNewSpecials() {
+    const found = [];
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        const cell = board[r][c];
+        if (cell && cell._new) {
+          found.push({ r, c, kind: cell.kind });
+          delete cell._new;
+        }
+      }
+    }
+    return found;
+  }
+
+  // ===== Spawn juice: make new specials impossible to miss =====
+  function registerSpawn(positions) {
+    lastSpawnBatch = positions.map(p => ({ ...p }));
+    positions.forEach(p => spawnFx.add(p.r + ',' + p.c));
+    clearTimeout(spawnFxTimer);
+    spawnFxTimer = setTimeout(() => {
+      spawnFx.clear();
+      if (playing) renderBoard();
+    }, 700);
+
+    showSpawnBubbles(positions);
+    showSpawnBanner(positions);
+    SoundManager.playAchievement();
+  }
+
+  // "Tap me!" bubbles floating above each freshly spawned special
+  function showSpawnBubbles(positions) {
+    if (!els.fxLayer) return;
+    positions.slice(0, 4).forEach(p => {
+      const bubble = document.createElement('div');
+      bubble.className = 'cd-spawn-bubble';
+      bubble.textContent = '👆 點我！';
+      bubble.style.left = ((p.c + 0.5) / COLS * 100) + '%';
+      bubble.style.top = ((p.r + 0.5) / ROWS * 100) + '%';
+      els.fxLayer.appendChild(bubble);
+      setTimeout(() => bubble.remove(), 2600);
+    });
+  }
+
+  // Big colorful banner announcing what kind of special just spawned
+  function showSpawnBanner(positions) {
+    if (!els.spawnBanner) return;
+    const priority = { rainbow: 3, wrap: 2, stripeRow: 1, stripeCol: 1 };
+    const top = positions.reduce((a, b) => (priority[b.kind] > priority[a.kind] ? b : a), positions[0]);
+    const info = SPECIAL_INFO[top.kind] || SPECIAL_INFO.wrap;
+    els.spawnBanner.textContent = positions.length > 1 ? `${info.toast}（×${positions.length}）` : info.toast;
+
+    // Restart the CSS animation even if it's already mid-flight
+    els.spawnBanner.classList.remove('show');
+    void els.spawnBanner.offsetWidth;
+    els.spawnBanner.classList.add('show');
+
+    clearTimeout(bannerTimer);
+    bannerTimer = setTimeout(() => els.spawnBanner.classList.remove('show'), 3000);
+  }
+
+  // Clear all transient spawn-juice overlays (called when the board is
+  // hidden behind a screen, or a fresh level starts)
+  function clearSpawnFx() {
+    spawnFx.clear();
+    clearTimeout(spawnFxTimer);
+    clearTimeout(bannerTimer);
+    if (els.fxLayer) els.fxLayer.innerHTML = '';
+    if (els.spawnBanner) {
+      els.spawnBanner.classList.remove('show');
+      els.spawnBanner.textContent = '';
+    }
   }
 
   // Drop candies down and refill from the top; returns Set of moved cells
@@ -582,6 +674,7 @@ const CandyGame = (() => {
   // ===== Vocabulary quiz (magic star) =====
   function openQuiz(starPos) {
     busy = true;
+    clearSpawnFx();
     quizStarPos = starPos;
     quizKind = board[starPos.r][starPos.c]?.kind || 'wrap';
     quizTries = 0;
