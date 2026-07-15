@@ -221,6 +221,7 @@ const GameEngine = (() => {
       skySecretFound: 0,
       skySecretBoss: false,
       skySwitches: 0,
+      skyUndergroundQuests: 0,
       // history
       learnedWordsList: [],
       // shop system
@@ -531,10 +532,11 @@ const GameEngine = (() => {
     checkAchievements();
   }
 
-  function recordSkyQuest(isGalaxy, isSecret) {
+  function recordSkyQuest(isGalaxy, isSecret, isUnderground) {
     state.skyQuests = (state.skyQuests || 0) + 1;
     if (isGalaxy) state.skyGalaxyQuests = (state.skyGalaxyQuests || 0) + 1;
     if (isSecret) state.skySecretQuests = (state.skySecretQuests || 0) + 1;
+    if (isUnderground) state.skyUndergroundQuests = (state.skyUndergroundQuests || 0) + 1;
     save();
     checkAchievements();
   }

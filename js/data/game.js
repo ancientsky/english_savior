@@ -37,11 +37,13 @@ const ACHIEVEMENTS = [
   { id: 'sky_hero', name: '空島英雄', desc: '在天空之城完成 10 個任務', icon: '🌤️', pts: 20, condition: s => (s.skyQuests || 0) >= 10 },
   { id: 'sky_storm', name: '風暴終結者', desc: '打倒天空之城的暴風巨像', icon: '⛈️', pts: 40, condition: s => !!s.skyBossDown },
   { id: 'sky_galaxy', name: '初探銀河空島', desc: '在銀河空島完成第一個任務', icon: '🌌', pts: 10, condition: s => (s.skyGalaxyQuests || 0) >= 1 },
-  { id: 'sky_galaxy_king', name: '銀河全制霸', desc: '完成天空之城全部 52 個任務', icon: '👑', pts: 40, condition: s => (s.skyQuests || 0) >= 52 },
+  { id: 'sky_galaxy_king', name: '銀河全制霸', desc: '完成 52 個天空之城任務', icon: '👑', pts: 40, condition: s => (s.skyQuests || 0) >= 52 },
   { id: 'sky_secret', name: '秘境探索者', desc: '發現第一個隱藏秘境', icon: '🔮', pts: 10, hidden: true, condition: s => (s.skySecretFound || 0) >= 1 },
   { id: 'sky_secret_king', name: '秘境全制霸', desc: '完成全部 18 個秘境任務', icon: '🗝️', pts: 40, hidden: true, condition: s => (s.skySecretQuests || 0) >= 18 },
   { id: 'sky_shadow_slayer', name: '星影終結者', desc: '擊敗星影守護者', icon: '🌑', pts: 20, hidden: true, condition: s => !!s.skySecretBoss },
   { id: 'sky_switch_master', name: '機關大師', desc: '啟動全部 4 個隱藏機關', icon: '⚙️', pts: 20, hidden: true, condition: s => (s.skySwitches || 0) >= 4 },
+  { id: 'sky_underground', name: '初探地心', desc: '進入地心世界並完成第一個任務', icon: '🌋', pts: 10, condition: s => (s.skyUndergroundQuests || 0) >= 1 },
+  { id: 'sky_core_king', name: '地心征服者', desc: '完成全部 8 個地心任務', icon: '🔥', pts: 40, hidden: true, condition: s => (s.skyUndergroundQuests || 0) >= 8 },
 ];
 
 const DAILY_QUESTS = [

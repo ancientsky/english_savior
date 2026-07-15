@@ -26,8 +26,11 @@ const SkyGame = (() => {
   let cloudMesh = null;
   const cloudData = [];
   // altitude atmosphere: base sky ↔ deep-space purple (galaxy region sits high)
+  // ↔ deep-red cave gloom (地心世界 sits far below, y ≈ -70..-95)
   let fogBase = null, fogGalaxy = null, hemiBase = null, hemiGalaxy = null;
+  let fogUnderground = null, hemiUnderground = null;
   let galaxyBlend = -1;
+  let undergroundBlend = -1;
 
   // ----- world -----
   const islandGroups = {};       // id -> THREE.Group
@@ -46,6 +49,7 @@ const SkyGame = (() => {
   let airJumpUsed = false;
   let lastGroundIsland = 'isle_dawn';
   let currentIsland = null;
+  let regionUnderground = false; // true while standing on/under an `underground: true` island (地心世界)
   let hearts = 5;
   let heroYaw = 0;
   let walkTime = 0;
@@ -248,6 +252,14 @@ const SkyGame = (() => {
         switches: interactables.filter(it => it.q.type === 'switch').length,
         stairsBuilt: { ...save.stairsBuilt },
       }),
+      // underground realm hooks (Part 7 / Wave 1)
+      region: () => ({
+        underground: regionUnderground,
+        blend: undergroundBlend,
+        island: currentIsland,
+        fogHex: scene ? scene.fog.color.getHex() : null,
+        fogFar: scene ? scene.fog.far : null,
+      }),
     };
   }
 
@@ -350,6 +362,8 @@ const SkyGame = (() => {
     fogGalaxy = new THREE.Color(0x241a4e);
     hemiBase = new THREE.Color(0xdfefff);
     hemiGalaxy = new THREE.Color(0xb09ae8);
+    fogUnderground = new THREE.Color(0x2a0c06);
+    hemiUnderground = new THREE.Color(0x8a4a20);
 
     camera = new THREE.PerspectiveCamera(55, w / h, 0.1, 1800);
 
@@ -369,6 +383,7 @@ const SkyGame = (() => {
     buildSwitches();
     AMBIENT_MOBS.forEach(a => spawnMob(a.mob, a.island, a.dx, a.dz));
     buildParticles();
+    buildEmberParticles();
     buildPlayer();
     setupPointerControls();
 
@@ -573,6 +588,12 @@ const SkyGame = (() => {
     vault: { top: 0x1a1414, side: 0x120e10, tex: 'rockTex' },
     tree: { top: 0x8a6a3e, side: 0x5e4526, tex: 'woodTex' },
     relic: { top: 0xe8dfc0, side: 0xb8ac86, tex: 'rockTex' },
+    // 地心世界 (underground region)
+    cavefloor: { top: 0x4a3f38, side: 0x2a221e, tex: 'rockTex' },
+    deepcrystal: { top: 0x3a2a52, side: 0x241a38, tex: 'crystalTex' },
+    magma: { top: 0x2a1410, side: 0x180c0a, tex: 'rockTex' },
+    bonecave: { top: 0x6a5a48, side: 0x3a2f26, tex: 'sandTex' },
+    coretemple: { top: 0x1a0f08, side: 0x100a06, tex: 'rockTex' },
   };
 
   function buildIsland(isle) {
@@ -1188,6 +1209,97 @@ const SkyGame = (() => {
         });
         break;
       }
+      // ===== 地心世界 (underground region) =====
+      case 'cavefloor':
+        scatter(g, isle, rng, 8, 0.15, 0.85, r => {
+          const h = 1.2 + r() * 2.4;
+          const stal = new THREE.Mesh(new THREE.ConeGeometry(0.4 + r() * 0.3, h, 6), matOf(0x3a322c));
+          stal.position.y = h / 2;
+          stal.castShadow = true;
+          return stal;
+        });
+        scatter(g, isle, rng, 6, 0.2, 0.8, r => makeCrystal(r, 0x5a6a8a));
+        break;
+      case 'deepcrystal': {
+        scatter(g, isle, rng, 9, 0.15, 0.88, r => makeCrystal(r, r() < 0.5 ? 0x9a7bff : 0x6ae8ff));
+        const lake = new THREE.Mesh(new THREE.CylinderGeometry(isle.r * 0.35, isle.r * 0.35, 0.14, 18),
+          matOf(0x2a3a6a, 0x14204a));
+        lake.position.set(isle.r * 0.15, 0.07, -isle.r * 0.15);
+        g.add(lake);
+        scatter(g, isle, rng, 5, 0.3, 0.75, r => {
+          const orb = new THREE.Mesh(new THREE.SphereGeometry(0.3 + r() * 0.25, 8, 6),
+            matOf(0xb08fff, 0x5a2aaa));
+          orb.position.y = 0.8 + r() * 2;
+          return orb;
+        });
+        break;
+      }
+      case 'magma': {
+        const pool = new THREE.Mesh(new THREE.CylinderGeometry(isle.r * 0.4, isle.r * 0.4, 0.18, 18),
+          matOf(0xff5a1a, 0xdd2200));
+        pool.position.set(-isle.r * 0.1, 0.09, isle.r * 0.12);
+        g.add(pool);
+        scatter(g, isle, rng, 7, 0.4, 0.9, r => {
+          const h = 1.2 + r() * 3;
+          const spike = new THREE.Mesh(new THREE.ConeGeometry(0.5, h, 5), matOf(0x120a0c));
+          spike.position.y = h / 2;
+          spike.castShadow = true;
+          return spike;
+        });
+        scatter(g, isle, rng, 10, 0.1, 0.9, r => {
+          const crack = new THREE.Mesh(new THREE.BoxGeometry(0.9 + r() * 0.6, 0.04, 0.12),
+            new THREE.MeshLambertMaterial({ color: 0xff6a2a, emissive: 0xdd3300 }));
+          crack.position.y = 0.02;
+          crack.rotation.y = r() * Math.PI;
+          return crack;
+        });
+        scatter(g, isle, rng, 6, 0.2, 0.7, r => {
+          const ember = new THREE.Mesh(new THREE.SphereGeometry(0.08, 5, 4),
+            new THREE.MeshLambertMaterial({ color: 0xffb060, emissive: 0xff5500 }));
+          ember.position.y = 0.5 + r() * 1.6;
+          return ember;
+        });
+        break;
+      }
+      case 'bonecave':
+        scatter(g, isle, rng, 6, 0.25, 0.85, r => {
+          const rib = new THREE.Mesh(new THREE.TorusGeometry(1.8 + r() * 1.6, 0.24, 6, 10, Math.PI), matOf(0xe0d4b0));
+          rib.position.y = 0.15;
+          rib.rotation.y = r() * Math.PI;
+          rib.castShadow = true;
+          return rib;
+        });
+        scatter(g, isle, rng, 5, 0.3, 0.85, r => {
+          const bone = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 1.8 + r(), 5), matOf(0xe0d4b0));
+          bone.rotation.z = Math.PI / 2 + (r() - 0.5);
+          bone.position.y = 0.25;
+          return bone;
+        });
+        scatter(g, isle, rng, 4, 0.2, 0.7, r => {
+          const skull = new THREE.Mesh(new THREE.DodecahedronGeometry(0.4 + r() * 0.2), matOf(0xd8cba0));
+          skull.position.y = 0.3;
+          return skull;
+        });
+        break;
+      case 'coretemple': {
+        scatter(g, isle, rng, 8, 0.5, 0.88, r => {
+          const h = 3 + r() * 2;
+          const col = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.58, h, 8), matOf(0x14100c));
+          col.position.y = h / 2;
+          col.castShadow = true;
+          return col;
+        });
+        const trim = new THREE.Mesh(new THREE.TorusGeometry(isle.r * 0.9, 0.3, 6, 26), matOf(0xd8a83a, 0x6a4a10));
+        trim.rotation.x = Math.PI / 2;
+        trim.position.y = 0.1;
+        g.add(trim);
+        const core = new THREE.Mesh(new THREE.SphereGeometry(1.8, 14, 10),
+          new THREE.MeshLambertMaterial({ color: 0xff6a1a, emissive: 0xff3300 }));
+        core.position.y = 2.4;
+        core.castShadow = true;
+        g.add(core);
+        break;
+      }
     }
 
     // grass blades on green islands (InstancedMesh child → bobs with island)
@@ -1546,25 +1658,28 @@ const SkyGame = (() => {
       const isle = isleById(p.island);
       const g = islandGroups[p.island];
       if (!isle || !g) continue;
+      // crater portals (火山口深洞 ↔ 地心世界) get a rocky rim + orange glow
+      // instead of the purple swirl — cheap recolor, visually distinct
+      const isCraterPortal = p.id.startsWith('portal_crater') || p.id.startsWith('portal_und');
       const visual = new THREE.Group();
       const ring = new THREE.Mesh(
         new THREE.TorusGeometry(1.7, 0.22, 8, 24),
-        matOf(0xb06ae8, 0x5a2a9a)
+        isCraterPortal ? matOf(0x2a1410, 0x1a0a06) : matOf(0xb06ae8, 0x5a2a9a)
       );
       ring.position.y = 2.2;
       ring.castShadow = true;
       visual.add(ring);
       const swirl = new THREE.Mesh(
         new THREE.CircleGeometry(1.45, 20),
-        new THREE.MeshLambertMaterial({
-          color: 0x8f6bff, emissive: 0x3a1a7a,
-          transparent: true, opacity: 0.7, side: THREE.DoubleSide,
-        })
+        new THREE.MeshLambertMaterial(isCraterPortal
+          ? { color: 0xff6a20, emissive: 0xdd3300, transparent: true, opacity: 0.75, side: THREE.DoubleSide }
+          : { color: 0x8f6bff, emissive: 0x3a1a7a, transparent: true, opacity: 0.7, side: THREE.DoubleSide })
       );
       swirl.position.y = 2.2;
       visual.add(swirl);
       [-1.9, 1.9].forEach(x => {
-        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.3, 4.2, 6), matOf(0x44305a));
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.3, 4.2, 6),
+          isCraterPortal ? matOf(0x241a16) : matOf(0x44305a));
         post.position.set(x, 2.1, 0);
         post.castShadow = true;
         visual.add(post);
@@ -1678,14 +1793,17 @@ const SkyGame = (() => {
     pos.y = target.pos[1] + bobOf(target.id) + 2;
     vy = 0;
     lastGroundIsland = target.id;
+    regionUnderground = !!target.underground;
     SoundManager.playAchievement();
     try {
       if (typeof MusicManager !== 'undefined') {
-        if (target.secret) MusicManager.play('mystic');
+        if (target.underground) MusicManager.play('cave');
+        else if (target.secret) MusicManager.play('mystic');
         else MusicManager.playForZone('sky');
       }
-    } catch (e) { /* mystic track may not exist yet — never block the portal */ }
-    showWorldToast(target.secret ? `🔮 你發現了「${target.name}」！`
+    } catch (e) { /* mystic/cave tracks may not exist yet — never block the portal */ }
+    showWorldToast(target.underground ? `🌋 你進入了「${target.name}」！`
+      : target.secret ? `🔮 你發現了「${target.name}」！`
       : q.to === 'isle_gx_hub'
         ? '🌌 歡迎來到銀河空島！新的任務在等著你！'
         : '🏝️ 回到了天空之城本土！');
@@ -1745,6 +1863,8 @@ const SkyGame = (() => {
     comet: '#5a7ac8', aurora: '#4ae8b0', alien: '#b06ae8',
     cave: '#3a3a4a', lake: '#4aa8d8', mist: '#6a7a6a', temple: '#2a2438',
     garden: '#e8b8d8', vault: '#3a1410', tree: '#8a6a3e', relic: '#e8dfc0',
+    cavefloor: '#4a3f38', deepcrystal: '#7a5cc8', magma: '#c8481a',
+    bonecave: '#cfc4b0', coretemple: '#3a2410',
   };
 
   function lowPower() { return !!save.settings.lowPower; }
@@ -1980,6 +2100,27 @@ const SkyGame = (() => {
     scene.add(particles);
   }
 
+  // ---- slow-rising ember motes over the 地心世界 cluster (cheap: one Points obj) ----
+  let emberParticles = null;
+  const EMBER_COUNT = 220;
+  const EMBER_Y_LO = -100, EMBER_Y_HI = -65;
+  function buildEmberParticles() {
+    if (lowPower()) return;
+    const geo = new THREE.BufferGeometry();
+    const arr = new Float32Array(EMBER_COUNT * 3);
+    const rng = mulberry32(SKY_CONFIG.worldSeed + 77);
+    for (let i = 0; i < EMBER_COUNT; i++) {
+      arr[i * 3] = -540 + rng() * 160;
+      arr[i * 3 + 1] = EMBER_Y_LO + rng() * (EMBER_Y_HI - EMBER_Y_LO);
+      arr[i * 3 + 2] = 280 + rng() * 200;
+    }
+    geo.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+    emberParticles = new THREE.Points(geo, new THREE.PointsMaterial({
+      color: 0xff7a2a, size: 1.4, transparent: true, opacity: 0.75, sizeAttenuation: true,
+    }));
+    scene.add(emberParticles);
+  }
+
   // ---- distance culling + fps watchdog (called from updateWorld) ----
   function updateCulling() {
     for (let k = 0; k < 2; k++) {
@@ -2044,6 +2185,13 @@ const SkyGame = (() => {
     { mob: 'knight', island: 'isle_sc_mist', dx: -4, dz: 4 },
     { mob: 'lurker', island: 'isle_sc_mist', dx: 4, dz: -6 },
     { mob: 'knight', island: 'isle_sc_temple', dx: 6, dz: -6 },
+    // 地心世界 (underground)
+    { mob: 'magma_slime', island: 'isle_und_hub', dx: 6, dz: 6 },
+    { mob: 'magma_bat', island: 'isle_und_cavern', dx: 4, dz: 4 },
+    { mob: 'magma_slime', island: 'isle_und_cavern', dx: -8, dz: -3 },
+    { mob: 'magma_bat', island: 'isle_und_magma', dx: 7, dz: 3 },
+    { mob: 'magma_slime', island: 'isle_und_magma', dx: -7, dz: -4 },
+    { mob: 'magma_bat', island: 'isle_und_bones', dx: 3, dz: 7 },
   ];
 
   function mobDef(id) { return SKY_MOBS.find(m => m.id === id); }
@@ -2767,6 +2915,13 @@ const SkyGame = (() => {
       wake: '🌑 星影守護者甦醒了！古老的力量在神殿中匯聚！',
       win: '🎆 星影散去，神殿重現光明！你成為傳說中的秘境英雄！',
     },
+    squ_core_boss: {
+      name: '熔岩核心巨獸', icon: '🌋', body: 0x1a0f08, bodyEm: 0x3a0e02,
+      head: 0x241408, arm: 0x140b05, eye: 0xff8a1a, eyeEm: 0xdd3300,
+      rage: 0xffe066, rageEm: 0xff5500, summon: 'magma_slime', scale: 1.25,
+      wake: '🌋 熔岩核心巨獸甦醒了！地心的怒火在燃燒！',
+      win: '🎆 核心的怒火平息了！你征服了整個地心世界！',
+    },
   };
   function bossDef(q) { return BOSS_DEFS[q.id] || BOSS_DEFS.sq_storm_boss; }
 
@@ -2892,9 +3047,16 @@ const SkyGame = (() => {
     if (combatHud) combatHud.bossBar.style.display = 'none';
     if (shockRing) shockRing.visible = false;
     if (warnRing) warnRing.visible = false;
-    // the sky clears (via the atmosphere base so the altitude blend keeps working)
-    fogBase.setHex(0xcfeeff);
-    galaxyBlend = -1;
+    const bossIsle = isleById(q.island);
+    if (bossIsle && bossIsle.underground) {
+      // no sky to clear this deep down — just force the underground blend to
+      // recompute so it doesn't fight the (unchanged) galaxy blend afterwards
+      undergroundBlend = -1;
+    } else {
+      // the sky clears (via the atmosphere base so the altitude blend keeps working)
+      fogBase.setHex(0xcfeeff);
+      galaxyBlend = -1;
+    }
     const winMsg = bossDef(q).win;
     bossActive = null;
     bossParts = null;
@@ -3236,12 +3398,16 @@ const SkyGame = (() => {
           const isle = isleById(currentIsland);
           if (isle) {
             els.location.textContent = `🏝️ ${isle.name}`;
+            regionUnderground = !!isle.underground;
             // secret realms (portal or hidden-stairway entry) swap to the mystic
-            // track; leaving one back to the normal per-zone rotation — this
-            // also covers the stairway-only realms that have no usePortal() call
+            // track; 地心世界 swaps to the cave track; leaving either back to the
+            // normal per-zone rotation — this also covers the stairway-only
+            // secret realms and the underground cluster, neither of which are
+            // always reached through usePortal()
             try {
               if (typeof MusicManager !== 'undefined') {
-                if (isle.secret) MusicManager.play('mystic');
+                if (isle.underground) MusicManager.play('cave');
+                else if (isle.secret) MusicManager.play('mystic');
                 else MusicManager.playForZone('sky');
               }
             } catch (e) { /* music optional — never block movement */ }
@@ -3282,8 +3448,9 @@ const SkyGame = (() => {
       }
     }
 
-    // fell into the void
-    if (pos.y < SKY_CONFIG.voidY) voidFall();
+    // fell into the void (地心世界 uses a much deeper threshold — its own
+    // islands sit at y -70..-95, well below the surface voidY of -40)
+    if (pos.y < (regionUnderground ? SKY_CONFIG.undergroundVoidY : SKY_CONFIG.voidY)) voidFall();
 
     // apply to mesh
     player.position.set(pos.x, pos.y, pos.z);
@@ -3358,14 +3525,44 @@ const SkyGame = (() => {
     updateCulling();
     watchFps(dt);
     if (particles) particles.rotation.y += dt * 0.004;
-    // deep-space tint as the player climbs toward the galaxy region
-    const gt = Math.min(1, Math.max(0, (pos.y - 70) / 50));
-    if (Math.abs(gt - galaxyBlend) > 0.01) {
-      galaxyBlend = gt;
-      scene.fog.color.copy(fogBase).lerp(fogGalaxy, gt);
-      hemiLight.color.copy(hemiBase).lerp(hemiGalaxy, gt);
-      // darken the sky dome itself (color multiplies its gradient texture)
-      skyDome.material.color.setRGB(1 - gt * 0.55, 1 - gt * 0.62, 1 - gt * 0.3);
+    if (emberParticles) {
+      const arr = emberParticles.geometry.attributes.position.array;
+      for (let i = 1; i < arr.length; i += 3) {
+        arr[i] += dt * 1.4;
+        if (arr[i] > EMBER_Y_HI) arr[i] = EMBER_Y_LO;
+      }
+      emberParticles.geometry.attributes.position.needsUpdate = true;
+    }
+    // altitude atmosphere — deep-space tint climbing toward the galaxy region,
+    // deep-red cave gloom descending toward 地心世界; the two bands never
+    // overlap (galaxy sits at y>70, underground at y<-20) so only one branch
+    // ever actively lerps at a time.
+    const ut = Math.min(1, Math.max(0, (-pos.y - 20) / 40));
+    if (ut > 0.001) {
+      if (Math.abs(ut - undergroundBlend) > 0.01) {
+        undergroundBlend = ut;
+        scene.fog.color.copy(fogBase).lerp(fogUnderground, ut);
+        hemiLight.color.copy(hemiBase).lerp(hemiUnderground, ut);
+        skyDome.material.color.setRGB(1 - ut * 0.75, 1 - ut * 0.88, 1 - ut * 0.92);
+        scene.fog.far = SKY_CONFIG.fogFar + (150 - SKY_CONFIG.fogFar) * ut;
+      }
+    } else {
+      if (undergroundBlend !== -1) {
+        // leaving the underground — restore surface fog-far and force the
+        // galaxy branch below to recompute so it writes the surface colors back
+        undergroundBlend = -1;
+        scene.fog.far = SKY_CONFIG.fogFar;
+        galaxyBlend = -1;
+      }
+      // deep-space tint as the player climbs toward the galaxy region
+      const gt = Math.min(1, Math.max(0, (pos.y - 70) / 50));
+      if (Math.abs(gt - galaxyBlend) > 0.01) {
+        galaxyBlend = gt;
+        scene.fog.color.copy(fogBase).lerp(fogGalaxy, gt);
+        hemiLight.color.copy(hemiBase).lerp(hemiGalaxy, gt);
+        // darken the sky dome itself (color multiplies its gradient texture)
+        skyDome.material.color.setRGB(1 - gt * 0.55, 1 - gt * 0.62, 1 - gt * 0.3);
+      }
     }
     // drifting clouds (cheap: advance a third of them per frame)
     if (cloudMesh) {
@@ -3844,7 +4041,7 @@ const SkyGame = (() => {
     if (first) {
       GameEngine.addXP(Math.round(tier.xp * (perks.xpMult || 1)));
       skyAddGems(tier.gems);
-      GameEngine.recordSkyQuest?.(q.id.startsWith('sqg_'), q.id.startsWith('sqh_'));
+      GameEngine.recordSkyQuest?.(q.id.startsWith('sqg_'), q.id.startsWith('sqh_'), q.id.startsWith('squ_'));
       if (q.type === 'bridge') {
         save.bridgesBuilt[q.id] = true;
         persist();
