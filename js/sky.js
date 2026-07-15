@@ -64,6 +64,7 @@ const SkyGame = (() => {
   let jumpHeld = false;
   const joy = { active: false, pointerId: null, ox: 0, oy: 0, dx: 0, dy: 0 };
   const lookPointers = new Map();
+  let imeToastShown = false; // show the IME hint toast at most once per adventure
 
   // ----- DOM -----
   let els = {};
@@ -299,6 +300,9 @@ const SkyGame = (() => {
           ? worldEvent.shards.filter(s => !s.got && !s.gone).length : undefined,
         falconsLeft: worldEvent.type === 'raid'
           ? worldEvent.falcons.filter(f => !f.dead && !f.gone).length : undefined,
+        word: worldEvent.type === 'meteor' ? worldEvent.word : undefined,
+        spellIdx: worldEvent.type === 'meteor' ? worldEvent.spellIdx : undefined,
+        spellFail: worldEvent.type === 'meteor' ? worldEvent.spellFail : undefined,
       } : null),
       triggerEvent: type => {
         if (!canStartEvent(type)) return false;
@@ -307,7 +311,7 @@ const SkyGame = (() => {
       },
       shardPos: i => {
         const s = worldEvent && worldEvent.type === 'meteor' && worldEvent.shards[i];
-        return s ? { x: s.mesh.position.x, y: s.mesh.position.y, z: s.mesh.position.z } : null;
+        return s ? { x: s.mesh.position.x, y: s.mesh.position.y, z: s.mesh.position.z, letter: s.letter } : null;
       },
       // puzzle-quest hooks (🧩 Wave 3: order 語序踏石 / maze 傳送迷宮)
       puzzle: () => (orderActive
@@ -375,6 +379,7 @@ const SkyGame = (() => {
     worldEvent = null;
     eventTimer = 0;
     eventCooldown = 75;
+    imeToastShown = false;
     // consumable session buffs: one use per adventure
     gliderOn = GameEngine.consumeBuff('glide');
     if (gliderOn) showWorldToast('🪂 滑翔翼啟動！按住跳躍鍵緩慢降落');
@@ -4008,6 +4013,7 @@ const SkyGame = (() => {
   // reuse this for its own eligibility assertions.
   function canStartEvent(type) {
     if (worldEvent || !playing || quizOpen || bossActive || raceActive) return false;
+    if (orderActive || mazeActive) return false; // both use the shared session HUD pill — avoid collisions
     if (type === 'meteor' && regionUnderground) return false; // 地心世界 doesn't get a sky meteor shower
     if (type === 'raid' && totalCleared() < 10) return false; // protect beginners from air raids
     return true;
@@ -4053,29 +4059,68 @@ const SkyGame = (() => {
     return g;
   }
 
+  // pick a short, all-unique-letter easy word for the shower's spelling
+  // mini-game; falls back to a small hardcoded list if the vocab pool ever
+  // comes up empty for the length/uniqueness filter.
+  function pickShardWord() {
+    const pool = vocabPool('easy').filter(e => {
+      if (!/^[A-Za-z]{3,5}$/.test(e.word)) return false;
+      const up = e.word.toUpperCase();
+      return new Set(up).size === up.length;
+    });
+    if (pool.length === 0) {
+      const fallback = ['STAR', 'MOON', 'SKY', 'FIRE', 'WIND'];
+      return fallback[Math.floor(Math.random() * fallback.length)];
+    }
+    return pool[Math.floor(Math.random() * pool.length)].word.toUpperCase();
+  }
+
   function startMeteorShower() {
     const isle = isleById(currentIsland) || isleById(lastGroundIsland) || SKY_ISLANDS[0];
     const groundY = isle.pos[1] + bobOf(isle.id);
+    const word = pickShardWord();
     const shards = [];
-    const N = 8;
+    const N = lowPower() ? word.length + 1 : Math.max(8, word.length + 2);
+    const decoyPool = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').filter(c => !word.includes(c));
+    const decoys = pickN(decoyPool, Math.max(0, N - word.length));
+    // shuffle letters across shard SPAWN INDEX (not spatial position, which
+    // is already randomized below) so collection order ≠ spatial order
+    const letters = shuffled([...word.split(''), ...decoys]);
+    // keep shards spread at least 2× the pickup radius (1.8) apart so a
+    // player standing still next to one shard can never simultaneously
+    // sweep up a neighbor — otherwise the letter-order spelling chain could
+    // register two pickups in the same frame in an unintended order
+    const MIN_SHARD_SPACING = 3.6;
     for (let i = 0; i < N; i++) {
-      const a = Math.random() * Math.PI * 2;
-      const r = Math.random() * Math.max(2, isle.r - 3);
-      const gx = isle.pos[0] + Math.cos(a) * r;
-      const gz = isle.pos[2] + Math.sin(a) * r;
+      let a, r, gx, gz, tries = 0;
+      do {
+        a = Math.random() * Math.PI * 2;
+        r = Math.random() * Math.max(2, isle.r - 3);
+        gx = isle.pos[0] + Math.cos(a) * r;
+        gz = isle.pos[2] + Math.sin(a) * r;
+        tries++;
+      } while (tries < 12 && shards.some(s => Math.hypot(s.gx - gx, s.gz - gz) < MIN_SHARD_SPACING));
       const mesh = makeShardMesh();
       mesh.position.set(gx, groundY + 25, gz);
+      const letter = letters[i] || decoyPool[Math.floor(Math.random() * decoyPool.length)] || 'X';
+      const badge = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: letterTexture(letter), transparent: true, depthWrite: false, fog: false,
+      }));
+      badge.scale.set(0.8, 0.8, 1);
+      badge.position.set(0, 0.9, 0);
+      mesh.add(badge);
       scene.add(mesh);
       shards.push({
         mesh, gx, gz, groundY, state: 'falling', t: 0,
         fallDur: 1.5 + Math.random() * 0.5, got: false, gone: false,
-        spin: Math.random() * 6.28,
+        spin: Math.random() * 6.28, letter,
       });
     }
-    worldEvent = { type: 'meteor', t: 0, dur: 30, shards, collected: 0 };
-    showWorldToast('☄️ 流星雨來了！快撿拾墜落的星屑！');
+    worldEvent = { type: 'meteor', t: 0, dur: 30, shards, collected: 0, word, spellIdx: 0, spellFail: false };
+    showWorldToast(`☄️ 流星雨來了！快按順序拼出「${word}」（字母標在星屑上）！`);
     if (typeof MusicManager !== 'undefined') { try { MusicManager.play('starfall'); } catch (e) { /* optional */ } }
     buildMeteorStreaks();
+    updateMeteorHud();
   }
 
   function updateMeteorShower(dt) {
@@ -4100,6 +4145,26 @@ const SkyGame = (() => {
         SoundManager.playCorrect();
         GameEngine.recordSkyShard?.();
         spawnConfetti(6);
+        // spelling mini-game: collecting shards in the word's letter order
+        // (regardless of which shard/position they came from) pays a bonus;
+        // a wrong-order word letter locks the chain but base rewards continue
+        const L = s.letter;
+        if (ev.word && !ev.spellFail && L) {
+          if (L === ev.word[ev.spellIdx]) {
+            ev.spellIdx++;
+            updateMeteorHud();
+            if (ev.spellIdx === ev.word.length) {
+              skyAddGems(10);
+              showWorldToast(`✨ 拼出 ${ev.word}！額外 +10 💎`);
+              TTSManager.speak(ev.word, 'en-US');
+              GameEngine.recordWord?.(ev.word);
+            }
+          } else if (ev.word.includes(L)) {
+            ev.spellFail = true;
+            showWorldToast('哎呀順序錯了！星屑獎勵照拿，下次再拼拼看');
+            updateMeteorHud();
+          }
+        }
       }
     }
     updateMeteorStreaks(dt);
@@ -4110,6 +4175,21 @@ const SkyGame = (() => {
       return;
     }
     if (ev.t >= ev.dur) endWorldEvent(); // uncollected shards fade via despawnEventVisuals
+  }
+
+  // shared session HUD pill (see ensureCombatHud) — mirrors updateOrderHud/
+  // updateMazeHud but only touches it when neither of those puzzle sessions
+  // owns it (canStartEvent already prevents a NEW meteor shower from
+  // starting while one is active; this guards the reverse ordering too).
+  function updateMeteorHud() {
+    ensureCombatHud();
+    if (orderActive || mazeActive) return;
+    const ev = worldEvent;
+    if (!ev || ev.type !== 'meteor' || !ev.word) { combatHud.session.style.display = 'none'; return; }
+    combatHud.session.style.display = '';
+    combatHud.session.textContent = ev.spellFail
+      ? '☄️ 拼字失敗 ✗（獎勵照拿）'
+      : `☄️ 拼出 ${ev.word}：` + ev.word.split('').map((c, i) => c + (i < ev.spellIdx ? '✓' : '─')).join(' ');
   }
 
   // decorative meteor streaks crossing the sky dome (cheap: 3 sprites, no new draw calls per streak)
@@ -4218,6 +4298,7 @@ const SkyGame = (() => {
     despawnEventVisuals(worldEvent);
     worldEvent = null;
     playRegionMusic();
+    updateMeteorHud();
   }
 
   function updateWorldEvent(dt) {
@@ -4726,6 +4807,17 @@ const SkyGame = (() => {
     return els.zone && els.zone.classList.contains('active');
   }
 
+  // release every held input — used when the window/tab loses the ability
+  // to receive the matching keyup/pointerup (right-click context menu,
+  // alt-tab/blur, tab hidden) so movement doesn't get stuck "on" forever.
+  function releaseAllInputs() {
+    keys.f = 0; keys.b = 0; keys.l = 0; keys.r = 0;
+    keys.sprint = false;
+    jumpHeld = false;
+    joy.active = false; joy.dx = 0; joy.dy = 0;
+    lookPointers.clear();
+  }
+
   function setupKeyboard() {
     window.addEventListener('keydown', e => {
       if (!playing || !zoneActive()) return;
@@ -4733,6 +4825,15 @@ const SkyGame = (() => {
       if (quizOpen) {
         if (e.code === 'Escape') closeQuiz();
         return;
+      }
+      // IME (Chinese/Japanese/Korean input method) composition steals WASD —
+      // detect it and nudge the player to switch back to English, but keep
+      // falling into the switch below so movement still works once it does.
+      if (e.key === 'Process' || e.keyCode === 229) {
+        if (!imeToastShown) {
+          imeToastShown = true;
+          showWorldToast('⌨️ 偵測到中文輸入法：按 Shift 切換成英文，WASD 才會動！也可以用方向鍵移動');
+        }
       }
       switch (e.code) {
         case 'KeyW': case 'ArrowUp': keys.f = 1; break;
@@ -4760,6 +4861,12 @@ const SkyGame = (() => {
         case 'ShiftLeft': case 'ShiftRight': keys.sprint = false; break;
         case 'Space': jumpHeld = false; break;
       }
+    });
+    // tab loses focus / goes to the background → release everything so a
+    // held key/drag doesn't keep driving the player after the user left
+    window.addEventListener('blur', releaseAllInputs);
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) releaseAllInputs();
     });
   }
 
@@ -5234,7 +5341,19 @@ const SkyGame = (() => {
   function setupPointerControls() {
     const el = els.wrap;
 
+    // right-click drag-cancel: no matching pointerup ever arrives once the
+    // browser's context menu takes over, so the look-drag/joystick state
+    // would otherwise stay "stuck" — suppress the menu and release inputs
+    el.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      releaseAllInputs();
+    });
+
     el.addEventListener('pointerdown', e => {
+      // right mouse button drives the OS/browser context menu, not the
+      // camera drag — bail before touching joy/lookPointers state so its
+      // eventual contextmenu (and no matching pointerup) can't leave input stuck
+      if (e.pointerType === 'mouse' && e.button === 2) return;
       if (!playing) return;
       // clicks on overlay UI (quiz card, buttons) must reach their targets —
       // capturing them here would swallow the click event
