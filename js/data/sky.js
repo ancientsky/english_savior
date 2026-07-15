@@ -175,7 +175,7 @@ const SKY_SWITCHES = [
 ];
 
 // ===== Quests =====
-// type: chest | gate | npc | listen | pillars | runes | arena | bridge | race | boss
+// type: chest | gate | npc | listen | pillars | runes | arena | bridge | race | boss | order | maze
 // diff: easy | medium | hard | boss  (reward tier)
 // n: questions / rounds / pairs / mobs / rings / letters-words, by type
 // dx/dz: quest object position relative to the island centre
@@ -345,6 +345,20 @@ const SKY_QUESTS = [
     intro: '沿著地核聖殿的熾熱光環全速穿梭，挑戰你的極限！' },
   { id: 'squ_core_boss', island: 'isle_und_core', type: 'boss', name: '熔岩核心巨獸', diff: 'boss', n: 12, dx: 0, dz: 0, lock: 40,
     intro: '沉睡在地心最深處的熔岩核心巨獸甦醒了！這是地心世界最終的試煉！' },
+
+  // ===== 語序踏石 & 傳送迷宮（新謎題玩法：order = 依中文意思踏對英文語序／maze = 4 道傳送門問答謎宮）=====
+  { id: 'sq_order_meadow', island: 'isle_meadow', type: 'order', name: '草原語序踏石', diff: 'medium', n: 3, dx: 9, dz: -9, lock: 8,
+    intro: '發光的踏石上飄著單字，照著中文意思，依序踏上正確的英文語序吧！' },
+  { id: 'sq_maze_ruins', island: 'isle_ruins', type: 'maze', name: '遺跡傳送迷宮', diff: 'medium', n: 4, dx: -12, dz: -8, lock: 14,
+    intro: '四座古老的傳送門排成謎宮，答對才能前進，答錯會被彈回起點！' },
+  { id: 'sqg_order_aurora', island: 'isle_gx_aurora', type: 'order', name: '極光語序踏石', diff: 'hard', n: 3, dx: 2, dz: 10, lock: 24,
+    intro: '極光下的踏石飄浮著單字，依照中文意思排出正確的語序！' },
+  { id: 'sqg_maze_dust', island: 'isle_gx_dust', type: 'maze', name: '星塵傳送迷宮', diff: 'hard', n: 4, dx: -2, dz: -6, lock: 26,
+    intro: '星塵沙洲上的傳送門謎宮，答對才能前進，答錯會被彈回起點！' },
+  { id: 'squ_order_bones', island: 'isle_und_bones', type: 'order', name: '龍骨語序踏石', diff: 'hard', n: 3, dx: 2, dz: 9, lock: 32,
+    intro: '龍骨窟裡的踏石刻著單字，依照中文意思排出正確的語序！' },
+  { id: 'squ_maze_core', island: 'isle_und_core', type: 'maze', name: '地核傳送迷宮', diff: 'hard', n: 4, dx: -10, dz: -8, lock: 38,
+    intro: '地核聖殿裡的傳送門謎宮，答對才能前進，答錯會被彈回起點！' },
 ];
 
 // ===== Mobs =====

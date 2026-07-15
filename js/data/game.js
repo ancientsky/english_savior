@@ -46,6 +46,7 @@ const ACHIEVEMENTS = [
   { id: 'sky_core_king', name: '地心征服者', desc: '完成全部 8 個地心任務', icon: '🔥', pts: 40, hidden: true, condition: s => (s.skyUndergroundQuests || 0) >= 8 },
   { id: 'sky_shards', name: '流星收藏家', desc: '在流星雨中撿到 20 顆星屑', icon: '☄️', pts: 20, condition: s => (s.skyShards || 0) >= 20 },
   { id: 'sky_raid_guard', name: '空襲守護者', desc: '擊退 3 次風暴隼空襲', icon: '🛡️', pts: 20, hidden: true, condition: s => (s.skyRaids || 0) >= 3 },
+  { id: 'sky_puzzle_master', name: '解謎大師', desc: '完成 6 個天空之城解謎任務', icon: '🧩', pts: 20, condition: s => (s.skyPuzzles || 0) >= 6 },
 ];
 
 const DAILY_QUESTS = [

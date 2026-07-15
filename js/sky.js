@@ -278,6 +278,16 @@ const SkyGame = (() => {
         const s = worldEvent && worldEvent.type === 'meteor' && worldEvent.shards[i];
         return s ? { x: s.mesh.position.x, y: s.mesh.position.y, z: s.mesh.position.z } : null;
       },
+      // puzzle-quest hooks (🧩 Wave 3: order 語序踏石 / maze 傳送迷宮)
+      puzzle: () => (orderActive
+        ? {
+          type: 'order', idx: orderActive.idx, expected: orderActive.words.slice(),
+          done: orderActive.done, n: orderActive.q.n,
+          stones: orderActive.stones.map(s => ({ x: s.x, z: s.z, word: s.word, done: s.done })),
+        }
+        : mazeActive
+          ? { type: 'maze', idx: mazeActive.idx, nodes: mazeActive.nodes.map(n => ({ x: n.x, z: n.z })) }
+          : null),
     };
   }
 
@@ -1472,7 +1482,7 @@ const SkyGame = (() => {
     boss: { xp: 150, gems: 25, ans: 16 },
   };
   const LIVE_TYPES = new Set(['chest', 'gate', 'npc', 'listen', 'pillars',
-    'runes', 'arena', 'bridge', 'race', 'boss', 'portal']);
+    'runes', 'arena', 'bridge', 'race', 'boss', 'portal', 'order', 'maze']);
 
   const interactables = [];    // { q, x, z, isle, marker }
   const markerList = [];       // bobbing quest markers
@@ -1640,6 +1650,31 @@ const SkyGame = (() => {
         altar.position.y = 0.5;
         altar.castShadow = true;
         g.add(altar);
+        break;
+      }
+      case 'order': {
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(1.3, 0.14, 8, 16), matOf(0x8a8270));
+        ring.rotation.x = Math.PI / 2;
+        ring.position.y = 0.2;
+        g.add(ring);
+        [0, 1, 2].forEach(i => {
+          const a = (i / 3) * Math.PI * 2;
+          const stone = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.34, 0.28, 6), matOf(0xb08fff, 0x3a1a7a));
+          stone.position.set(Math.cos(a) * 1.3, 0.24, Math.sin(a) * 1.3);
+          g.add(stone);
+        });
+        break;
+      }
+      case 'maze': {
+        [-0.8, 0.8].forEach(x => {
+          const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, 2, 6), matOf(0x44305a));
+          pillar.position.set(x, 1, 0);
+          pillar.castShadow = true;
+          g.add(pillar);
+        });
+        const arch = new THREE.Mesh(new THREE.TorusGeometry(0.95, 0.16, 8, 16, Math.PI), matOf(0xb06ae8, 0x5a2a9a));
+        arch.position.set(0, 2, 0);
+        g.add(arch);
         break;
       }
     }
@@ -2182,6 +2217,9 @@ const SkyGame = (() => {
   let arenaActive = null;      // { q, remaining }
   let raceActive = null;       // { q, idx, time, rings, sinceQ }
   let runeActive = null;       // { q, wordIdx, entry, orbs, collected }
+  let orderActive = null;      // { q, entry, words, sentence, zh, stones, idx, done, standingOn, usedTexts }
+  let mazeActive = null;       // { q, startX, startZ, isleY, nodes, idx, chest }
+  let SENTENCE_POOL = null;    // cached order-quest word-order sentence pool
   let bossActive = null;       // { q, mob, phase, sinceSummon, shockT, warnT, waveR, waveHit }
   let bossParts = null;
   let shockRing = null, warnRing = null;
@@ -2350,6 +2388,8 @@ const SkyGame = (() => {
   function goHome() {
     if (!playing || quizOpen) return;
     if (raceActive) cancelRace('🏁 競速取消了');
+    if (orderActive) cancelOrder('');
+    if (mazeActive) cancelMaze('');
     if (arenaActive) {
       despawnQuestMobs(arenaActive.q.id);
       arenaActive = null;
@@ -2372,6 +2412,8 @@ const SkyGame = (() => {
     }
     if (bossActive) resetBoss();
     if (raceActive) cancelRace('');
+    if (orderActive) cancelOrder('');
+    if (mazeActive) cancelMaze('');
     if (worldEvent) endWorldEvent(); // KO during a raid/meteor shower ends it quietly (no reward)
     hearts = maxHearts();
     const dawn = SKY_ISLANDS[0];
@@ -2935,6 +2977,388 @@ const SkyGame = (() => {
     });
   }
 
+  // ---- order (語序踏石: step on floating word-stones in correct word order) ----
+
+  // pool of short (3-6 word) EMPIRE_DIALOGUES/EMPIRE_LIFE answer sentences with
+  // unique, letters-only tokens — safe to scramble into stepping stones without
+  // ambiguity. Built once and cached (the underlying data arrays never change
+  // at runtime).
+  function sentencePool() {
+    if (SENTENCE_POOL) return SENTENCE_POOL;
+    const raw = [];
+    ['easy', 'medium', 'hard'].forEach(d => {
+      (EMPIRE_DIALOGUES[d] || []).forEach(e => raw.push({ text: e.a, zh: e.qZh }));
+      (EMPIRE_LIFE[d] || []).forEach(e => raw.push({ text: e.a, zh: e.scene }));
+    });
+    const seen = new Set();
+    const pool = [];
+    raw.forEach(({ text, zh }) => {
+      if (!text || seen.has(text)) return;
+      const words = text.split(/\s+/)
+        .map(w => w.replace(/^[^A-Za-z']+|[^A-Za-z']+$/g, ''))
+        .filter(Boolean);
+      if (words.length < 3 || words.length > 6) return;
+      if (!words.every(w => /^[A-Za-z']+$/.test(w))) return;
+      const lower = words.map(w => w.toLowerCase());
+      if (new Set(lower).size !== lower.length) return; // no duplicate tokens (ambiguous order)
+      seen.add(text);
+      pool.push({ text, words, zh: zh || '' });
+    });
+    SENTENCE_POOL = pool;
+    return pool;
+  }
+
+  // rounded word-plaque texture for the floating sprite above each stone
+  function wordTexture(text) {
+    const w = Math.max(150, text.length * 30 + 46);
+    const h = 84;
+    const cv = document.createElement('canvas');
+    cv.width = w; cv.height = h;
+    const ctx = cv.getContext('2d');
+    const r = 18;
+    ctx.fillStyle = 'rgba(45, 30, 75, 0.9)';
+    ctx.beginPath();
+    ctx.moveTo(r, 0);
+    ctx.lineTo(w - r, 0);
+    ctx.quadraticCurveTo(w, 0, w, r);
+    ctx.lineTo(w, h - r);
+    ctx.quadraticCurveTo(w, h, w - r, h);
+    ctx.lineTo(r, h);
+    ctx.quadraticCurveTo(0, h, 0, h - r);
+    ctx.lineTo(0, r);
+    ctx.quadraticCurveTo(0, 0, r, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#d8b4ff';
+    ctx.lineWidth = 4;
+    ctx.stroke();
+    ctx.fillStyle = '#ffe9a8';
+    ctx.font = 'bold 38px "Noto Sans TC", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, w / 2, h / 2 + 2);
+    return new THREE.CanvasTexture(cv);
+  }
+
+  function pickOrderSentence() {
+    const pool = sentencePool();
+    const avail = pool.filter(p => !orderActive.usedTexts.has(p.text));
+    const list = avail.length ? avail : pool;
+    return list[Math.floor(Math.random() * list.length)];
+  }
+
+  function removeOrderStoneMeshes() {
+    if (!orderActive) return;
+    orderActive.stones.forEach(s => { scene.remove(s.mesh); scene.remove(s.sprite); });
+    orderActive.stones = [];
+  }
+
+  function buildOrderSentence() {
+    const oa = orderActive;
+    if (!oa) return;
+    const q = oa.q;
+    const isle = isleById(q.island);
+    removeOrderStoneMeshes();
+    const entry = pickOrderSentence();
+    oa.usedTexts.add(entry.text);
+    oa.entry = entry;
+    oa.words = entry.words.slice();
+    oa.sentence = entry.text;
+    oa.zh = entry.zh;
+    oa.idx = 0;
+    oa.standingOn = null;
+    const baseX = isle.pos[0] + q.dx, baseZ = isle.pos[2] + q.dz;
+    const topY = isle.pos[1] + 0.15;
+    const n = oa.words.length;
+    const order = shuffled(oa.words.map((_, i) => i));
+    const stoneGeo = GEO.orderStone || (GEO.orderStone = new THREE.CylinderGeometry(0.85, 0.95, 0.3, 10));
+    const stones = [];
+    const rr = 2 + n * 0.28;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2;
+      const x = baseX + Math.cos(a) * rr;
+      const z = baseZ + Math.sin(a) * rr;
+      const word = oa.words[order[i]];
+      const mesh = new THREE.Mesh(stoneGeo, new THREE.MeshLambertMaterial({ color: 0x8a8270 }));
+      mesh.position.set(x, topY, z);
+      scene.add(mesh);
+      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: wordTexture(word), transparent: true }));
+      sprite.scale.set(Math.max(1.5, word.length * 0.3 + 0.5), 0.85, 1);
+      sprite.position.set(x, topY + 1.3, z);
+      scene.add(sprite);
+      stones.push({ mesh, sprite, word, x, z, done: false });
+    }
+    oa.stones = stones;
+    showWorldToast(`🪨 中文意思：${entry.zh}　依序踏上正確的英文語序！(${oa.done + 1}/${q.n})`);
+    updateOrderHud();
+  }
+
+  function startOrder(q) {
+    if (orderActive && orderActive.q.id === q.id) {
+      showWorldToast(`🪨 語序踏石進行中！中文意思：${orderActive.zh}`);
+      return;
+    }
+    if (orderActive) cancelOrder('');
+    if (mazeActive) cancelMaze('');
+    if (raceActive) cancelRace('');
+    orderActive = {
+      q, entry: null, words: [], sentence: '', zh: '',
+      stones: [], idx: 0, done: 0, standingOn: null, usedTexts: new Set(),
+    };
+    buildOrderSentence();
+    SoundManager.playAchievement();
+  }
+
+  function cancelOrder(msg) {
+    if (!orderActive) return;
+    removeOrderStoneMeshes();
+    orderActive = null;
+    updateOrderHud();
+    if (msg) showWorldToast(msg);
+  }
+
+  function resetOrderStones() {
+    const oa = orderActive;
+    oa.idx = 0;
+    oa.stones.forEach(s => {
+      s.done = false;
+      s.mesh.material.color.setHex(0x8a8270);
+      s.mesh.material.emissive = new THREE.Color(0x000000);
+    });
+    updateOrderHud();
+  }
+
+  function handleOrderStep(s) {
+    const oa = orderActive;
+    const expected = oa.words[oa.idx];
+    if (s.word === expected) {
+      s.done = true;
+      s.mesh.material.color.setHex(0x4ade80);
+      s.mesh.material.emissive = new THREE.Color(0x1a5a2a);
+      SoundManager.playCorrect();
+      oa.idx++;
+      updateOrderHud();
+      if (oa.idx >= oa.words.length) {
+        if (typeof TTSManager !== 'undefined' && TTSManager) TTSManager.speak(oa.sentence, 'en-US');
+        oa.done++;
+        spawnConfetti(12);
+        if (oa.done >= oa.q.n) {
+          showWorldToast(`✨ 語序全對！(${oa.done}/${oa.q.n})`);
+          const q = oa.q;
+          setTimeout(() => {
+            removeOrderStoneMeshes();
+            orderActive = null;
+            updateOrderHud();
+            finishQuestDirect(q);
+          }, 1000);
+        } else {
+          showWorldToast(`✨ 完成一句！(${oa.done}/${oa.q.n})`);
+          setTimeout(buildOrderSentence, 1100);
+        }
+      }
+    } else {
+      SoundManager.playWrong();
+      showWorldToast('🪨 再想想語序！');
+      resetOrderStones();
+    }
+  }
+
+  function updateOrder() {
+    if (!orderActive || quizOpen) return;
+    const isle = isleById(orderActive.q.island);
+    const topY = isle.pos[1] + 0.15;
+    let onStone = null;
+    for (const s of orderActive.stones) {
+      if (s.done) continue;
+      const d = Math.hypot(pos.x - s.x, pos.z - s.z);
+      if (d < 1.6 && Math.abs(pos.y - topY) < 2.4) { onStone = s; break; }
+    }
+    if (onStone) {
+      if (orderActive.standingOn !== onStone) {
+        orderActive.standingOn = onStone;
+        handleOrderStep(onStone);
+      }
+    } else {
+      orderActive.standingOn = null;
+    }
+  }
+
+  function updateOrderHud() {
+    ensureCombatHud();
+    if (!orderActive) { if (!mazeActive) combatHud.session.style.display = 'none'; return; }
+    combatHud.session.style.display = '';
+    combatHud.session.textContent =
+      `🪨 中文意思：${orderActive.zh}　踏對 ${orderActive.idx}/${orderActive.words.length}　📜 ${orderActive.done}/${orderActive.q.n}`;
+  }
+
+  // ---- maze (傳送迷宮: answer a clue at each of 4 portal-gate nodes to advance) ----
+  function makeMazeArch() {
+    const g = new THREE.Group();
+    [-0.7, 0.7].forEach(x => {
+      const p = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 1.7, 6),
+        new THREE.MeshLambertMaterial({ color: 0x44305a }));
+      p.position.set(x, 0.85, 0);
+      g.add(p);
+    });
+    const arch = new THREE.Mesh(new THREE.TorusGeometry(0.8, 0.13, 8, 16, Math.PI),
+      new THREE.MeshLambertMaterial({ color: 0xb06ae8, emissive: 0x5a2a9a }));
+    arch.position.set(0, 1.7, 0);
+    g.add(arch);
+    return g;
+  }
+
+  function buildMazeNodes(q) {
+    const isle = isleById(q.island);
+    const baseX = isle.pos[0] + q.dx, baseZ = isle.pos[2] + q.dz;
+    const nodes = [];
+    for (let i = 0; i < 4; i++) {
+      const a = i * (Math.PI / 2) + 0.5;
+      const rr = 1.6 + i * 1.0;
+      const x = baseX + Math.cos(a) * rr;
+      const z = baseZ + Math.sin(a) * rr;
+      const mesh = makeMazeArch();
+      mesh.position.set(x, isle.pos[1], z);
+      scene.add(mesh);
+      nodes.push({ mesh, x, z });
+    }
+    return { nodes, baseX, baseZ, isleY: isle.pos[1] };
+  }
+
+  function startMaze(q) {
+    if (mazeActive && mazeActive.q.id === q.id) {
+      showWorldToast(`🌀 傳送迷宮進行中！前往第 ${mazeActive.idx + 1}/4 個傳送門！`);
+      return;
+    }
+    if (mazeActive) cancelMaze('');
+    if (orderActive) cancelOrder('');
+    if (raceActive) cancelRace('');
+    const isle = isleById(q.island);
+    const { nodes, baseX, baseZ, isleY } = buildMazeNodes(q);
+    mazeActive = { q, startX: baseX, startZ: baseZ, isleY, nodes, idx: 0, chest: null };
+    els.flash.classList.add('on');
+    setTimeout(() => els.flash.classList.remove('on'), 420);
+    pos.x = baseX; pos.z = baseZ; pos.y = isleY + bobOf(isle.id) + 2; vy = 0;
+    showWorldToast('🌀 傳送迷宮：走到發光的傳送門前回答問題，答對前進、答錯彈回起點！');
+    SoundManager.playAchievement();
+    updateMazeHud();
+  }
+
+  function clearMaze() {
+    if (!mazeActive) return;
+    mazeActive.nodes.forEach(n => scene.remove(n.mesh));
+    if (mazeActive.chest) scene.remove(mazeActive.chest);
+    mazeActive = null;
+    updateMazeHud();
+  }
+
+  function cancelMaze(msg) {
+    clearMaze();
+    if (msg) showWorldToast(msg);
+  }
+
+  function mazeWarpTo(x, z) {
+    const isle = isleById(mazeActive.q.island);
+    els.flash.classList.add('on');
+    setTimeout(() => els.flash.classList.remove('on'), 420);
+    pos.x = x; pos.z = z; pos.y = mazeActive.isleY + bobOf(isle.id) + 2; vy = 0;
+  }
+
+  function mazeAdvance() {
+    if (!mazeActive) return;
+    mazeActive.idx++;
+    if (mazeActive.idx >= mazeActive.nodes.length) {
+      mazeSpawnChest();
+      return;
+    }
+    const next = mazeActive.nodes[mazeActive.idx];
+    mazeWarpTo(next.x, next.z);
+    showWorldToast(`🌀 傳送門開啟！前進到第 ${mazeActive.idx + 1}/4 關！`);
+    SoundManager.playCorrect();
+    updateMazeHud();
+  }
+
+  function mazeResetToStart() {
+    if (!mazeActive) return;
+    mazeActive.idx = 0;
+    mazeWarpTo(mazeActive.startX, mazeActive.startZ);
+    showWorldToast('💫 答錯了！傳送門把你彈回起點了！');
+    updateMazeHud();
+  }
+
+  function mazeSpawnChest() {
+    const last = mazeActive.nodes[mazeActive.nodes.length - 1];
+    const chest = makeQuestVisual({ type: 'chest' });
+    chest.position.set(last.x, mazeActive.isleY, last.z);
+    scene.add(chest);
+    mazeActive.chest = chest;
+    spawnConfetti(24);
+    showWorldToast('📦 四座傳送門都通過了！寶箱出現了！');
+    SoundManager.playQuestComplete();
+    const q = mazeActive.q;
+    updateMazeHud();
+    setTimeout(() => { clearMaze(); finishQuestDirect(q); }, 1200);
+  }
+
+  function onMazeCorrect(word) {
+    awardAnswer(!!word, word);
+    quiz.fb.textContent = '✨ 答對了！傳送門開啟！';
+    quiz.fb.className = 'aw-quiz-feedback good';
+    setTimeout(() => { closeQuiz(); mazeAdvance(); }, 700);
+  }
+
+  function onMazeWrong() {
+    quiz.fb.textContent = '💫 答錯了！傳送門要把你彈回起點了！';
+    quiz.fb.className = 'aw-quiz-feedback';
+    setTimeout(() => { closeQuiz(); mazeResetToStart(); }, 900);
+  }
+
+  function openMazeClue() {
+    const q = mazeActive.q;
+    ensureQuizDom();
+    active = { q: { ...q, type: 'chest' }, replay: isCleared(q), wrongThis: false, anyWrong: false, step: 0, ttsText: null, mazeBonus: true };
+    quizOpen = true;
+    GameEngine.setDeferLevelUp(true);
+    quiz.root.classList.add('on');
+    quiz.name.textContent = `🌀 傳送門謎題（第 ${mazeActive.idx + 1}/4 關）`;
+    quiz.prog.textContent = '';
+    quiz.npc.style.display = 'none';
+    quiz.tts.style.display = 'none';
+    quiz.fb.textContent = '';
+    if (Math.random() < 0.5) {
+      const entry = GRAMMAR_DATA[Math.floor(Math.random() * GRAMMAR_DATA.length)];
+      const options = shuffled(entry.options.slice());
+      quiz.prompt.innerHTML = entry.sentence.replace(/_+/g, '<span class="aw-blank">____</span>');
+      quiz.zh.textContent = entry.translation || '';
+      renderOptions(options, options.indexOf(entry.blank), () => onMazeCorrect(), null, () => onMazeWrong());
+    } else {
+      const pool = vocabPool(q.diff);
+      const entry = pool[Math.floor(Math.random() * pool.length)];
+      const distract = pickN(pool.filter(e => e.word !== entry.word), 3).map(e => e.word);
+      const options = shuffled([entry.word, ...distract]);
+      quiz.prompt.innerHTML = `${entry.hint} ${entry.sentence.replace(/_+/g, '<span class="aw-blank">____</span>')}`;
+      quiz.zh.innerHTML = zhPretty(entry.zh);
+      renderOptions(options, options.indexOf(entry.word), () => onMazeCorrect(entry.word), null, () => onMazeWrong());
+    }
+  }
+
+  function updateMaze(dt) {
+    if (!mazeActive || quizOpen) return;
+    const node = mazeActive.nodes[mazeActive.idx];
+    if (!node) return;
+    node.mesh.rotation.y += dt * 1.4;
+    const d = Math.hypot(pos.x - node.x, pos.z - node.z);
+    if (d < 2 && Math.abs(pos.y - mazeActive.isleY) < 4) {
+      openMazeClue();
+    }
+  }
+
+  function updateMazeHud() {
+    ensureCombatHud();
+    if (!mazeActive) { if (!orderActive) combatHud.session.style.display = 'none'; return; }
+    combatHud.session.style.display = '';
+    combatHud.session.textContent = `🌀 傳送迷宮：第 ${mazeActive.idx + 1}/4 個傳送門`;
+  }
+
   // ---- race ----
   function startRace(q) {
     if (raceActive) { showWorldToast('🏁 比賽進行中！穿過金色的環！'); return; }
@@ -3052,11 +3476,18 @@ const SkyGame = (() => {
     race.className = 'aw-race';
     race.style.display = 'none';
     els.wrap.appendChild(race);
+    // shared HUD pill for the 'order'/'maze' puzzle sessions (mutually
+    // exclusive with each other and with race, so one div covers both)
+    const session = document.createElement('div');
+    session.className = 'aw-race';
+    session.style.display = 'none';
+    els.wrap.appendChild(session);
     combatHud = {
       bossBar: bar,
       bossLabel: bar.querySelector('#sky-boss-label'),
       bossFill: bar.querySelector('#sky-boss-fill'),
       race,
+      session,
     };
   }
 
@@ -3932,6 +4363,8 @@ const SkyGame = (() => {
     updateBoss(dt);
     updateRace(dt);
     updateRunePickup();
+    updateOrder();
+    updateMaze(dt);
     checkSecretDiscovery();
     updateWorldEvent(dt);
     // slowly regain hearts out of combat
@@ -4081,10 +4514,14 @@ const SkyGame = (() => {
       return;
     }
     if (raceActive && raceActive.q.id !== q.id) cancelRace('🏁 競速取消了');
+    if (orderActive && orderActive.q.id !== q.id) cancelOrder('🪨 語序踏石取消了');
+    if (mazeActive && mazeActive.q.id !== q.id) cancelMaze('🌀 傳送迷宮取消了');
     switch (q.type) {
       case 'arena': startArena(q); return;
       case 'race': startRace(q); return;
       case 'runes': startRunes(q); return;
+      case 'order': startOrder(q); return;
+      case 'maze': startMaze(q); return;
       case 'boss':
         if (bossActive) engageBoss();
         else startBoss(q);
@@ -4482,6 +4919,7 @@ const SkyGame = (() => {
         GameEngine.recordSkyBoss?.();
         if (q.id === 'sqh_temple_boss') GameEngine.recordSkySecretBoss?.();
       }
+      if (q.type === 'order' || q.type === 'maze') GameEngine.recordSkyPuzzle?.();
     }
     SoundManager.playQuestComplete();
     if (first) spawnConfetti(q.type === 'boss' ? 70 : 36);
