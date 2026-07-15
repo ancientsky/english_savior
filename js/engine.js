@@ -163,6 +163,9 @@ const BUFF_META = {
   fire_bomb: { icon: '🔥', name: '火焰彈' },
   wall_repair: { icon: '🧱', name: '城牆工事' },
   freeze_trap: { icon: '❄️', name: '冰凍陷阱' },
+  lightning_staff: { icon: '⚡', name: '雷霆法杖' },
+  bubble_shield: { icon: '🫧', name: '泡泡護罩' },
+  cloud_mount: { icon: '☁️', name: '飛天雲' },
 };
 
 const GameEngine = (() => {
@@ -221,6 +224,11 @@ const GameEngine = (() => {
       skySecretFound: 0,
       skySecretBoss: false,
       skySwitches: 0,
+      skyUndergroundQuests: 0,
+      skyShards: 0,
+      skyRaids: 0,
+      skyPuzzles: 0,
+      skyItemUses: 0,
       // history
       learnedWordsList: [],
       // shop system
@@ -531,10 +539,11 @@ const GameEngine = (() => {
     checkAchievements();
   }
 
-  function recordSkyQuest(isGalaxy, isSecret) {
+  function recordSkyQuest(isGalaxy, isSecret, isUnderground) {
     state.skyQuests = (state.skyQuests || 0) + 1;
     if (isGalaxy) state.skyGalaxyQuests = (state.skyGalaxyQuests || 0) + 1;
     if (isSecret) state.skySecretQuests = (state.skySecretQuests || 0) + 1;
+    if (isUnderground) state.skyUndergroundQuests = (state.skyUndergroundQuests || 0) + 1;
     save();
     checkAchievements();
   }
@@ -565,6 +574,30 @@ const GameEngine = (() => {
 
   function recordSkySwitch() {
     state.skySwitches = (state.skySwitches || 0) + 1;
+    save();
+    checkAchievements();
+  }
+
+  function recordSkyShard() {
+    state.skyShards = (state.skyShards || 0) + 1;
+    save();
+    checkAchievements();
+  }
+
+  function recordSkyRaid() {
+    state.skyRaids = (state.skyRaids || 0) + 1;
+    save();
+    checkAchievements();
+  }
+
+  function recordSkyPuzzle() {
+    state.skyPuzzles = (state.skyPuzzles || 0) + 1;
+    save();
+    checkAchievements();
+  }
+
+  function recordSkyItemUse() {
+    state.skyItemUses = (state.skyItemUses || 0) + 1;
     save();
     checkAchievements();
   }
@@ -1293,6 +1326,7 @@ const GameEngine = (() => {
     recordRpgTalk, recordRpgChapter,
     recordSkyQuest, recordSkyAnswer, recordSkyBoss,
     recordSkySecretFound, recordSkySecretBoss, recordSkySwitch,
+    recordSkyShard, recordSkyRaid, recordSkyPuzzle, recordSkyItemUse,
     recordPerfectGrammar, recordStreak,
     updateHUD, updateStats, renderItemBar,
     showInventory, showAchievements, showToast,

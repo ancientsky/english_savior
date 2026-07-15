@@ -14,6 +14,7 @@ const SKY_CONFIG = {
   fogNear: 120,
   fogFar: 320,
   voidY: -40,          // absolute fall-death height
+  undergroundVoidY: -160, // fall-death height while inside 地心世界 (much deeper — the cluster itself sits at y -70..-95)
   maxHearts: 5,
 };
 
@@ -59,6 +60,12 @@ const SKY_ISLANDS = [
   { id: 'isle_sc_vault', name: '熔岩密室', type: 'vault', pos: [300, 35, -110], r: 16, seed: 34, secret: true },
   { id: 'isle_sc_tree', name: '古樹之心', type: 'tree', pos: [-200, 44, -70], r: 19, seed: 35, secret: true },
   { id: 'isle_sc_relic', name: '雲上遺跡', type: 'relic', pos: [-140, 65, 80], r: 17, seed: 36, secret: true },
+  // ===== 地心世界 (underground region — entered via a volcano-crater portal on 熔岩浮島) =====
+  { id: 'isle_und_hub', name: '地心裂谷', type: 'cavefloor', pos: [-460, -70, 340], r: 16, seed: 37, underground: true },
+  { id: 'isle_und_cavern', name: '水晶洞窟海', type: 'deepcrystal', pos: [-500, -78, 380], r: 19, seed: 38, underground: true },
+  { id: 'isle_und_magma', name: '岩漿之海', type: 'magma', pos: [-420, -85, 400], r: 20, seed: 39, underground: true },
+  { id: 'isle_und_bones', name: '遠古龍骨窟', type: 'bonecave', pos: [-520, -88, 440], r: 18, seed: 40, underground: true },
+  { id: 'isle_und_core', name: '地核聖殿', type: 'coretemple', pos: [-460, -95, 460], r: 21, seed: 41, underground: true },
 ];
 
 // Bridges / stepping stones between islands. style: plank | stone | stepstones
@@ -99,6 +106,12 @@ const SKY_BRIDGES = [
   { from: 'isle_lava', to: 'isle_sc_vault', style: 'stepstones', switch: 'sw_vault' },
   { from: 'isle_forest', to: 'isle_sc_tree', style: 'stepstones', switch: 'sw_tree' },
   { from: 'isle_ruins', to: 'isle_sc_relic', style: 'stepstones', switch: 'sw_relic' },
+  // ===== 地心世界內部路網（一路連通 + 一條樞紐↔岩漿之海的捷徑）=====
+  { from: 'isle_und_hub', to: 'isle_und_cavern', style: 'stepstones' },
+  { from: 'isle_und_cavern', to: 'isle_und_magma', style: 'stepstones' },
+  { from: 'isle_und_magma', to: 'isle_und_bones', style: 'stepstones' },
+  { from: 'isle_und_bones', to: 'isle_und_core', style: 'stepstones' },
+  { from: 'isle_und_hub', to: 'isle_und_magma', style: 'stepstones' },
 ];
 
 // Portals: special interactables that teleport between regions.
@@ -126,6 +139,12 @@ const SKY_PORTALS = [
     name: '星影神殿入口', secret: true },
   { id: 'portal_sc_temple_out', island: 'isle_sc_temple', dx: 0, dz: -18, to: 'isle_gx_moon',
     name: '回到月岩高地' },
+
+  // ===== 地心世界入口（火山口深洞——熔岩浮島中心的裂縫，需完成 30 個任務後開放）=====
+  { id: 'portal_crater', island: 'isle_lava', dx: -9, dz: -4, to: 'isle_und_hub',
+    lock: 30, name: '火山口深洞' },
+  { id: 'portal_und_back', island: 'isle_und_hub', dx: 0, dz: -10, to: 'isle_lava',
+    name: '回到地面' },
 ];
 
 // Cloud jump pads: bouncy discs that launch the player upward.
@@ -156,7 +175,7 @@ const SKY_SWITCHES = [
 ];
 
 // ===== Quests =====
-// type: chest | gate | npc | listen | pillars | runes | arena | bridge | race | boss
+// type: chest | gate | npc | listen | pillars | runes | arena | bridge | race | boss | order | maze
 // diff: easy | medium | hard | boss  (reward tier)
 // n: questions / rounds / pairs / mobs / rings / letters-words, by type
 // dx/dz: quest object position relative to the island centre
@@ -308,10 +327,44 @@ const SKY_QUESTS = [
     intro: '雲端遺跡深處的破碎之門，只有精通文法的人才能通過。' },
   { id: 'sqh_relic_race', island: 'isle_sc_relic', type: 'race', name: '浮空遺跡競速', diff: 'hard', n: 8, time: 40, dx: -6, dz: 6, hidden: true,
     intro: '沿著遺跡間的光環快速穿梭，跟時間賽跑，找回遺失的榮耀！' },
+
+  // ===== 地心世界任務（從火山口深洞進入；全部公開任務，不隱藏）=====
+  { id: 'squ_cavern_chest', island: 'isle_und_cavern', type: 'chest', name: '深海水晶寶箱', diff: 'hard', n: 5, dx: 6, dz: -6, lock: 30,
+    intro: '洞窟深海裡漂著一個發光的寶箱，答對單字咒語才能打開它。' },
+  { id: 'squ_cavern_arena', island: 'isle_und_cavern', type: 'arena', name: '熔核史萊姆入侵', diff: 'hard', n: 4, mob: 'magma_slime', dx: -6, dz: 6, lock: 31,
+    intro: '熔核史萊姆從裂縫裡爬了出來！用英語魔法把牠們擊退！' },
+  { id: 'squ_magma_gate', island: 'isle_und_magma', type: 'gate', name: '熔岩封印之門', diff: 'hard', n: 5, dx: 5, dz: -5, lock: 32,
+    intro: '滾燙的熔岩之門刻著古老的文法謎題，答對 5 題才會敞開。' },
+  { id: 'squ_magma_listen', island: 'isle_und_magma', type: 'listen', name: '岩漿的低吼', diff: 'hard', n: 6, dx: -5, dz: 5, lock: 33,
+    intro: '滾滾岩漿發出低沉的吼聲，仔細聽並選出正確的單字！' },
+  { id: 'squ_bones_npc', island: 'isle_und_bones', type: 'npc', name: '龍骨的低語', diff: 'hard', n: 5, dx: 5, dz: -5, npc: '💀', lock: 34,
+    intro: '沉睡在龍骨窟深處的骸骨守衛想和你聊聊遠古的語言。' },
+  { id: 'squ_bones_runes', island: 'isle_und_bones', type: 'runes', name: '龍骨咒印', diff: 'hard', n: 6, dx: -5, dz: 5, lock: 35,
+    intro: '古老的咒印字母散落在龍骨之間，拼出封印的話語！' },
+  { id: 'squ_core_race', island: 'isle_und_core', type: 'race', name: '地核飛環競速', diff: 'hard', n: 8, time: 40, dx: 6, dz: 4, lock: 36,
+    intro: '沿著地核聖殿的熾熱光環全速穿梭，挑戰你的極限！' },
+  { id: 'squ_core_boss', island: 'isle_und_core', type: 'boss', name: '熔岩核心巨獸', diff: 'boss', n: 12, dx: 0, dz: 0, lock: 40,
+    intro: '沉睡在地心最深處的熔岩核心巨獸甦醒了！這是地心世界最終的試煉！' },
+
+  // ===== 語序踏石 & 傳送迷宮（新謎題玩法：order = 依中文意思踏對英文語序／maze = 4 道傳送門問答謎宮）=====
+  { id: 'sq_order_meadow', island: 'isle_meadow', type: 'order', name: '草原語序踏石', diff: 'medium', n: 3, dx: 9, dz: -9, lock: 8,
+    intro: '發光的踏石上飄著單字，照著中文意思，依序踏上正確的英文語序吧！' },
+  { id: 'sq_maze_ruins', island: 'isle_ruins', type: 'maze', name: '遺跡傳送迷宮', diff: 'medium', n: 4, dx: -12, dz: -8, lock: 14,
+    intro: '四座古老的傳送門排成謎宮，答對才能前進，答錯會被彈回起點！' },
+  { id: 'sqg_order_aurora', island: 'isle_gx_aurora', type: 'order', name: '極光語序踏石', diff: 'hard', n: 3, dx: 2, dz: 10, lock: 24,
+    intro: '極光下的踏石飄浮著單字，依照中文意思排出正確的語序！' },
+  { id: 'sqg_maze_dust', island: 'isle_gx_dust', type: 'maze', name: '星塵傳送迷宮', diff: 'hard', n: 4, dx: -2, dz: -6, lock: 26,
+    intro: '星塵沙洲上的傳送門謎宮，答對才能前進，答錯會被彈回起點！' },
+  { id: 'squ_order_bones', island: 'isle_und_bones', type: 'order', name: '龍骨語序踏石', diff: 'hard', n: 3, dx: 2, dz: 9, lock: 32,
+    intro: '龍骨窟裡的踏石刻著單字，依照中文意思排出正確的語序！' },
+  { id: 'squ_maze_core', island: 'isle_und_core', type: 'maze', name: '地核傳送迷宮', diff: 'hard', n: 4, dx: -10, dz: -8, lock: 38,
+    intro: '地核聖殿裡的傳送門謎宮，答對才能前進，答錯會被彈回起點！' },
 ];
 
 // ===== Mobs =====
-// shape: which body build makeMobMesh() uses ('slime' | 'wisp' | 'bat')
+// shape: which body build makeMobMesh() uses ('slime' | 'wisp' | 'bat' | 'flyer')
+// flies: true → free 3D flight AI (updateFlyer in js/sky.js) instead of the
+// island-pinned ground-mob AI; currently only used by world events (raids).
 const SKY_MOBS = [
   { id: 'slime', name: '雲史萊姆', hp: 1, quiz: 'vocab', diff: 'easy', color: 0x8fd4ff, speed: 3, shape: 'slime' },
   { id: 'wisp', name: '風靈', hp: 2, quiz: 'vocab', diff: 'medium', color: 0xa8ffd8, speed: 3.8, shape: 'wisp' },
@@ -324,6 +377,11 @@ const SKY_MOBS = [
   { id: 'golem', name: '水晶魔像', hp: 8, quiz: 'vocab', diff: 'hard', color: 0x8fd8f0, speed: 2, shape: 'slime', scale: 1.5 },
   { id: 'lurker', name: '深淵潛伏者', hp: 7, quiz: 'vocab', diff: 'hard', color: 0x1a5a5a, speed: 4, shape: 'wisp', scale: 1.3 },
   { id: 'ember', name: '烈焰惡靈', hp: 7, quiz: 'vocab', diff: 'hard', color: 0xff5a1a, speed: 4.3, shape: 'wisp', scale: 1.4 },
+  // underground (地心世界) mobs
+  { id: 'magma_bat', name: '岩漿蝠', hp: 5, quiz: 'vocab', diff: 'hard', color: 0xd93a1e, speed: 2.6, shape: 'bat', scale: 1.2 },
+  { id: 'magma_slime', name: '熔核史萊姆', hp: 6, quiz: 'grammar', diff: 'hard', color: 0xff6a26, speed: 1.6, shape: 'slime', scale: 1.3 },
+  // world-event mob (☄️ 天空事件系統 — air raids; see js/sky.js updateFlyer())
+  { id: 'storm_falcon', name: '風暴隼', hp: 4, quiz: 'vocab', diff: 'medium', color: 0x7a8fb8, speed: 3.2, shape: 'flyer', scale: 1.15, flies: true },
 ];
 
 // Skin id → body tint for the voxel hero (head shows the emoji itself)

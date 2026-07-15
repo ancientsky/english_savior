@@ -26,8 +26,11 @@ const SkyGame = (() => {
   let cloudMesh = null;
   const cloudData = [];
   // altitude atmosphere: base sky ↔ deep-space purple (galaxy region sits high)
+  // ↔ deep-red cave gloom (地心世界 sits far below, y ≈ -70..-95)
   let fogBase = null, fogGalaxy = null, hemiBase = null, hemiGalaxy = null;
+  let fogUnderground = null, hemiUnderground = null;
   let galaxyBlend = -1;
+  let undergroundBlend = -1;
 
   // ----- world -----
   const islandGroups = {};       // id -> THREE.Group
@@ -46,6 +49,7 @@ const SkyGame = (() => {
   let airJumpUsed = false;
   let lastGroundIsland = 'isle_dawn';
   let currentIsland = null;
+  let regionUnderground = false; // true while standing on/under an `underground: true` island (地心世界)
   let hearts = 5;
   let heroYaw = 0;
   let walkTime = 0;
@@ -70,6 +74,23 @@ const SkyGame = (() => {
   let gemCarry = 0;            // fractional gem bonus accumulator
   let gliderOn = false;        // sky_glider consumable active this adventure
   let jumpBoostOn = false;     // cloud_boots consumable active this adventure
+
+  // ----- active-use item consumables (⚡ Wave 4) -----
+  let shieldT = 0;             // 泡泡護罩 seconds remaining
+  let mountT = 0;              // 飛天雲 seconds remaining
+  let mountWarned = false;     // 3s-before-expiry warning already shown this ride
+  let shieldMesh = null;       // translucent bubble around the player
+  let mountMesh = null;        // small fluffy cloud under the player's feet
+  let lightningLines = [];     // { mesh, t } chain-lightning visuals, expire after ~0.3s
+  const ITEM_TYPES = ['lightning_staff', 'bubble_shield', 'cloud_mount'];
+  const ITEM_META = {
+    lightning_staff: { icon: '⚡', name: '雷霆法杖', key: 'Q' },
+    bubble_shield: { icon: '🫧', name: '泡泡護罩', key: 'R' },
+    cloud_mount: { icon: '☁️', name: '飛天雲', key: 'F' },
+  };
+  // ambient decoration Points systems (☁️ Wave 4 polish)
+  let waterMistSystems = [];
+  let fireflySystems = [];
 
   function computePerks() {
     const id = GameEngine.getEquippedTitle().id;
@@ -161,6 +182,7 @@ const SkyGame = (() => {
       journalBtn: document.getElementById('sky-btn-journal'),
       homeBtn: document.getElementById('sky-btn-home'),
       lowPower: document.getElementById('sky-lowpower'),
+      itemTray: document.getElementById('sky-item-tray'),
     };
     if (!els.zone) return;
 
@@ -185,6 +207,12 @@ const SkyGame = (() => {
     els.camReset?.addEventListener('click', () => { cam.theta = heroYaw + Math.PI; cam.phi = 0.42; cam.radius = SKY_CONFIG.camRadius; });
     window.addEventListener('resize', resizeRenderer);
     setupKeyboard();
+    els.itemTray?.addEventListener('pointerdown', e => {
+      const btn = e.target.closest('.aw-item-btn');
+      if (!btn) return;
+      e.preventDefault();
+      useActiveItem(btn.dataset.item);
+    });
 
     // test hooks
     window.__skyTest = {
@@ -240,6 +268,13 @@ const SkyGame = (() => {
       // perk hooks (Part 4)
       perks: () => ({ ...perks, maxHearts: maxHearts(), gliderOn, jumpBoostOn }),
       refreshEquipment,
+      // active-use item hooks (⚡ Wave 4)
+      useItem: useActiveItem,
+      itemTray: () => ITEM_TYPES.map(type => {
+        const b = (GameEngine.getState().activeBuffs || []).find(x => x.type === type && x.uses > 0);
+        return b ? { type, uses: b.uses, active: (type === 'bubble_shield' && shieldT > 0) || (type === 'cloud_mount' && mountT > 0) } : null;
+      }).filter(Boolean),
+      effects: () => ({ shieldT, mountT }),
       // secret realm hooks (Part 6)
       secretState: () => ({
         found: { ...save.secretsFound },
@@ -248,6 +283,42 @@ const SkyGame = (() => {
         switches: interactables.filter(it => it.q.type === 'switch').length,
         stairsBuilt: { ...save.stairsBuilt },
       }),
+      // underground realm hooks (Part 7 / Wave 1)
+      region: () => ({
+        underground: regionUnderground,
+        blend: undergroundBlend,
+        island: currentIsland,
+        fogHex: scene ? scene.fog.color.getHex() : null,
+        fogFar: scene ? scene.fog.far : null,
+      }),
+      // world-event hooks (☄️ Wave 2)
+      event: () => (worldEvent ? {
+        type: worldEvent.type,
+        t: worldEvent.t,
+        shardsLeft: worldEvent.type === 'meteor'
+          ? worldEvent.shards.filter(s => !s.got && !s.gone).length : undefined,
+        falconsLeft: worldEvent.type === 'raid'
+          ? worldEvent.falcons.filter(f => !f.dead && !f.gone).length : undefined,
+      } : null),
+      triggerEvent: type => {
+        if (!canStartEvent(type)) return false;
+        if (type === 'meteor') startMeteorShower(); else startAirRaid();
+        return true;
+      },
+      shardPos: i => {
+        const s = worldEvent && worldEvent.type === 'meteor' && worldEvent.shards[i];
+        return s ? { x: s.mesh.position.x, y: s.mesh.position.y, z: s.mesh.position.z } : null;
+      },
+      // puzzle-quest hooks (🧩 Wave 3: order 語序踏石 / maze 傳送迷宮)
+      puzzle: () => (orderActive
+        ? {
+          type: 'order', idx: orderActive.idx, expected: orderActive.words.slice(),
+          done: orderActive.done, n: orderActive.q.n,
+          stones: orderActive.stones.map(s => ({ x: s.x, z: s.z, word: s.word, done: s.done })),
+        }
+        : mazeActive
+          ? { type: 'maze', idx: mazeActive.idx, nodes: mazeActive.nodes.map(n => ({ x: n.x, z: n.z })) }
+          : null),
     };
   }
 
@@ -300,11 +371,18 @@ const SkyGame = (() => {
     hearts = maxHearts();
     playing = true;
     updateHudHearts();
+    // ☄️ world-event scheduler: fresh per adventure, first roll ~75s in
+    worldEvent = null;
+    eventTimer = 0;
+    eventCooldown = 75;
     // consumable session buffs: one use per adventure
     gliderOn = GameEngine.consumeBuff('glide');
     if (gliderOn) showWorldToast('🪂 滑翔翼啟動！按住跳躍鍵緩慢降落');
     jumpBoostOn = GameEngine.consumeBuff('jump_boost');
     if (jumpBoostOn) showWorldToast('🌨️ 彈跳雲靴啟動！跳躍高度 +40%');
+    // active-use items reset per adventure (they're activated in-world, not consumed at start)
+    clearActiveItemEffects();
+    updateItemTray();
     if (!rafId) animate();
   }
 
@@ -350,6 +428,8 @@ const SkyGame = (() => {
     fogGalaxy = new THREE.Color(0x241a4e);
     hemiBase = new THREE.Color(0xdfefff);
     hemiGalaxy = new THREE.Color(0xb09ae8);
+    fogUnderground = new THREE.Color(0x2a0c06);
+    hemiUnderground = new THREE.Color(0x8a4a20);
 
     camera = new THREE.PerspectiveCamera(55, w / h, 0.1, 1800);
 
@@ -369,6 +449,7 @@ const SkyGame = (() => {
     buildSwitches();
     AMBIENT_MOBS.forEach(a => spawnMob(a.mob, a.island, a.dx, a.dz));
     buildParticles();
+    buildEmberParticles();
     buildPlayer();
     setupPointerControls();
 
@@ -573,6 +654,12 @@ const SkyGame = (() => {
     vault: { top: 0x1a1414, side: 0x120e10, tex: 'rockTex' },
     tree: { top: 0x8a6a3e, side: 0x5e4526, tex: 'woodTex' },
     relic: { top: 0xe8dfc0, side: 0xb8ac86, tex: 'rockTex' },
+    // 地心世界 (underground region)
+    cavefloor: { top: 0x4a3f38, side: 0x2a221e, tex: 'rockTex' },
+    deepcrystal: { top: 0x3a2a52, side: 0x241a38, tex: 'crystalTex' },
+    magma: { top: 0x2a1410, side: 0x180c0a, tex: 'rockTex' },
+    bonecave: { top: 0x6a5a48, side: 0x3a2f26, tex: 'sandTex' },
+    coretemple: { top: 0x1a0f08, side: 0x100a06, tex: 'rockTex' },
   };
 
   function buildIsland(isle) {
@@ -698,6 +785,7 @@ const SkyGame = (() => {
         break;
       case 'forest':
         scatter(g, isle, rng, 11, 0.25, 0.9, r => makeTree(r, 0x2e6e38));
+        buildFireflies(g, isle);
         break;
       case 'water': {
         const pond = new THREE.Mesh(new THREE.CylinderGeometry(isle.r * 0.4, isle.r * 0.4, 0.16, 18),
@@ -714,6 +802,7 @@ const SkyGame = (() => {
           s.position.y = 0.4;
           return s;
         });
+        buildWaterMist(g, isle, fall.position.x, fall.position.z);
         break;
       }
       case 'flower':
@@ -1032,6 +1121,7 @@ const SkyGame = (() => {
           fly.position.y = 0.4 + r() * 1.2;
           return fly;
         });
+        buildFireflies(g, isle);
         break;
       case 'temple': {
         const trim = new THREE.Mesh(new THREE.TorusGeometry(isle.r * 0.94, 0.35, 6, 28),
@@ -1188,6 +1278,97 @@ const SkyGame = (() => {
         });
         break;
       }
+      // ===== 地心世界 (underground region) =====
+      case 'cavefloor':
+        scatter(g, isle, rng, 8, 0.15, 0.85, r => {
+          const h = 1.2 + r() * 2.4;
+          const stal = new THREE.Mesh(new THREE.ConeGeometry(0.4 + r() * 0.3, h, 6), matOf(0x3a322c));
+          stal.position.y = h / 2;
+          stal.castShadow = true;
+          return stal;
+        });
+        scatter(g, isle, rng, 6, 0.2, 0.8, r => makeCrystal(r, 0x5a6a8a));
+        break;
+      case 'deepcrystal': {
+        scatter(g, isle, rng, 9, 0.15, 0.88, r => makeCrystal(r, r() < 0.5 ? 0x9a7bff : 0x6ae8ff));
+        const lake = new THREE.Mesh(new THREE.CylinderGeometry(isle.r * 0.35, isle.r * 0.35, 0.14, 18),
+          matOf(0x2a3a6a, 0x14204a));
+        lake.position.set(isle.r * 0.15, 0.07, -isle.r * 0.15);
+        g.add(lake);
+        scatter(g, isle, rng, 5, 0.3, 0.75, r => {
+          const orb = new THREE.Mesh(new THREE.SphereGeometry(0.3 + r() * 0.25, 8, 6),
+            matOf(0xb08fff, 0x5a2aaa));
+          orb.position.y = 0.8 + r() * 2;
+          return orb;
+        });
+        break;
+      }
+      case 'magma': {
+        const pool = new THREE.Mesh(new THREE.CylinderGeometry(isle.r * 0.4, isle.r * 0.4, 0.18, 18),
+          matOf(0xff5a1a, 0xdd2200));
+        pool.position.set(-isle.r * 0.1, 0.09, isle.r * 0.12);
+        g.add(pool);
+        scatter(g, isle, rng, 7, 0.4, 0.9, r => {
+          const h = 1.2 + r() * 3;
+          const spike = new THREE.Mesh(new THREE.ConeGeometry(0.5, h, 5), matOf(0x120a0c));
+          spike.position.y = h / 2;
+          spike.castShadow = true;
+          return spike;
+        });
+        scatter(g, isle, rng, 10, 0.1, 0.9, r => {
+          const crack = new THREE.Mesh(new THREE.BoxGeometry(0.9 + r() * 0.6, 0.04, 0.12),
+            new THREE.MeshLambertMaterial({ color: 0xff6a2a, emissive: 0xdd3300 }));
+          crack.position.y = 0.02;
+          crack.rotation.y = r() * Math.PI;
+          return crack;
+        });
+        scatter(g, isle, rng, 6, 0.2, 0.7, r => {
+          const ember = new THREE.Mesh(new THREE.SphereGeometry(0.08, 5, 4),
+            new THREE.MeshLambertMaterial({ color: 0xffb060, emissive: 0xff5500 }));
+          ember.position.y = 0.5 + r() * 1.6;
+          return ember;
+        });
+        break;
+      }
+      case 'bonecave':
+        scatter(g, isle, rng, 6, 0.25, 0.85, r => {
+          const rib = new THREE.Mesh(new THREE.TorusGeometry(1.8 + r() * 1.6, 0.24, 6, 10, Math.PI), matOf(0xe0d4b0));
+          rib.position.y = 0.15;
+          rib.rotation.y = r() * Math.PI;
+          rib.castShadow = true;
+          return rib;
+        });
+        scatter(g, isle, rng, 5, 0.3, 0.85, r => {
+          const bone = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 1.8 + r(), 5), matOf(0xe0d4b0));
+          bone.rotation.z = Math.PI / 2 + (r() - 0.5);
+          bone.position.y = 0.25;
+          return bone;
+        });
+        scatter(g, isle, rng, 4, 0.2, 0.7, r => {
+          const skull = new THREE.Mesh(new THREE.DodecahedronGeometry(0.4 + r() * 0.2), matOf(0xd8cba0));
+          skull.position.y = 0.3;
+          return skull;
+        });
+        break;
+      case 'coretemple': {
+        scatter(g, isle, rng, 8, 0.5, 0.88, r => {
+          const h = 3 + r() * 2;
+          const col = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.58, h, 8), matOf(0x14100c));
+          col.position.y = h / 2;
+          col.castShadow = true;
+          return col;
+        });
+        const trim = new THREE.Mesh(new THREE.TorusGeometry(isle.r * 0.9, 0.3, 6, 26), matOf(0xd8a83a, 0x6a4a10));
+        trim.rotation.x = Math.PI / 2;
+        trim.position.y = 0.1;
+        g.add(trim);
+        const core = new THREE.Mesh(new THREE.SphereGeometry(1.8, 14, 10),
+          new THREE.MeshLambertMaterial({ color: 0xff6a1a, emissive: 0xff3300 }));
+        core.position.y = 2.4;
+        core.castShadow = true;
+        g.add(core);
+        break;
+      }
     }
 
     // grass blades on green islands (InstancedMesh child → bobs with island)
@@ -1338,7 +1519,7 @@ const SkyGame = (() => {
     boss: { xp: 150, gems: 25, ans: 16 },
   };
   const LIVE_TYPES = new Set(['chest', 'gate', 'npc', 'listen', 'pillars',
-    'runes', 'arena', 'bridge', 'race', 'boss', 'portal']);
+    'runes', 'arena', 'bridge', 'race', 'boss', 'portal', 'order', 'maze']);
 
   const interactables = [];    // { q, x, z, isle, marker }
   const markerList = [];       // bobbing quest markers
@@ -1508,6 +1689,31 @@ const SkyGame = (() => {
         g.add(altar);
         break;
       }
+      case 'order': {
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(1.3, 0.14, 8, 16), matOf(0x8a8270));
+        ring.rotation.x = Math.PI / 2;
+        ring.position.y = 0.2;
+        g.add(ring);
+        [0, 1, 2].forEach(i => {
+          const a = (i / 3) * Math.PI * 2;
+          const stone = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.34, 0.28, 6), matOf(0xb08fff, 0x3a1a7a));
+          stone.position.set(Math.cos(a) * 1.3, 0.24, Math.sin(a) * 1.3);
+          g.add(stone);
+        });
+        break;
+      }
+      case 'maze': {
+        [-0.8, 0.8].forEach(x => {
+          const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, 2, 6), matOf(0x44305a));
+          pillar.position.set(x, 1, 0);
+          pillar.castShadow = true;
+          g.add(pillar);
+        });
+        const arch = new THREE.Mesh(new THREE.TorusGeometry(0.95, 0.16, 8, 16, Math.PI), matOf(0xb06ae8, 0x5a2a9a));
+        arch.position.set(0, 2, 0);
+        g.add(arch);
+        break;
+      }
     }
     return g;
   }
@@ -1546,25 +1752,28 @@ const SkyGame = (() => {
       const isle = isleById(p.island);
       const g = islandGroups[p.island];
       if (!isle || !g) continue;
+      // crater portals (火山口深洞 ↔ 地心世界) get a rocky rim + orange glow
+      // instead of the purple swirl — cheap recolor, visually distinct
+      const isCraterPortal = p.id.startsWith('portal_crater') || p.id.startsWith('portal_und');
       const visual = new THREE.Group();
       const ring = new THREE.Mesh(
         new THREE.TorusGeometry(1.7, 0.22, 8, 24),
-        matOf(0xb06ae8, 0x5a2a9a)
+        isCraterPortal ? matOf(0x2a1410, 0x1a0a06) : matOf(0xb06ae8, 0x5a2a9a)
       );
       ring.position.y = 2.2;
       ring.castShadow = true;
       visual.add(ring);
       const swirl = new THREE.Mesh(
         new THREE.CircleGeometry(1.45, 20),
-        new THREE.MeshLambertMaterial({
-          color: 0x8f6bff, emissive: 0x3a1a7a,
-          transparent: true, opacity: 0.7, side: THREE.DoubleSide,
-        })
+        new THREE.MeshLambertMaterial(isCraterPortal
+          ? { color: 0xff6a20, emissive: 0xdd3300, transparent: true, opacity: 0.75, side: THREE.DoubleSide }
+          : { color: 0x8f6bff, emissive: 0x3a1a7a, transparent: true, opacity: 0.7, side: THREE.DoubleSide })
       );
       swirl.position.y = 2.2;
       visual.add(swirl);
       [-1.9, 1.9].forEach(x => {
-        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.3, 4.2, 6), matOf(0x44305a));
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.3, 4.2, 6),
+          isCraterPortal ? matOf(0x241a16) : matOf(0x44305a));
         post.position.set(x, 2.1, 0);
         post.castShadow = true;
         visual.add(post);
@@ -1678,14 +1887,11 @@ const SkyGame = (() => {
     pos.y = target.pos[1] + bobOf(target.id) + 2;
     vy = 0;
     lastGroundIsland = target.id;
+    regionUnderground = !!target.underground;
     SoundManager.playAchievement();
-    try {
-      if (typeof MusicManager !== 'undefined') {
-        if (target.secret) MusicManager.play('mystic');
-        else MusicManager.playForZone('sky');
-      }
-    } catch (e) { /* mystic track may not exist yet — never block the portal */ }
-    showWorldToast(target.secret ? `🔮 你發現了「${target.name}」！`
+    playRegionMusic(target);
+    showWorldToast(target.underground ? `🌋 你進入了「${target.name}」！`
+      : target.secret ? `🔮 你發現了「${target.name}」！`
       : q.to === 'isle_gx_hub'
         ? '🌌 歡迎來到銀河空島！新的任務在等著你！'
         : '🏝️ 回到了天空之城本土！');
@@ -1745,6 +1951,8 @@ const SkyGame = (() => {
     comet: '#5a7ac8', aurora: '#4ae8b0', alien: '#b06ae8',
     cave: '#3a3a4a', lake: '#4aa8d8', mist: '#6a7a6a', temple: '#2a2438',
     garden: '#e8b8d8', vault: '#3a1410', tree: '#8a6a3e', relic: '#e8dfc0',
+    cavefloor: '#4a3f38', deepcrystal: '#7a5cc8', magma: '#c8481a',
+    bonecave: '#cfc4b0', coretemple: '#3a2410',
   };
 
   function lowPower() { return !!save.settings.lowPower; }
@@ -1841,6 +2049,27 @@ const SkyGame = (() => {
     const dgems = usesOf(buffs, 'double_gems');
     if (dgems) chips.push(`⚗️<sup>×${dgems}</sup>`);
     els.buffs.innerHTML = chips.map(c => `<span class="aw-buff-chip">${c}</span>`).join('');
+  }
+
+  // ---- ⚡ active-use item tray (lightning staff / bubble shield / cloud mount) ----
+  function updateItemTray() {
+    if (!els.itemTray) return;
+    const buffs = (GameEngine.getState().activeBuffs) || [];
+    const items = ITEM_TYPES.map(type => {
+      const b = buffs.find(x => x.type === type && x.uses > 0);
+      return b ? { type, uses: b.uses } : null;
+    }).filter(Boolean);
+    if (!items.length) {
+      els.itemTray.innerHTML = '';
+      els.itemTray.style.display = 'none';
+      return;
+    }
+    els.itemTray.style.display = '';
+    els.itemTray.innerHTML = items.map(it => {
+      const meta = ITEM_META[it.type];
+      const active = (it.type === 'bubble_shield' && shieldT > 0) || (it.type === 'cloud_mount' && mountT > 0);
+      return `<button class="aw-item-btn${active ? ' active' : ''}" data-item="${it.type}" title="${meta.name}（${meta.key} 鍵）">${meta.icon}<span class="aw-item-uses">${it.uses}</span></button>`;
+    }).join('');
   }
 
   function updateTracker() {
@@ -1980,6 +2209,74 @@ const SkyGame = (() => {
     scene.add(particles);
   }
 
+  // ---- slow-rising ember motes over the 地心世界 cluster (cheap: one Points obj) ----
+  let emberParticles = null;
+  const EMBER_COUNT = 220;
+  const EMBER_Y_LO = -100, EMBER_Y_HI = -65;
+  function buildEmberParticles() {
+    if (lowPower()) return;
+    const geo = new THREE.BufferGeometry();
+    const arr = new Float32Array(EMBER_COUNT * 3);
+    const rng = mulberry32(SKY_CONFIG.worldSeed + 77);
+    for (let i = 0; i < EMBER_COUNT; i++) {
+      arr[i * 3] = -540 + rng() * 160;
+      arr[i * 3 + 1] = EMBER_Y_LO + rng() * (EMBER_Y_HI - EMBER_Y_LO);
+      arr[i * 3 + 2] = 280 + rng() * 200;
+    }
+    geo.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+    emberParticles = new THREE.Points(geo, new THREE.PointsMaterial({
+      color: 0xff7a2a, size: 1.4, transparent: true, opacity: 0.75, sizeAttenuation: true,
+    }));
+    scene.add(emberParticles);
+  }
+
+  // ---- rising mist at a waterfall's base (☁️ Wave 4 polish; ≤80 verts, one per water isle) ----
+  function buildWaterMist(g, isle, x, z) {
+    if (lowPower()) return;
+    const N = 60;
+    const geo = new THREE.BufferGeometry();
+    const arr = new Float32Array(N * 3);
+    const rng = mulberry32(SKY_CONFIG.worldSeed + isle.seed * 13 + 41);
+    for (let i = 0; i < N; i++) {
+      arr[i * 3] = (rng() - 0.5) * 2.4;
+      arr[i * 3 + 1] = rng() * 2.5;
+      arr[i * 3 + 2] = (rng() - 0.5) * 1.4;
+    }
+    geo.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+    const points = new THREE.Points(geo, new THREE.PointsMaterial({
+      color: 0xffffff, size: 0.5, transparent: true, opacity: 0.5, sizeAttenuation: true,
+    }));
+    // the waterfall box is centred at y -7.4 with height 16, so its base sits
+    // at roughly y -15.4 — that's where the mist should hover
+    points.position.set(x, -15.4, z);
+    g.add(points);
+    waterMistSystems.push(points);
+  }
+
+  // ---- gentle-drifting fireflies over forest/mist isles (☁️ Wave 4 polish; ≤40 verts) ----
+  function buildFireflies(g, isle, color = 0xd8ff8f) {
+    if (lowPower()) return;
+    const N = 24;
+    const geo = new THREE.BufferGeometry();
+    const arr = new Float32Array(N * 3);
+    const phase = new Float32Array(N);
+    const rng = mulberry32(SKY_CONFIG.worldSeed + isle.seed * 29 + 7);
+    for (let i = 0; i < N; i++) {
+      const a = rng() * Math.PI * 2;
+      const rr = isle.r * (0.15 + rng() * 0.7);
+      arr[i * 3] = Math.cos(a) * rr;
+      arr[i * 3 + 1] = 0.6 + rng() * 1.6;
+      arr[i * 3 + 2] = Math.sin(a) * rr;
+      phase[i] = rng() * Math.PI * 2;
+    }
+    geo.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+    const points = new THREE.Points(geo, new THREE.PointsMaterial({
+      color, size: 0.4, transparent: true, opacity: 0.85, sizeAttenuation: true,
+    }));
+    g.add(points);
+    fireflySystems.push({ points, base: arr.slice(), phase });
+  }
+
   // ---- distance culling + fps watchdog (called from updateWorld) ----
   function updateCulling() {
     for (let k = 0; k < 2; k++) {
@@ -1994,6 +2291,11 @@ const SkyGame = (() => {
     // own cull anyway). Mob count is small (<25), so a full pass each frame is cheap.
     for (const m of mobs) {
       if (m.gone) continue;
+      if (m.def.flies) {
+        // free-flying mobs aren't tied to their home island's group visibility
+        m.mesh.visible = Math.hypot(pos.x - m.mesh.position.x, pos.z - m.mesh.position.z) < 120;
+        continue;
+      }
       const g = islandGroups[m.isle.id];
       m.mesh.visible = !g || g.visible;
     }
@@ -2020,9 +2322,13 @@ const SkyGame = (() => {
   let arenaActive = null;      // { q, remaining }
   let raceActive = null;       // { q, idx, time, rings, sinceQ }
   let runeActive = null;       // { q, wordIdx, entry, orbs, collected }
+  let orderActive = null;      // { q, entry, words, sentence, zh, stones, idx, done, standingOn, usedTexts }
+  let mazeActive = null;       // { q, startX, startZ, isleY, nodes, idx, chest }
+  let SENTENCE_POOL = null;    // cached order-quest word-order sentence pool
   let bossActive = null;       // { q, mob, phase, sinceSummon, shockT, warnT, waveR, waveHit }
   let bossParts = null;
   let shockRing = null, warnRing = null;
+  let raidWarnRing = null;  // dive-telegraph ring for storm_falcon air raids (Wave 2)
   let raycaster = null;
   let combatHud = null;        // { bossBar, bossFill, bossLabel, race }
 
@@ -2044,6 +2350,13 @@ const SkyGame = (() => {
     { mob: 'knight', island: 'isle_sc_mist', dx: -4, dz: 4 },
     { mob: 'lurker', island: 'isle_sc_mist', dx: 4, dz: -6 },
     { mob: 'knight', island: 'isle_sc_temple', dx: 6, dz: -6 },
+    // 地心世界 (underground)
+    { mob: 'magma_slime', island: 'isle_und_hub', dx: 6, dz: 6 },
+    { mob: 'magma_bat', island: 'isle_und_cavern', dx: 4, dz: 4 },
+    { mob: 'magma_slime', island: 'isle_und_cavern', dx: -8, dz: -3 },
+    { mob: 'magma_bat', island: 'isle_und_magma', dx: 7, dz: 3 },
+    { mob: 'magma_slime', island: 'isle_und_magma', dx: -7, dz: -4 },
+    { mob: 'magma_bat', island: 'isle_und_bones', dx: 3, dz: 7 },
   ];
 
   function mobDef(id) { return SKY_MOBS.find(m => m.id === id); }
@@ -2068,6 +2381,26 @@ const SkyGame = (() => {
       body.castShadow = true;
       g.add(body);
       g.userData.body = body;
+    } else if (shape === 'flyer') {
+      // hawk-like: streamlined stretched body, small forward head, big swept wings
+      const body = new THREE.Mesh(new THREE.SphereGeometry(0.4, 8, 6),
+        new THREE.MeshLambertMaterial({ color: def.color }));
+      body.scale.set(1, 0.8, 1.9);
+      body.position.y = 1.4;
+      body.castShadow = true;
+      g.add(body);
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 7, 6),
+        new THREE.MeshLambertMaterial({ color: def.color }));
+      head.position.set(0, 1.46, 0.6);
+      g.add(head);
+      [-1, 1].forEach(s => {
+        const wing = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.07, 0.65), matOf(0x33415f));
+        wing.position.set(s * 1.15, 1.42, -0.05);
+        wing.rotation.z = s * 0.18;
+        g.add(wing);
+        (g.userData.wings = g.userData.wings || []).push(wing);
+      });
+      g.userData.body = body;
     } else {
       const body = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 6),
         new THREE.MeshLambertMaterial({ color: def.color }));
@@ -2084,8 +2417,8 @@ const SkyGame = (() => {
     }
     // eyes
     [-0.22, 0.22].forEach(x => {
-      const eyeY = shape === 'bat' ? 1.68 : (shape === 'wisp' ? 1.35 : 0.72);
-      const eyeZ = shape === 'slime' ? 0.62 : 0.42;
+      const eyeY = shape === 'bat' ? 1.68 : (shape === 'wisp' ? 1.35 : (shape === 'flyer' ? 1.46 : 0.72));
+      const eyeZ = shape === 'slime' ? 0.62 : (shape === 'flyer' ? 0.72 : 0.42);
       const eye = new THREE.Mesh(new THREE.SphereGeometry(0.11, 6, 5), eyeMat);
       eye.position.set(x, eyeY, eyeZ);
       g.add(eye);
@@ -2110,6 +2443,9 @@ const SkyGame = (() => {
       home: { x, z }, angle: Math.random() * 6.28,
       cooldown: 0, boost: 0, shieldT: 0, fade: 0, questId: questId || null,
     };
+    if (def.flies) {
+      mob.air = { state: 'patrol', t: 0, dur: 3 + Math.random() * 3, angle: Math.random() * 6.28 };
+    }
     mesh.traverse(o => { o.userData.mobRef = mob; });
     mesh.userData.mobRef = mob;
     mobs.push(mob);
@@ -2125,8 +2461,20 @@ const SkyGame = (() => {
     }
   }
 
+  function clearActiveItemEffects() {
+    shieldT = 0;
+    mountT = 0;
+    mountWarned = false;
+    if (shieldMesh) shieldMesh.visible = false;
+    if (mountMesh) mountMesh.visible = false;
+  }
+
   function damagePlayer(n, sx, sz) {
     if (!playing) return;
+    if (shieldT > 0) {
+      showWorldToast('🫧 泡泡護罩擋下了攻擊！');
+      return;
+    }
     hearts -= n;
     lastDamageAt = simTime;
     els.flash.classList.add('red', 'on');
@@ -2157,6 +2505,8 @@ const SkyGame = (() => {
   function goHome() {
     if (!playing || quizOpen) return;
     if (raceActive) cancelRace('🏁 競速取消了');
+    if (orderActive) cancelOrder('');
+    if (mazeActive) cancelMaze('');
     if (arenaActive) {
       despawnQuestMobs(arenaActive.q.id);
       arenaActive = null;
@@ -2167,6 +2517,8 @@ const SkyGame = (() => {
     pos.y = dawn.pos[1] + bobOf(dawn.id) + 2;
     vy = 0;
     lastGroundIsland = dawn.id;
+    clearActiveItemEffects();
+    updateItemTray();
     showWorldToast('🏠 回到晨曦之島！');
     SoundManager.playCorrect();
   }
@@ -2179,10 +2531,15 @@ const SkyGame = (() => {
     }
     if (bossActive) resetBoss();
     if (raceActive) cancelRace('');
+    if (orderActive) cancelOrder('');
+    if (mazeActive) cancelMaze('');
+    if (worldEvent) endWorldEvent(); // KO during a raid/meteor shower ends it quietly (no reward)
     hearts = maxHearts();
     const dawn = SKY_ISLANDS[0];
     pos.x = dawn.pos[0]; pos.z = dawn.pos[2]; pos.y = dawn.pos[1] + 2;
     vy = 0;
+    clearActiveItemEffects();
+    updateItemTray();
   }
 
   // ---- combat quiz ----
@@ -2197,6 +2554,10 @@ const SkyGame = (() => {
 
   function openCombatQuiz(mob) {
     if (quizOpen || !mob || mob.dead) return;
+    if (mob.def.flies && !flyerAttackable(mob)) {
+      showWorldToast('🦅 牠飛得太高了，等牠俯衝時再攻擊！');
+      return;
+    }
     const d = Math.hypot(pos.x - mob.mesh.position.x, pos.z - mob.mesh.position.z);
     if (d > 14) { showWorldToast('🏃 再靠近一點才能攻擊！'); return; }
     ensureQuizDom();
@@ -2330,6 +2691,104 @@ const SkyGame = (() => {
     }
   }
 
+  // ===================== ⚡ active-use item consumables (Wave 4) =====================
+  function spawnLightningLine(mob) {
+    const points = [
+      new THREE.Vector3(pos.x, pos.y + 1.4, pos.z),
+      new THREE.Vector3(mob.mesh.position.x, mob.mesh.position.y + 1, mob.mesh.position.z),
+    ];
+    const geo = new THREE.BufferGeometry().setFromPoints(points);
+    const mat = new THREE.LineBasicMaterial({ color: 0xbfe8ff, transparent: true, opacity: 1 });
+    const line = new THREE.Line(geo, mat);
+    scene.add(line);
+    lightningLines.push({ mesh: line, t: 0.3 });
+  }
+
+  function updateLightningLines(dt) {
+    for (let i = lightningLines.length - 1; i >= 0; i--) {
+      const L = lightningLines[i];
+      L.t -= dt;
+      L.mesh.material.opacity = Math.max(0, L.t / 0.3);
+      if (L.t <= 0) {
+        scene.remove(L.mesh);
+        L.mesh.geometry.dispose();
+        L.mesh.material.dispose();
+        lightningLines.splice(i, 1);
+      }
+    }
+  }
+
+  function ensureShieldMesh() {
+    if (shieldMesh || !player) return;
+    shieldMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(1.6, 12, 10),
+      new THREE.MeshBasicMaterial({ color: 0x8fe0ff, transparent: true, opacity: 0.25, depthWrite: false })
+    );
+    shieldMesh.position.y = 1.05;
+    shieldMesh.visible = false;
+    player.add(shieldMesh);
+  }
+
+  function ensureMountMesh() {
+    if (mountMesh || !player) return;
+    const g = new THREE.Group();
+    const base = new THREE.Mesh(new THREE.SphereGeometry(0.75, 10, 6), new THREE.MeshLambertMaterial({ color: 0xffffff }));
+    base.scale.set(1, 0.35, 1);
+    g.add(base);
+    const puff = new THREE.Mesh(new THREE.SphereGeometry(0.42, 8, 6), new THREE.MeshLambertMaterial({ color: 0xffffff }));
+    puff.position.set(0.4, 0.14, 0.1);
+    puff.scale.set(1, 0.55, 1);
+    g.add(puff);
+    const puff2 = new THREE.Mesh(new THREE.SphereGeometry(0.38, 8, 6), new THREE.MeshLambertMaterial({ color: 0xffffff }));
+    puff2.position.set(-0.38, 0.1, -0.12);
+    puff2.scale.set(1, 0.5, 1);
+    g.add(puff2);
+    g.position.y = -0.05;
+    g.visible = false;
+    mountMesh = g;
+    player.add(mountMesh);
+  }
+
+  // 按 Q/R/F 或點擊道具列啟用主動道具（僅在冒險中、非答題時可用）
+  function useActiveItem(type) {
+    if (!playing || quizOpen) return;
+    if (!GameEngine.hasBuff(type)) return;
+    if (type === 'lightning_staff') {
+      const targets = mobs.filter(m => !m.dead && !m.gone &&
+        Math.hypot(m.mesh.position.x - pos.x, m.mesh.position.z - pos.z) <= 12);
+      if (!targets.length) {
+        showWorldToast('附近沒有怪物');
+        return;
+      }
+      GameEngine.consumeBuff('lightning_staff');
+      targets.forEach(m => { hitMob(m); spawnLightningLine(m); });
+      els.flash.classList.add('on');
+      setTimeout(() => els.flash.classList.remove('on'), 300);
+      SoundManager.playCorrect();
+      showWorldToast(`⚡ 雷霆法杖電擊了 ${targets.length} 隻怪物！`);
+      GameEngine.recordSkyItemUse();
+    } else if (type === 'bubble_shield') {
+      GameEngine.consumeBuff('bubble_shield');
+      ensureShieldMesh();
+      shieldT = 15;
+      if (shieldMesh) shieldMesh.visible = true;
+      showWorldToast('🫧 泡泡護罩展開！15 秒內無敵');
+      GameEngine.recordSkyItemUse();
+    } else if (type === 'cloud_mount') {
+      GameEngine.consumeBuff('cloud_mount');
+      ensureMountMesh();
+      mountT = 12;
+      mountWarned = false;
+      if (mountMesh) mountMesh.visible = true;
+      showWorldToast('☁️ 飛天雲召喚成功！自由飛行 12 秒');
+      GameEngine.recordSkyItemUse();
+    } else {
+      return;
+    }
+    updateBuffBar();
+    updateItemTray();
+  }
+
   function updateMobs(dt) {
     for (const mob of mobs) {
       if (mob.gone) continue;
@@ -2342,6 +2801,7 @@ const SkyGame = (() => {
         continue;
       }
       if (mob.isBoss) continue; // boss animated in updateBoss
+      if (mob.def.flies) { updateFlyer(mob, dt); continue; } // free-flight AI (☄️ world events)
       // idle animation
       const b = mob.mesh.userData.body;
       const shape = mob.def.shape || mob.def.id;
@@ -2398,6 +2858,123 @@ const SkyGame = (() => {
         mob.cooldown = 2.5;
         damagePlayer(1, mob.mesh.position.x, mob.mesh.position.z);
       }
+    }
+  }
+
+  // ---- flying mob AI (☄️ 天空事件系統 — air raid storm_falcons) ----
+  // state machine on mob.air: patrol (circle above home) → telegraph (dip low
+  // + warning ring, 1.2s) → dive (fast low swoop at the player, one hit) →
+  // recover (climb back to patrol height) → patrol again.
+  function ensureRaidWarnRing() {
+    if (raidWarnRing) return;
+    raidWarnRing = new THREE.Mesh(
+      new THREE.TorusGeometry(2.2, 0.16, 6, 28),
+      new THREE.MeshLambertMaterial({ color: 0xff5555, emissive: 0xaa2222, transparent: true, opacity: 0.8 })
+    );
+    raidWarnRing.rotation.x = Math.PI / 2;
+    raidWarnRing.visible = false;
+    scene.add(raidWarnRing);
+  }
+
+  // kid-friendly: falcons only take damage while flying low (telegraph, the
+  // dive itself, and the first ~1s of recovery) — not while circling high overhead.
+  function flyerAttackable(mob) {
+    const air = mob.air;
+    if (!air) return false;
+    return air.state === 'telegraph' || air.state === 'dive' ||
+      (air.state === 'recover' && air.t < 1.0);
+  }
+
+  function updateFlyer(mob, dt) {
+    if (mob.mesh.userData.wings) {
+      mob.mesh.userData.wings.forEach((w, i) => { w.rotation.z = Math.sin(simTime * 14) * 0.55 * (i ? -1 : 1); });
+    }
+    if (mob.shieldT > 0) {
+      mob.shieldT -= dt;
+      const b = mob.mesh.userData.body;
+      if (b) b.material.emissive = new THREE.Color(mob.shieldT > 0 ? 0x888888 : 0x000000);
+    }
+    if (quizOpen) return; // combat quiz freezes state timers (kid-friendly)
+    const air = mob.air;
+    air.t += dt;
+    const homeX = mob.home.x, homeZ = mob.home.z;
+    const groundY = mob.isle.pos[1] + bobOf(mob.isle.id);
+    const patrolY = groundY + 12;
+
+    if (air.state === 'patrol') {
+      air.angle += dt * 0.5;
+      const tx = homeX + Math.cos(air.angle) * 10;
+      const tz = homeZ + Math.sin(air.angle) * 10;
+      mob.mesh.position.set(tx, patrolY, tz);
+      mob.mesh.rotation.y = air.angle + Math.PI / 2;
+      if (air.t >= air.dur) {
+        air.state = 'telegraph';
+        air.t = 0; air.dur = 1.2;
+        air.targetX = pos.x; air.targetZ = pos.z;
+        air.startX = tx; air.startY = patrolY; air.startZ = tz;
+        air.lowY = groundY + 1.6; // low enough to be within the player's vertical hit/attack tolerance
+        ensureRaidWarnRing();
+        raidWarnRing.visible = true;
+        SoundManager.playWrong(); // screech cue
+      }
+      return;
+    }
+    if (air.state === 'telegraph') {
+      const k = Math.min(1, air.t / air.dur);
+      mob.mesh.position.set(
+        air.startX + (air.targetX - air.startX) * k,
+        air.startY + (air.lowY - air.startY) * k,
+        air.startZ + (air.targetZ - air.startZ) * k
+      );
+      if (raidWarnRing) {
+        raidWarnRing.position.set(air.targetX, groundY + 0.3, air.targetZ);
+        raidWarnRing.material.opacity = 0.4 + Math.abs(Math.sin(simTime * 8)) * 0.5;
+      }
+      if (air.t >= air.dur) {
+        air.state = 'dive';
+        air.t = 0; air.dur = 0.45;
+        air.diveStartX = mob.mesh.position.x;
+        air.diveStartY = mob.mesh.position.y;
+        air.diveStartZ = mob.mesh.position.z;
+        air.hitDone = false;
+        if (raidWarnRing) raidWarnRing.visible = false;
+      }
+      return;
+    }
+    if (air.state === 'dive') {
+      const k = Math.min(1, air.t / air.dur);
+      mob.mesh.position.set(
+        air.diveStartX + (air.targetX - air.diveStartX) * k,
+        air.diveStartY,
+        air.diveStartZ + (air.targetZ - air.diveStartZ) * k
+      );
+      if (!air.hitDone) {
+        const d = Math.hypot(pos.x - mob.mesh.position.x, pos.z - mob.mesh.position.z);
+        if (d < 1.6 && Math.abs(pos.y - mob.mesh.position.y) < 3) {
+          air.hitDone = true;
+          damagePlayer(1, mob.mesh.position.x, mob.mesh.position.z);
+        }
+      }
+      if (air.t >= air.dur) {
+        air.state = 'recover';
+        air.t = 0; air.dur = 1.5;
+        air.recoverStartX = mob.mesh.position.x;
+        air.recoverStartY = mob.mesh.position.y;
+        air.recoverStartZ = mob.mesh.position.z;
+      }
+      return;
+    }
+    // recover
+    const k = Math.min(1, air.t / air.dur);
+    mob.mesh.position.set(
+      air.recoverStartX,
+      air.recoverStartY + (patrolY - air.recoverStartY) * k,
+      air.recoverStartZ
+    );
+    if (air.t >= air.dur) {
+      air.state = 'patrol';
+      air.t = 0; air.dur = 3 + Math.random() * 3;
+      air.angle = Math.atan2(air.recoverStartZ - homeZ, air.recoverStartX - homeX) || 0;
     }
   }
 
@@ -2619,6 +3196,388 @@ const SkyGame = (() => {
     });
   }
 
+  // ---- order (語序踏石: step on floating word-stones in correct word order) ----
+
+  // pool of short (3-6 word) EMPIRE_DIALOGUES/EMPIRE_LIFE answer sentences with
+  // unique, letters-only tokens — safe to scramble into stepping stones without
+  // ambiguity. Built once and cached (the underlying data arrays never change
+  // at runtime).
+  function sentencePool() {
+    if (SENTENCE_POOL) return SENTENCE_POOL;
+    const raw = [];
+    ['easy', 'medium', 'hard'].forEach(d => {
+      (EMPIRE_DIALOGUES[d] || []).forEach(e => raw.push({ text: e.a, zh: e.qZh }));
+      (EMPIRE_LIFE[d] || []).forEach(e => raw.push({ text: e.a, zh: e.scene }));
+    });
+    const seen = new Set();
+    const pool = [];
+    raw.forEach(({ text, zh }) => {
+      if (!text || seen.has(text)) return;
+      const words = text.split(/\s+/)
+        .map(w => w.replace(/^[^A-Za-z']+|[^A-Za-z']+$/g, ''))
+        .filter(Boolean);
+      if (words.length < 3 || words.length > 6) return;
+      if (!words.every(w => /^[A-Za-z']+$/.test(w))) return;
+      const lower = words.map(w => w.toLowerCase());
+      if (new Set(lower).size !== lower.length) return; // no duplicate tokens (ambiguous order)
+      seen.add(text);
+      pool.push({ text, words, zh: zh || '' });
+    });
+    SENTENCE_POOL = pool;
+    return pool;
+  }
+
+  // rounded word-plaque texture for the floating sprite above each stone
+  function wordTexture(text) {
+    const w = Math.max(150, text.length * 30 + 46);
+    const h = 84;
+    const cv = document.createElement('canvas');
+    cv.width = w; cv.height = h;
+    const ctx = cv.getContext('2d');
+    const r = 18;
+    ctx.fillStyle = 'rgba(45, 30, 75, 0.9)';
+    ctx.beginPath();
+    ctx.moveTo(r, 0);
+    ctx.lineTo(w - r, 0);
+    ctx.quadraticCurveTo(w, 0, w, r);
+    ctx.lineTo(w, h - r);
+    ctx.quadraticCurveTo(w, h, w - r, h);
+    ctx.lineTo(r, h);
+    ctx.quadraticCurveTo(0, h, 0, h - r);
+    ctx.lineTo(0, r);
+    ctx.quadraticCurveTo(0, 0, r, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#d8b4ff';
+    ctx.lineWidth = 4;
+    ctx.stroke();
+    ctx.fillStyle = '#ffe9a8';
+    ctx.font = 'bold 38px "Noto Sans TC", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, w / 2, h / 2 + 2);
+    return new THREE.CanvasTexture(cv);
+  }
+
+  function pickOrderSentence() {
+    const pool = sentencePool();
+    const avail = pool.filter(p => !orderActive.usedTexts.has(p.text));
+    const list = avail.length ? avail : pool;
+    return list[Math.floor(Math.random() * list.length)];
+  }
+
+  function removeOrderStoneMeshes() {
+    if (!orderActive) return;
+    orderActive.stones.forEach(s => { scene.remove(s.mesh); scene.remove(s.sprite); });
+    orderActive.stones = [];
+  }
+
+  function buildOrderSentence() {
+    const oa = orderActive;
+    if (!oa) return;
+    const q = oa.q;
+    const isle = isleById(q.island);
+    removeOrderStoneMeshes();
+    const entry = pickOrderSentence();
+    oa.usedTexts.add(entry.text);
+    oa.entry = entry;
+    oa.words = entry.words.slice();
+    oa.sentence = entry.text;
+    oa.zh = entry.zh;
+    oa.idx = 0;
+    oa.standingOn = null;
+    const baseX = isle.pos[0] + q.dx, baseZ = isle.pos[2] + q.dz;
+    const topY = isle.pos[1] + 0.15;
+    const n = oa.words.length;
+    const order = shuffled(oa.words.map((_, i) => i));
+    const stoneGeo = GEO.orderStone || (GEO.orderStone = new THREE.CylinderGeometry(0.85, 0.95, 0.3, 10));
+    const stones = [];
+    const rr = 2 + n * 0.28;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2;
+      const x = baseX + Math.cos(a) * rr;
+      const z = baseZ + Math.sin(a) * rr;
+      const word = oa.words[order[i]];
+      const mesh = new THREE.Mesh(stoneGeo, new THREE.MeshLambertMaterial({ color: 0x8a8270 }));
+      mesh.position.set(x, topY, z);
+      scene.add(mesh);
+      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: wordTexture(word), transparent: true }));
+      sprite.scale.set(Math.max(1.5, word.length * 0.3 + 0.5), 0.85, 1);
+      sprite.position.set(x, topY + 1.3, z);
+      scene.add(sprite);
+      stones.push({ mesh, sprite, word, x, z, done: false });
+    }
+    oa.stones = stones;
+    showWorldToast(`🪨 中文意思：${entry.zh}　依序踏上正確的英文語序！(${oa.done + 1}/${q.n})`);
+    updateOrderHud();
+  }
+
+  function startOrder(q) {
+    if (orderActive && orderActive.q.id === q.id) {
+      showWorldToast(`🪨 語序踏石進行中！中文意思：${orderActive.zh}`);
+      return;
+    }
+    if (orderActive) cancelOrder('');
+    if (mazeActive) cancelMaze('');
+    if (raceActive) cancelRace('');
+    orderActive = {
+      q, entry: null, words: [], sentence: '', zh: '',
+      stones: [], idx: 0, done: 0, standingOn: null, usedTexts: new Set(),
+    };
+    buildOrderSentence();
+    SoundManager.playAchievement();
+  }
+
+  function cancelOrder(msg) {
+    if (!orderActive) return;
+    removeOrderStoneMeshes();
+    orderActive = null;
+    updateOrderHud();
+    if (msg) showWorldToast(msg);
+  }
+
+  function resetOrderStones() {
+    const oa = orderActive;
+    oa.idx = 0;
+    oa.stones.forEach(s => {
+      s.done = false;
+      s.mesh.material.color.setHex(0x8a8270);
+      s.mesh.material.emissive = new THREE.Color(0x000000);
+    });
+    updateOrderHud();
+  }
+
+  function handleOrderStep(s) {
+    const oa = orderActive;
+    const expected = oa.words[oa.idx];
+    if (s.word === expected) {
+      s.done = true;
+      s.mesh.material.color.setHex(0x4ade80);
+      s.mesh.material.emissive = new THREE.Color(0x1a5a2a);
+      SoundManager.playCorrect();
+      oa.idx++;
+      updateOrderHud();
+      if (oa.idx >= oa.words.length) {
+        if (typeof TTSManager !== 'undefined' && TTSManager) TTSManager.speak(oa.sentence, 'en-US');
+        oa.done++;
+        spawnConfetti(12);
+        if (oa.done >= oa.q.n) {
+          showWorldToast(`✨ 語序全對！(${oa.done}/${oa.q.n})`);
+          const q = oa.q;
+          setTimeout(() => {
+            removeOrderStoneMeshes();
+            orderActive = null;
+            updateOrderHud();
+            finishQuestDirect(q);
+          }, 1000);
+        } else {
+          showWorldToast(`✨ 完成一句！(${oa.done}/${oa.q.n})`);
+          setTimeout(buildOrderSentence, 1100);
+        }
+      }
+    } else {
+      SoundManager.playWrong();
+      showWorldToast('🪨 再想想語序！');
+      resetOrderStones();
+    }
+  }
+
+  function updateOrder() {
+    if (!orderActive || quizOpen) return;
+    const isle = isleById(orderActive.q.island);
+    const topY = isle.pos[1] + 0.15;
+    let onStone = null;
+    for (const s of orderActive.stones) {
+      if (s.done) continue;
+      const d = Math.hypot(pos.x - s.x, pos.z - s.z);
+      if (d < 1.6 && Math.abs(pos.y - topY) < 2.4) { onStone = s; break; }
+    }
+    if (onStone) {
+      if (orderActive.standingOn !== onStone) {
+        orderActive.standingOn = onStone;
+        handleOrderStep(onStone);
+      }
+    } else {
+      orderActive.standingOn = null;
+    }
+  }
+
+  function updateOrderHud() {
+    ensureCombatHud();
+    if (!orderActive) { if (!mazeActive) combatHud.session.style.display = 'none'; return; }
+    combatHud.session.style.display = '';
+    combatHud.session.textContent =
+      `🪨 中文意思：${orderActive.zh}　踏對 ${orderActive.idx}/${orderActive.words.length}　📜 ${orderActive.done}/${orderActive.q.n}`;
+  }
+
+  // ---- maze (傳送迷宮: answer a clue at each of 4 portal-gate nodes to advance) ----
+  function makeMazeArch() {
+    const g = new THREE.Group();
+    [-0.7, 0.7].forEach(x => {
+      const p = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 1.7, 6),
+        new THREE.MeshLambertMaterial({ color: 0x44305a }));
+      p.position.set(x, 0.85, 0);
+      g.add(p);
+    });
+    const arch = new THREE.Mesh(new THREE.TorusGeometry(0.8, 0.13, 8, 16, Math.PI),
+      new THREE.MeshLambertMaterial({ color: 0xb06ae8, emissive: 0x5a2a9a }));
+    arch.position.set(0, 1.7, 0);
+    g.add(arch);
+    return g;
+  }
+
+  function buildMazeNodes(q) {
+    const isle = isleById(q.island);
+    const baseX = isle.pos[0] + q.dx, baseZ = isle.pos[2] + q.dz;
+    const nodes = [];
+    for (let i = 0; i < 4; i++) {
+      const a = i * (Math.PI / 2) + 0.5;
+      const rr = 1.6 + i * 1.0;
+      const x = baseX + Math.cos(a) * rr;
+      const z = baseZ + Math.sin(a) * rr;
+      const mesh = makeMazeArch();
+      mesh.position.set(x, isle.pos[1], z);
+      scene.add(mesh);
+      nodes.push({ mesh, x, z });
+    }
+    return { nodes, baseX, baseZ, isleY: isle.pos[1] };
+  }
+
+  function startMaze(q) {
+    if (mazeActive && mazeActive.q.id === q.id) {
+      showWorldToast(`🌀 傳送迷宮進行中！前往第 ${mazeActive.idx + 1}/4 個傳送門！`);
+      return;
+    }
+    if (mazeActive) cancelMaze('');
+    if (orderActive) cancelOrder('');
+    if (raceActive) cancelRace('');
+    const isle = isleById(q.island);
+    const { nodes, baseX, baseZ, isleY } = buildMazeNodes(q);
+    mazeActive = { q, startX: baseX, startZ: baseZ, isleY, nodes, idx: 0, chest: null };
+    els.flash.classList.add('on');
+    setTimeout(() => els.flash.classList.remove('on'), 420);
+    pos.x = baseX; pos.z = baseZ; pos.y = isleY + bobOf(isle.id) + 2; vy = 0;
+    showWorldToast('🌀 傳送迷宮：走到發光的傳送門前回答問題，答對前進、答錯彈回起點！');
+    SoundManager.playAchievement();
+    updateMazeHud();
+  }
+
+  function clearMaze() {
+    if (!mazeActive) return;
+    mazeActive.nodes.forEach(n => scene.remove(n.mesh));
+    if (mazeActive.chest) scene.remove(mazeActive.chest);
+    mazeActive = null;
+    updateMazeHud();
+  }
+
+  function cancelMaze(msg) {
+    clearMaze();
+    if (msg) showWorldToast(msg);
+  }
+
+  function mazeWarpTo(x, z) {
+    const isle = isleById(mazeActive.q.island);
+    els.flash.classList.add('on');
+    setTimeout(() => els.flash.classList.remove('on'), 420);
+    pos.x = x; pos.z = z; pos.y = mazeActive.isleY + bobOf(isle.id) + 2; vy = 0;
+  }
+
+  function mazeAdvance() {
+    if (!mazeActive) return;
+    mazeActive.idx++;
+    if (mazeActive.idx >= mazeActive.nodes.length) {
+      mazeSpawnChest();
+      return;
+    }
+    const next = mazeActive.nodes[mazeActive.idx];
+    mazeWarpTo(next.x, next.z);
+    showWorldToast(`🌀 傳送門開啟！前進到第 ${mazeActive.idx + 1}/4 關！`);
+    SoundManager.playCorrect();
+    updateMazeHud();
+  }
+
+  function mazeResetToStart() {
+    if (!mazeActive) return;
+    mazeActive.idx = 0;
+    mazeWarpTo(mazeActive.startX, mazeActive.startZ);
+    showWorldToast('💫 答錯了！傳送門把你彈回起點了！');
+    updateMazeHud();
+  }
+
+  function mazeSpawnChest() {
+    const last = mazeActive.nodes[mazeActive.nodes.length - 1];
+    const chest = makeQuestVisual({ type: 'chest' });
+    chest.position.set(last.x, mazeActive.isleY, last.z);
+    scene.add(chest);
+    mazeActive.chest = chest;
+    spawnConfetti(24);
+    showWorldToast('📦 四座傳送門都通過了！寶箱出現了！');
+    SoundManager.playQuestComplete();
+    const q = mazeActive.q;
+    updateMazeHud();
+    setTimeout(() => { clearMaze(); finishQuestDirect(q); }, 1200);
+  }
+
+  function onMazeCorrect(word) {
+    awardAnswer(!!word, word);
+    quiz.fb.textContent = '✨ 答對了！傳送門開啟！';
+    quiz.fb.className = 'aw-quiz-feedback good';
+    setTimeout(() => { closeQuiz(); mazeAdvance(); }, 700);
+  }
+
+  function onMazeWrong() {
+    quiz.fb.textContent = '💫 答錯了！傳送門要把你彈回起點了！';
+    quiz.fb.className = 'aw-quiz-feedback';
+    setTimeout(() => { closeQuiz(); mazeResetToStart(); }, 900);
+  }
+
+  function openMazeClue() {
+    const q = mazeActive.q;
+    ensureQuizDom();
+    active = { q: { ...q, type: 'chest' }, replay: isCleared(q), wrongThis: false, anyWrong: false, step: 0, ttsText: null, mazeBonus: true };
+    quizOpen = true;
+    GameEngine.setDeferLevelUp(true);
+    quiz.root.classList.add('on');
+    quiz.name.textContent = `🌀 傳送門謎題（第 ${mazeActive.idx + 1}/4 關）`;
+    quiz.prog.textContent = '';
+    quiz.npc.style.display = 'none';
+    quiz.tts.style.display = 'none';
+    quiz.fb.textContent = '';
+    if (Math.random() < 0.5) {
+      const entry = GRAMMAR_DATA[Math.floor(Math.random() * GRAMMAR_DATA.length)];
+      const options = shuffled(entry.options.slice());
+      quiz.prompt.innerHTML = entry.sentence.replace(/_+/g, '<span class="aw-blank">____</span>');
+      quiz.zh.textContent = entry.translation || '';
+      renderOptions(options, options.indexOf(entry.blank), () => onMazeCorrect(), null, () => onMazeWrong());
+    } else {
+      const pool = vocabPool(q.diff);
+      const entry = pool[Math.floor(Math.random() * pool.length)];
+      const distract = pickN(pool.filter(e => e.word !== entry.word), 3).map(e => e.word);
+      const options = shuffled([entry.word, ...distract]);
+      quiz.prompt.innerHTML = `${entry.hint} ${entry.sentence.replace(/_+/g, '<span class="aw-blank">____</span>')}`;
+      quiz.zh.innerHTML = zhPretty(entry.zh);
+      renderOptions(options, options.indexOf(entry.word), () => onMazeCorrect(entry.word), null, () => onMazeWrong());
+    }
+  }
+
+  function updateMaze(dt) {
+    if (!mazeActive || quizOpen) return;
+    const node = mazeActive.nodes[mazeActive.idx];
+    if (!node) return;
+    node.mesh.rotation.y += dt * 1.4;
+    const d = Math.hypot(pos.x - node.x, pos.z - node.z);
+    if (d < 2 && Math.abs(pos.y - mazeActive.isleY) < 4) {
+      openMazeClue();
+    }
+  }
+
+  function updateMazeHud() {
+    ensureCombatHud();
+    if (!mazeActive) { if (!orderActive) combatHud.session.style.display = 'none'; return; }
+    combatHud.session.style.display = '';
+    combatHud.session.textContent = `🌀 傳送迷宮：第 ${mazeActive.idx + 1}/4 個傳送門`;
+  }
+
   // ---- race ----
   function startRace(q) {
     if (raceActive) { showWorldToast('🏁 比賽進行中！穿過金色的環！'); return; }
@@ -2736,11 +3695,18 @@ const SkyGame = (() => {
     race.className = 'aw-race';
     race.style.display = 'none';
     els.wrap.appendChild(race);
+    // shared HUD pill for the 'order'/'maze' puzzle sessions (mutually
+    // exclusive with each other and with race, so one div covers both)
+    const session = document.createElement('div');
+    session.className = 'aw-race';
+    session.style.display = 'none';
+    els.wrap.appendChild(session);
     combatHud = {
       bossBar: bar,
       bossLabel: bar.querySelector('#sky-boss-label'),
       bossFill: bar.querySelector('#sky-boss-fill'),
       race,
+      session,
     };
   }
 
@@ -2766,6 +3732,13 @@ const SkyGame = (() => {
       rage: 0xffd700, rageEm: 0xaa8800, summon: 'knight', scale: 1.2,
       wake: '🌑 星影守護者甦醒了！古老的力量在神殿中匯聚！',
       win: '🎆 星影散去，神殿重現光明！你成為傳說中的秘境英雄！',
+    },
+    squ_core_boss: {
+      name: '熔岩核心巨獸', icon: '🌋', body: 0x1a0f08, bodyEm: 0x3a0e02,
+      head: 0x241408, arm: 0x140b05, eye: 0xff8a1a, eyeEm: 0xdd3300,
+      rage: 0xffe066, rageEm: 0xff5500, summon: 'magma_slime', scale: 1.25,
+      wake: '🌋 熔岩核心巨獸甦醒了！地心的怒火在燃燒！',
+      win: '🎆 核心的怒火平息了！你征服了整個地心世界！',
     },
   };
   function bossDef(q) { return BOSS_DEFS[q.id] || BOSS_DEFS.sq_storm_boss; }
@@ -2892,9 +3865,16 @@ const SkyGame = (() => {
     if (combatHud) combatHud.bossBar.style.display = 'none';
     if (shockRing) shockRing.visible = false;
     if (warnRing) warnRing.visible = false;
-    // the sky clears (via the atmosphere base so the altitude blend keeps working)
-    fogBase.setHex(0xcfeeff);
-    galaxyBlend = -1;
+    const bossIsle = isleById(q.island);
+    if (bossIsle && bossIsle.underground) {
+      // no sky to clear this deep down — just force the underground blend to
+      // recompute so it doesn't fight the (unchanged) galaxy blend afterwards
+      undergroundBlend = -1;
+    } else {
+      // the sky clears (via the atmosphere base so the altitude blend keeps working)
+      fogBase.setHex(0xcfeeff);
+      galaxyBlend = -1;
+    }
     const winMsg = bossDef(q).win;
     bossActive = null;
     bossParts = null;
@@ -2993,10 +3973,273 @@ const SkyGame = (() => {
     let best = null, bd = maxD;
     for (const m of mobs) {
       if (m.dead || m.gone) continue;
+      if (m.def.flies && !flyerAttackable(m)) continue; // flying too high to reach
       const d = Math.hypot(pos.x - m.mesh.position.x, pos.z - m.mesh.position.z);
       if (d < bd) { bd = d; best = m; }
     }
     return best;
+  }
+
+  // ===================== ☄️ 天空事件系統 (world events — Wave 2) =====================
+  // Random world events roll while the player is free-roaming (not mid-quiz,
+  // boss fight or race). Two kinds: a 30s METEOR SHOWER (collect falling star
+  // shards) and an up-to-45s AIR RAID (kill 3 storm_falcons). Only one event
+  // is ever active at a time; both freeze while a combat/quest quiz is open.
+  let worldEvent = null;     // { type:'meteor'|'raid', t, ... } — see startMeteorShower/startAirRaid
+  let eventTimer = 0;
+  let eventCooldown = 75;    // seconds until the next roll attempt
+
+  // re-plays whichever track fits where the player currently stands — shared
+  // by the island-change ground check, portal travel, and world-event cleanup
+  // so all three branch identically instead of duplicating the underground/
+  // secret/normal logic three times.
+  function playRegionMusic(isle) {
+    isle = isle || isleById(currentIsland) || SKY_ISLANDS[0];
+    try {
+      if (typeof MusicManager === 'undefined') return;
+      if (isle.underground) MusicManager.play('cave');
+      else if (isle.secret) MusicManager.play('mystic');
+      else MusicManager.playForZone('sky');
+    } catch (e) { /* music optional — never block gameplay */ }
+  }
+
+  // type omitted → let the scheduler pick; both bypass the "no concurrent
+  // event" / lock checks the same way so the __skyTest.triggerEvent hook can
+  // reuse this for its own eligibility assertions.
+  function canStartEvent(type) {
+    if (worldEvent || !playing || quizOpen || bossActive || raceActive) return false;
+    if (type === 'meteor' && regionUnderground) return false; // 地心世界 doesn't get a sky meteor shower
+    if (type === 'raid' && totalCleared() < 10) return false; // protect beginners from air raids
+    return true;
+  }
+
+  function rollWorldEvent() {
+    const canMeteor = canStartEvent('meteor');
+    const canRaid = canStartEvent('raid');
+    if (!canMeteor && !canRaid) return;
+    const type = (canMeteor && canRaid) ? (Math.random() < 0.5 ? 'meteor' : 'raid')
+      : (canMeteor ? 'meteor' : 'raid');
+    if (type === 'meteor') startMeteorShower(); else startAirRaid();
+  }
+
+  // ---- meteor shower ----
+  let _shardGlowTex = null;
+  function shardGlowTex() {
+    if (_shardGlowTex) return _shardGlowTex;
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = 64;
+    const ctx = cv.getContext('2d');
+    const grad = ctx.createRadialGradient(32, 32, 2, 32, 32, 32);
+    grad.addColorStop(0, 'rgba(255,230,102,0.9)');
+    grad.addColorStop(1, 'rgba(255,230,102,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 64, 64);
+    _shardGlowTex = new THREE.CanvasTexture(cv);
+    return _shardGlowTex;
+  }
+
+  function makeShardMesh() {
+    const g = new THREE.Group();
+    const core = new THREE.Mesh(new THREE.OctahedronGeometry(0.4, 0),
+      new THREE.MeshLambertMaterial({ color: 0xffe066, emissive: 0xcc9900 }));
+    g.add(core);
+    if (!lowPower()) {
+      const glow = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: shardGlowTex(), transparent: true, depthWrite: false, fog: false, opacity: 0.85,
+      }));
+      glow.scale.set(2.2, 2.2, 1);
+      g.add(glow);
+    }
+    return g;
+  }
+
+  function startMeteorShower() {
+    const isle = isleById(currentIsland) || isleById(lastGroundIsland) || SKY_ISLANDS[0];
+    const groundY = isle.pos[1] + bobOf(isle.id);
+    const shards = [];
+    const N = 8;
+    for (let i = 0; i < N; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const r = Math.random() * Math.max(2, isle.r - 3);
+      const gx = isle.pos[0] + Math.cos(a) * r;
+      const gz = isle.pos[2] + Math.sin(a) * r;
+      const mesh = makeShardMesh();
+      mesh.position.set(gx, groundY + 25, gz);
+      scene.add(mesh);
+      shards.push({
+        mesh, gx, gz, groundY, state: 'falling', t: 0,
+        fallDur: 1.5 + Math.random() * 0.5, got: false, gone: false,
+        spin: Math.random() * 6.28,
+      });
+    }
+    worldEvent = { type: 'meteor', t: 0, dur: 30, shards, collected: 0 };
+    showWorldToast('☄️ 流星雨來了！快撿拾墜落的星屑！');
+    if (typeof MusicManager !== 'undefined') { try { MusicManager.play('starfall'); } catch (e) { /* optional */ } }
+    buildMeteorStreaks();
+  }
+
+  function updateMeteorShower(dt) {
+    const ev = worldEvent;
+    for (const s of ev.shards) {
+      if (s.got || s.gone) continue;
+      if (s.state === 'falling') {
+        s.t += dt;
+        const k = Math.min(1, s.t / s.fallDur);
+        s.mesh.position.y = (s.groundY + 25) + ((s.groundY + 0.6) - (s.groundY + 25)) * k;
+        if (k >= 1) s.state = 'resting';
+      } else {
+        s.mesh.position.y = s.groundY + 0.6 + Math.sin(simTime * 3 + s.spin) * 0.15;
+      }
+      s.mesh.rotation.y += dt * 2;
+      const d = Math.hypot(pos.x - s.mesh.position.x, pos.z - s.mesh.position.z);
+      if (d < 1.8 && Math.abs(pos.y - s.mesh.position.y) < 3) {
+        s.got = true;
+        scene.remove(s.mesh);
+        ev.collected++;
+        skyAddGems(1);
+        SoundManager.playCorrect();
+        GameEngine.recordSkyShard?.();
+        spawnConfetti(6);
+      }
+    }
+    updateMeteorStreaks(dt);
+    if (ev.collected >= ev.shards.length) {
+      skyAddGems(5);
+      showWorldToast('🌟 全部接住了！額外 +5 💎');
+      endWorldEvent();
+      return;
+    }
+    if (ev.t >= ev.dur) endWorldEvent(); // uncollected shards fade via despawnEventVisuals
+  }
+
+  // decorative meteor streaks crossing the sky dome (cheap: 3 sprites, no new draw calls per streak)
+  let meteorStreaks = null;
+  let _streakTex = null;
+  function meteorStreakTex() {
+    if (_streakTex) return _streakTex;
+    const cv = document.createElement('canvas');
+    cv.width = 128; cv.height = 16;
+    const ctx = cv.getContext('2d');
+    const grad = ctx.createLinearGradient(0, 0, 128, 0);
+    grad.addColorStop(0, 'rgba(255,255,255,0)');
+    grad.addColorStop(0.7, 'rgba(255,240,180,0.9)');
+    grad.addColorStop(1, 'rgba(255,255,255,1)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 128, 16);
+    _streakTex = new THREE.CanvasTexture(cv);
+    return _streakTex;
+  }
+  function resetStreak(s, immediate) {
+    s.startX = pos.x - 150 + Math.random() * 100;
+    s.startZ = pos.z - 150 + Math.random() * 300;
+    s.y = pos.y + 60 + Math.random() * 40;
+    s.t = immediate ? Math.random() : 0;
+    s.dur = 1.2 + Math.random() * 0.8;
+  }
+  function buildMeteorStreaks() {
+    if (lowPower() || meteorStreaks) return;
+    meteorStreaks = [];
+    for (let i = 0; i < 3; i++) {
+      const spr = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: meteorStreakTex(), transparent: true, depthWrite: false, fog: false, rotation: -0.7,
+      }));
+      spr.scale.set(40, 5, 1);
+      scene.add(spr);
+      const s = { spr, t: 0, dur: 1 };
+      resetStreak(s, true);
+      meteorStreaks.push(s);
+    }
+  }
+  function updateMeteorStreaks(dt) {
+    if (!meteorStreaks) return;
+    meteorStreaks.forEach(s => {
+      s.t += dt / s.dur;
+      if (s.t >= 1) resetStreak(s, false);
+      const k = Math.min(1, s.t);
+      s.spr.position.set(s.startX + k * 90, s.y - k * 60, s.startZ + k * 40);
+      s.spr.material.opacity = Math.sin(k * Math.PI);
+    });
+  }
+  function clearMeteorStreaks() {
+    if (!meteorStreaks) return;
+    meteorStreaks.forEach(s => scene.remove(s.spr));
+    meteorStreaks = null;
+  }
+
+  // ---- air raid ----
+  function startAirRaid() {
+    const isle = isleById(currentIsland) || isleById(lastGroundIsland) || SKY_ISLANDS[0];
+    const falcons = [];
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * Math.PI * 2;
+      const m = spawnMob('storm_falcon', isle.id, Math.cos(a) * 8, Math.sin(a) * 8, '__raid');
+      if (m) falcons.push(m);
+    }
+    worldEvent = { type: 'raid', t: 0, dur: 45, falcons };
+    showWorldToast('🦅 空襲警報！風暴隼來襲！');
+    SoundManager.playAchievement();
+  }
+
+  function updateAirRaid(dt) {
+    const ev = worldEvent;
+    const alive = ev.falcons.filter(f => !f.dead && !f.gone);
+    if (alive.length === 0) {
+      skyAddGems(8);
+      showWorldToast('🛡️ 擊退空襲！+8 💎');
+      GameEngine.recordSkyRaid?.();
+      spawnConfetti(20);
+      endWorldEvent();
+      return;
+    }
+    if (ev.t >= ev.dur) {
+      showWorldToast('風暴隼飛走了…');
+      endWorldEvent();
+    }
+  }
+
+  // ---- shared lifecycle ----
+  // remove/fade whatever's left of an event's visuals without granting any
+  // reward — used by the timeout and player-KO exits (win exits have nothing
+  // left to clean up: shards are all `.got`, falcons all `.dead`).
+  function despawnEventVisuals(ev) {
+    if (!ev) return;
+    if (ev.type === 'meteor') {
+      ev.shards.forEach(s => { if (!s.got && !s.gone) { scene.remove(s.mesh); s.gone = true; } });
+      clearMeteorStreaks();
+    } else if (ev.type === 'raid') {
+      // mark still-alive falcons dead (no gems/toast) so updateMobs' existing
+      // shrink-and-fade animation carries them off screen — no extra code needed
+      ev.falcons.forEach(f => { if (!f.dead && !f.gone) f.dead = true; });
+      if (raidWarnRing) raidWarnRing.visible = false;
+    }
+  }
+
+  function endWorldEvent() {
+    despawnEventVisuals(worldEvent);
+    worldEvent = null;
+    playRegionMusic();
+  }
+
+  function updateWorldEvent(dt) {
+    if (!worldEvent) {
+      // only count toward the next roll while the player is genuinely free
+      // (not mid-quiz/quest, boss fight or race) — being busy pauses the
+      // countdown rather than silently spending it on a roll that would
+      // just get rejected by canStartEvent() anyway
+      if (playing && !quizOpen && !bossActive && !raceActive) {
+        eventTimer += dt;
+        if (eventTimer > eventCooldown) {
+          eventTimer = 0;
+          eventCooldown = 90 + Math.random() * 60;
+          rollWorldEvent();
+        }
+      }
+      return;
+    }
+    if (quizOpen) return; // events pause while any quiz is open
+    worldEvent.t += dt;
+    if (worldEvent.type === 'meteor') updateMeteorShower(dt);
+    else updateAirRaid(dt);
   }
 
   // ===================== player =====================
@@ -3203,7 +4446,7 @@ const SkyGame = (() => {
     if (mlen > 0.001) {
       mx /= mlen; mz /= mlen;
       const speed = SKY_CONFIG.walkSpeed * (perks.speedMult || 1) *
-        (sprint ? SKY_CONFIG.sprintMult : 1) * Math.min(1, mag || 1);
+        (sprint ? SKY_CONFIG.sprintMult : 1) * Math.min(1, mag || 1) * (mountT > 0 ? 1.6 : 1);
       pos.x += mx * speed * dt;
       pos.z += mz * speed * dt;
       const targetYaw = Math.atan2(mx, mz);
@@ -3219,6 +4462,13 @@ const SkyGame = (() => {
 
     // vertical (hold jump to glide with 傳說勇者 title or 🪂 glider)
     const prevFeet = pos.y;
+    if (mountT > 0) {
+      // ☁️ 飛天雲: free flight — hold jump to ascend, release to sink gently;
+      // the entire gravity/collision/jump/void block below is skipped while mounted
+      vy = jumpHeld ? 6 : -2;
+      pos.y += vy * dt;
+      grounded = false;
+    } else {
     vy += SKY_CONFIG.gravity * dt;
     if (jumpHeld && vy < -3.2 && (perks.glide || gliderOn)) vy = -3.2;
     pos.y += vy * dt;
@@ -3236,15 +4486,13 @@ const SkyGame = (() => {
           const isle = isleById(currentIsland);
           if (isle) {
             els.location.textContent = `🏝️ ${isle.name}`;
+            regionUnderground = !!isle.underground;
             // secret realms (portal or hidden-stairway entry) swap to the mystic
-            // track; leaving one back to the normal per-zone rotation — this
-            // also covers the stairway-only realms that have no usePortal() call
-            try {
-              if (typeof MusicManager !== 'undefined') {
-                if (isle.secret) MusicManager.play('mystic');
-                else MusicManager.playForZone('sky');
-              }
-            } catch (e) { /* music optional — never block movement */ }
+            // track; 地心世界 swaps to the cave track; leaving either back to the
+            // normal per-zone rotation — this also covers the stairway-only
+            // secret realms and the underground cluster, neither of which are
+            // always reached through usePortal()
+            playRegionMusic(isle);
             if (save.lastIsland !== currentIsland) {
               save.lastIsland = currentIsland;
               persist();
@@ -3281,9 +4529,13 @@ const SkyGame = (() => {
         jumpBufferedAt = -10;
       }
     }
+    }
 
-    // fell into the void
-    if (pos.y < SKY_CONFIG.voidY) voidFall();
+    // fell into the void (地心世界 uses a much deeper threshold — its own
+    // islands sit at y -70..-95, well below the surface voidY of -40);
+    // skipped while ☁️ 飛天雲 is active so the free-flight ride never gets
+    // interrupted by a stray void check.
+    if (mountT <= 0 && pos.y < (regionUnderground ? SKY_CONFIG.undergroundVoidY : SKY_CONFIG.voidY)) voidFall();
 
     // apply to mesh
     player.position.set(pos.x, pos.y, pos.z);
@@ -3340,7 +4592,10 @@ const SkyGame = (() => {
     updateBoss(dt);
     updateRace(dt);
     updateRunePickup();
+    updateOrder();
+    updateMaze(dt);
     checkSecretDiscovery();
+    updateWorldEvent(dt);
     // slowly regain hearts out of combat
     if (playing && hearts < maxHearts() && simTime - lastDamageAt > 20) {
       hearts++;
@@ -3352,20 +4607,99 @@ const SkyGame = (() => {
     minimapTimer += dt;
     if (minimapTimer > 0.12) { minimapTimer = 0; drawMinimap(); }
     buffBarTimer += dt;
-    if (buffBarTimer > 1) { buffBarTimer = 0; updateBuffBar(); }
+    if (buffBarTimer > 1) { buffBarTimer = 0; updateBuffBar(); updateItemTray(); }
     trackerTimer += dt;
     if (trackerTimer > 0.15) { trackerTimer = 0; updateTracker(); }
     updateCulling();
     watchFps(dt);
     if (particles) particles.rotation.y += dt * 0.004;
-    // deep-space tint as the player climbs toward the galaxy region
-    const gt = Math.min(1, Math.max(0, (pos.y - 70) / 50));
-    if (Math.abs(gt - galaxyBlend) > 0.01) {
-      galaxyBlend = gt;
-      scene.fog.color.copy(fogBase).lerp(fogGalaxy, gt);
-      hemiLight.color.copy(hemiBase).lerp(hemiGalaxy, gt);
-      // darken the sky dome itself (color multiplies its gradient texture)
-      skyDome.material.color.setRGB(1 - gt * 0.55, 1 - gt * 0.62, 1 - gt * 0.3);
+    if (emberParticles) {
+      const arr = emberParticles.geometry.attributes.position.array;
+      for (let i = 1; i < arr.length; i += 3) {
+        arr[i] += dt * 1.4;
+        if (arr[i] > EMBER_Y_HI) arr[i] = EMBER_Y_LO;
+      }
+      emberParticles.geometry.attributes.position.needsUpdate = true;
+    }
+    // ambient decoration drift (☁️ Wave 4 polish; arrays stay empty under lowPower())
+    for (const mist of waterMistSystems) {
+      const arr = mist.geometry.attributes.position.array;
+      for (let i = 1; i < arr.length; i += 3) {
+        arr[i] += dt * 1.1;
+        if (arr[i] > 2.5) arr[i] = 0;
+      }
+      mist.geometry.attributes.position.needsUpdate = true;
+    }
+    for (const sys of fireflySystems) {
+      const arr = sys.points.geometry.attributes.position.array;
+      const base = sys.base, phase = sys.phase;
+      for (let i = 0; i < phase.length; i++) {
+        arr[i * 3] = base[i * 3] + Math.sin(simTime * 0.8 + phase[i]) * 0.4;
+        arr[i * 3 + 1] = base[i * 3 + 1] + Math.sin(simTime * 1.4 + phase[i] * 1.7) * 0.35;
+        arr[i * 3 + 2] = base[i * 3 + 2] + Math.cos(simTime * 0.8 + phase[i]) * 0.4;
+      }
+      sys.points.geometry.attributes.position.needsUpdate = true;
+    }
+    // ⚡ active-use item timers: chain-lightning fade + shield/mount durations
+    updateLightningLines(dt);
+    if (shieldT > 0) {
+      shieldT -= dt;
+      if (shieldMesh) {
+        shieldMesh.rotation.y += dt * 0.6;
+        shieldMesh.material.opacity = 0.18 + Math.sin(simTime * 3) * 0.07;
+      }
+      if (shieldT <= 0) {
+        shieldT = 0;
+        if (shieldMesh) shieldMesh.visible = false;
+        showWorldToast('🫧 泡泡護罩消失了！');
+        SoundManager.playCorrect();
+        updateItemTray();
+      }
+    }
+    if (mountT > 0) {
+      mountT -= dt;
+      if (mountMesh) mountMesh.position.y = -0.05 + Math.sin(simTime * 3) * 0.06;
+      if (!mountWarned && mountT <= 3) {
+        mountWarned = true;
+        showWorldToast('☁️ 雲朵即將散開⋯⋯');
+      }
+      if (mountT <= 0) {
+        mountT = 0;
+        if (mountMesh) mountMesh.visible = false;
+        showWorldToast('☁️ 雲朵散開了！');
+        updateItemTray();
+      }
+    }
+    // altitude atmosphere — deep-space tint climbing toward the galaxy region,
+    // deep-red cave gloom descending toward 地心世界; the two bands never
+    // overlap (galaxy sits at y>70, underground at y<-20) so only one branch
+    // ever actively lerps at a time.
+    const ut = Math.min(1, Math.max(0, (-pos.y - 20) / 40));
+    if (ut > 0.001) {
+      if (Math.abs(ut - undergroundBlend) > 0.01) {
+        undergroundBlend = ut;
+        scene.fog.color.copy(fogBase).lerp(fogUnderground, ut);
+        hemiLight.color.copy(hemiBase).lerp(hemiUnderground, ut);
+        skyDome.material.color.setRGB(1 - ut * 0.75, 1 - ut * 0.88, 1 - ut * 0.92);
+        scene.fog.far = SKY_CONFIG.fogFar + (150 - SKY_CONFIG.fogFar) * ut;
+      }
+    } else {
+      if (undergroundBlend !== -1) {
+        // leaving the underground — restore surface fog-far and force the
+        // galaxy branch below to recompute so it writes the surface colors back
+        undergroundBlend = -1;
+        scene.fog.far = SKY_CONFIG.fogFar;
+        galaxyBlend = -1;
+      }
+      // deep-space tint as the player climbs toward the galaxy region
+      const gt = Math.min(1, Math.max(0, (pos.y - 70) / 50));
+      if (Math.abs(gt - galaxyBlend) > 0.01) {
+        galaxyBlend = gt;
+        scene.fog.color.copy(fogBase).lerp(fogGalaxy, gt);
+        hemiLight.color.copy(hemiBase).lerp(hemiGalaxy, gt);
+        // darken the sky dome itself (color multiplies its gradient texture)
+        skyDome.material.color.setRGB(1 - gt * 0.55, 1 - gt * 0.62, 1 - gt * 0.3);
+      }
     }
     // drifting clouds (cheap: advance a third of them per frame)
     if (cloudMesh) {
@@ -3410,6 +4744,9 @@ const SkyGame = (() => {
           if (!jumpHeld) { jumpBufferedAt = simTime; jumpHeld = true; }
           break;
         case 'KeyE': interact(); break;
+        case 'KeyQ': useActiveItem('lightning_staff'); break;
+        case 'KeyR': useActiveItem('bubble_shield'); break;
+        case 'KeyF': useActiveItem('cloud_mount'); break;
         default: return;
       }
       e.preventDefault();
@@ -3458,10 +4795,14 @@ const SkyGame = (() => {
       return;
     }
     if (raceActive && raceActive.q.id !== q.id) cancelRace('🏁 競速取消了');
+    if (orderActive && orderActive.q.id !== q.id) cancelOrder('🪨 語序踏石取消了');
+    if (mazeActive && mazeActive.q.id !== q.id) cancelMaze('🌀 傳送迷宮取消了');
     switch (q.type) {
       case 'arena': startArena(q); return;
       case 'race': startRace(q); return;
       case 'runes': startRunes(q); return;
+      case 'order': startOrder(q); return;
+      case 'maze': startMaze(q); return;
       case 'boss':
         if (bossActive) engageBoss();
         else startBoss(q);
@@ -3844,7 +5185,7 @@ const SkyGame = (() => {
     if (first) {
       GameEngine.addXP(Math.round(tier.xp * (perks.xpMult || 1)));
       skyAddGems(tier.gems);
-      GameEngine.recordSkyQuest?.(q.id.startsWith('sqg_'), q.id.startsWith('sqh_'));
+      GameEngine.recordSkyQuest?.(q.id.startsWith('sqg_'), q.id.startsWith('sqh_'), q.id.startsWith('squ_'));
       if (q.type === 'bridge') {
         save.bridgesBuilt[q.id] = true;
         persist();
@@ -3859,6 +5200,7 @@ const SkyGame = (() => {
         GameEngine.recordSkyBoss?.();
         if (q.id === 'sqh_temple_boss') GameEngine.recordSkySecretBoss?.();
       }
+      if (q.type === 'order' || q.type === 'maze') GameEngine.recordSkyPuzzle?.();
     }
     SoundManager.playQuestComplete();
     if (first) spawnConfetti(q.type === 'boss' ? 70 : 36);
