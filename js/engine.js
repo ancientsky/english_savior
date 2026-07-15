@@ -222,6 +222,8 @@ const GameEngine = (() => {
       skySecretBoss: false,
       skySwitches: 0,
       skyUndergroundQuests: 0,
+      skyShards: 0,
+      skyRaids: 0,
       // history
       learnedWordsList: [],
       // shop system
@@ -567,6 +569,18 @@ const GameEngine = (() => {
 
   function recordSkySwitch() {
     state.skySwitches = (state.skySwitches || 0) + 1;
+    save();
+    checkAchievements();
+  }
+
+  function recordSkyShard() {
+    state.skyShards = (state.skyShards || 0) + 1;
+    save();
+    checkAchievements();
+  }
+
+  function recordSkyRaid() {
+    state.skyRaids = (state.skyRaids || 0) + 1;
     save();
     checkAchievements();
   }
@@ -1295,6 +1309,7 @@ const GameEngine = (() => {
     recordRpgTalk, recordRpgChapter,
     recordSkyQuest, recordSkyAnswer, recordSkyBoss,
     recordSkySecretFound, recordSkySecretBoss, recordSkySwitch,
+    recordSkyShard, recordSkyRaid,
     recordPerfectGrammar, recordStreak,
     updateHUD, updateStats, renderItemBar,
     showInventory, showAchievements, showToast,

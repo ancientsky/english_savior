@@ -260,6 +260,24 @@ const SkyGame = (() => {
         fogHex: scene ? scene.fog.color.getHex() : null,
         fogFar: scene ? scene.fog.far : null,
       }),
+      // world-event hooks (☄️ Wave 2)
+      event: () => (worldEvent ? {
+        type: worldEvent.type,
+        t: worldEvent.t,
+        shardsLeft: worldEvent.type === 'meteor'
+          ? worldEvent.shards.filter(s => !s.got && !s.gone).length : undefined,
+        falconsLeft: worldEvent.type === 'raid'
+          ? worldEvent.falcons.filter(f => !f.dead && !f.gone).length : undefined,
+      } : null),
+      triggerEvent: type => {
+        if (!canStartEvent(type)) return false;
+        if (type === 'meteor') startMeteorShower(); else startAirRaid();
+        return true;
+      },
+      shardPos: i => {
+        const s = worldEvent && worldEvent.type === 'meteor' && worldEvent.shards[i];
+        return s ? { x: s.mesh.position.x, y: s.mesh.position.y, z: s.mesh.position.z } : null;
+      },
     };
   }
 
@@ -312,6 +330,10 @@ const SkyGame = (() => {
     hearts = maxHearts();
     playing = true;
     updateHudHearts();
+    // ☄️ world-event scheduler: fresh per adventure, first roll ~75s in
+    worldEvent = null;
+    eventTimer = 0;
+    eventCooldown = 75;
     // consumable session buffs: one use per adventure
     gliderOn = GameEngine.consumeBuff('glide');
     if (gliderOn) showWorldToast('🪂 滑翔翼啟動！按住跳躍鍵緩慢降落');
@@ -1795,13 +1817,7 @@ const SkyGame = (() => {
     lastGroundIsland = target.id;
     regionUnderground = !!target.underground;
     SoundManager.playAchievement();
-    try {
-      if (typeof MusicManager !== 'undefined') {
-        if (target.underground) MusicManager.play('cave');
-        else if (target.secret) MusicManager.play('mystic');
-        else MusicManager.playForZone('sky');
-      }
-    } catch (e) { /* mystic/cave tracks may not exist yet — never block the portal */ }
+    playRegionMusic(target);
     showWorldToast(target.underground ? `🌋 你進入了「${target.name}」！`
       : target.secret ? `🔮 你發現了「${target.name}」！`
       : q.to === 'isle_gx_hub'
@@ -2135,6 +2151,11 @@ const SkyGame = (() => {
     // own cull anyway). Mob count is small (<25), so a full pass each frame is cheap.
     for (const m of mobs) {
       if (m.gone) continue;
+      if (m.def.flies) {
+        // free-flying mobs aren't tied to their home island's group visibility
+        m.mesh.visible = Math.hypot(pos.x - m.mesh.position.x, pos.z - m.mesh.position.z) < 120;
+        continue;
+      }
       const g = islandGroups[m.isle.id];
       m.mesh.visible = !g || g.visible;
     }
@@ -2164,6 +2185,7 @@ const SkyGame = (() => {
   let bossActive = null;       // { q, mob, phase, sinceSummon, shockT, warnT, waveR, waveHit }
   let bossParts = null;
   let shockRing = null, warnRing = null;
+  let raidWarnRing = null;  // dive-telegraph ring for storm_falcon air raids (Wave 2)
   let raycaster = null;
   let combatHud = null;        // { bossBar, bossFill, bossLabel, race }
 
@@ -2216,6 +2238,26 @@ const SkyGame = (() => {
       body.castShadow = true;
       g.add(body);
       g.userData.body = body;
+    } else if (shape === 'flyer') {
+      // hawk-like: streamlined stretched body, small forward head, big swept wings
+      const body = new THREE.Mesh(new THREE.SphereGeometry(0.4, 8, 6),
+        new THREE.MeshLambertMaterial({ color: def.color }));
+      body.scale.set(1, 0.8, 1.9);
+      body.position.y = 1.4;
+      body.castShadow = true;
+      g.add(body);
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 7, 6),
+        new THREE.MeshLambertMaterial({ color: def.color }));
+      head.position.set(0, 1.46, 0.6);
+      g.add(head);
+      [-1, 1].forEach(s => {
+        const wing = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.07, 0.65), matOf(0x33415f));
+        wing.position.set(s * 1.15, 1.42, -0.05);
+        wing.rotation.z = s * 0.18;
+        g.add(wing);
+        (g.userData.wings = g.userData.wings || []).push(wing);
+      });
+      g.userData.body = body;
     } else {
       const body = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 6),
         new THREE.MeshLambertMaterial({ color: def.color }));
@@ -2232,8 +2274,8 @@ const SkyGame = (() => {
     }
     // eyes
     [-0.22, 0.22].forEach(x => {
-      const eyeY = shape === 'bat' ? 1.68 : (shape === 'wisp' ? 1.35 : 0.72);
-      const eyeZ = shape === 'slime' ? 0.62 : 0.42;
+      const eyeY = shape === 'bat' ? 1.68 : (shape === 'wisp' ? 1.35 : (shape === 'flyer' ? 1.46 : 0.72));
+      const eyeZ = shape === 'slime' ? 0.62 : (shape === 'flyer' ? 0.72 : 0.42);
       const eye = new THREE.Mesh(new THREE.SphereGeometry(0.11, 6, 5), eyeMat);
       eye.position.set(x, eyeY, eyeZ);
       g.add(eye);
@@ -2258,6 +2300,9 @@ const SkyGame = (() => {
       home: { x, z }, angle: Math.random() * 6.28,
       cooldown: 0, boost: 0, shieldT: 0, fade: 0, questId: questId || null,
     };
+    if (def.flies) {
+      mob.air = { state: 'patrol', t: 0, dur: 3 + Math.random() * 3, angle: Math.random() * 6.28 };
+    }
     mesh.traverse(o => { o.userData.mobRef = mob; });
     mesh.userData.mobRef = mob;
     mobs.push(mob);
@@ -2327,6 +2372,7 @@ const SkyGame = (() => {
     }
     if (bossActive) resetBoss();
     if (raceActive) cancelRace('');
+    if (worldEvent) endWorldEvent(); // KO during a raid/meteor shower ends it quietly (no reward)
     hearts = maxHearts();
     const dawn = SKY_ISLANDS[0];
     pos.x = dawn.pos[0]; pos.z = dawn.pos[2]; pos.y = dawn.pos[1] + 2;
@@ -2345,6 +2391,10 @@ const SkyGame = (() => {
 
   function openCombatQuiz(mob) {
     if (quizOpen || !mob || mob.dead) return;
+    if (mob.def.flies && !flyerAttackable(mob)) {
+      showWorldToast('🦅 牠飛得太高了，等牠俯衝時再攻擊！');
+      return;
+    }
     const d = Math.hypot(pos.x - mob.mesh.position.x, pos.z - mob.mesh.position.z);
     if (d > 14) { showWorldToast('🏃 再靠近一點才能攻擊！'); return; }
     ensureQuizDom();
@@ -2490,6 +2540,7 @@ const SkyGame = (() => {
         continue;
       }
       if (mob.isBoss) continue; // boss animated in updateBoss
+      if (mob.def.flies) { updateFlyer(mob, dt); continue; } // free-flight AI (☄️ world events)
       // idle animation
       const b = mob.mesh.userData.body;
       const shape = mob.def.shape || mob.def.id;
@@ -2546,6 +2597,123 @@ const SkyGame = (() => {
         mob.cooldown = 2.5;
         damagePlayer(1, mob.mesh.position.x, mob.mesh.position.z);
       }
+    }
+  }
+
+  // ---- flying mob AI (☄️ 天空事件系統 — air raid storm_falcons) ----
+  // state machine on mob.air: patrol (circle above home) → telegraph (dip low
+  // + warning ring, 1.2s) → dive (fast low swoop at the player, one hit) →
+  // recover (climb back to patrol height) → patrol again.
+  function ensureRaidWarnRing() {
+    if (raidWarnRing) return;
+    raidWarnRing = new THREE.Mesh(
+      new THREE.TorusGeometry(2.2, 0.16, 6, 28),
+      new THREE.MeshLambertMaterial({ color: 0xff5555, emissive: 0xaa2222, transparent: true, opacity: 0.8 })
+    );
+    raidWarnRing.rotation.x = Math.PI / 2;
+    raidWarnRing.visible = false;
+    scene.add(raidWarnRing);
+  }
+
+  // kid-friendly: falcons only take damage while flying low (telegraph, the
+  // dive itself, and the first ~1s of recovery) — not while circling high overhead.
+  function flyerAttackable(mob) {
+    const air = mob.air;
+    if (!air) return false;
+    return air.state === 'telegraph' || air.state === 'dive' ||
+      (air.state === 'recover' && air.t < 1.0);
+  }
+
+  function updateFlyer(mob, dt) {
+    if (mob.mesh.userData.wings) {
+      mob.mesh.userData.wings.forEach((w, i) => { w.rotation.z = Math.sin(simTime * 14) * 0.55 * (i ? -1 : 1); });
+    }
+    if (mob.shieldT > 0) {
+      mob.shieldT -= dt;
+      const b = mob.mesh.userData.body;
+      if (b) b.material.emissive = new THREE.Color(mob.shieldT > 0 ? 0x888888 : 0x000000);
+    }
+    if (quizOpen) return; // combat quiz freezes state timers (kid-friendly)
+    const air = mob.air;
+    air.t += dt;
+    const homeX = mob.home.x, homeZ = mob.home.z;
+    const groundY = mob.isle.pos[1] + bobOf(mob.isle.id);
+    const patrolY = groundY + 12;
+
+    if (air.state === 'patrol') {
+      air.angle += dt * 0.5;
+      const tx = homeX + Math.cos(air.angle) * 10;
+      const tz = homeZ + Math.sin(air.angle) * 10;
+      mob.mesh.position.set(tx, patrolY, tz);
+      mob.mesh.rotation.y = air.angle + Math.PI / 2;
+      if (air.t >= air.dur) {
+        air.state = 'telegraph';
+        air.t = 0; air.dur = 1.2;
+        air.targetX = pos.x; air.targetZ = pos.z;
+        air.startX = tx; air.startY = patrolY; air.startZ = tz;
+        air.lowY = groundY + 1.6; // low enough to be within the player's vertical hit/attack tolerance
+        ensureRaidWarnRing();
+        raidWarnRing.visible = true;
+        SoundManager.playWrong(); // screech cue
+      }
+      return;
+    }
+    if (air.state === 'telegraph') {
+      const k = Math.min(1, air.t / air.dur);
+      mob.mesh.position.set(
+        air.startX + (air.targetX - air.startX) * k,
+        air.startY + (air.lowY - air.startY) * k,
+        air.startZ + (air.targetZ - air.startZ) * k
+      );
+      if (raidWarnRing) {
+        raidWarnRing.position.set(air.targetX, groundY + 0.3, air.targetZ);
+        raidWarnRing.material.opacity = 0.4 + Math.abs(Math.sin(simTime * 8)) * 0.5;
+      }
+      if (air.t >= air.dur) {
+        air.state = 'dive';
+        air.t = 0; air.dur = 0.45;
+        air.diveStartX = mob.mesh.position.x;
+        air.diveStartY = mob.mesh.position.y;
+        air.diveStartZ = mob.mesh.position.z;
+        air.hitDone = false;
+        if (raidWarnRing) raidWarnRing.visible = false;
+      }
+      return;
+    }
+    if (air.state === 'dive') {
+      const k = Math.min(1, air.t / air.dur);
+      mob.mesh.position.set(
+        air.diveStartX + (air.targetX - air.diveStartX) * k,
+        air.diveStartY,
+        air.diveStartZ + (air.targetZ - air.diveStartZ) * k
+      );
+      if (!air.hitDone) {
+        const d = Math.hypot(pos.x - mob.mesh.position.x, pos.z - mob.mesh.position.z);
+        if (d < 1.6 && Math.abs(pos.y - mob.mesh.position.y) < 3) {
+          air.hitDone = true;
+          damagePlayer(1, mob.mesh.position.x, mob.mesh.position.z);
+        }
+      }
+      if (air.t >= air.dur) {
+        air.state = 'recover';
+        air.t = 0; air.dur = 1.5;
+        air.recoverStartX = mob.mesh.position.x;
+        air.recoverStartY = mob.mesh.position.y;
+        air.recoverStartZ = mob.mesh.position.z;
+      }
+      return;
+    }
+    // recover
+    const k = Math.min(1, air.t / air.dur);
+    mob.mesh.position.set(
+      air.recoverStartX,
+      air.recoverStartY + (patrolY - air.recoverStartY) * k,
+      air.recoverStartZ
+    );
+    if (air.t >= air.dur) {
+      air.state = 'patrol';
+      air.t = 0; air.dur = 3 + Math.random() * 3;
+      air.angle = Math.atan2(air.recoverStartZ - homeZ, air.recoverStartX - homeX) || 0;
     }
   }
 
@@ -3155,10 +3323,273 @@ const SkyGame = (() => {
     let best = null, bd = maxD;
     for (const m of mobs) {
       if (m.dead || m.gone) continue;
+      if (m.def.flies && !flyerAttackable(m)) continue; // flying too high to reach
       const d = Math.hypot(pos.x - m.mesh.position.x, pos.z - m.mesh.position.z);
       if (d < bd) { bd = d; best = m; }
     }
     return best;
+  }
+
+  // ===================== ☄️ 天空事件系統 (world events — Wave 2) =====================
+  // Random world events roll while the player is free-roaming (not mid-quiz,
+  // boss fight or race). Two kinds: a 30s METEOR SHOWER (collect falling star
+  // shards) and an up-to-45s AIR RAID (kill 3 storm_falcons). Only one event
+  // is ever active at a time; both freeze while a combat/quest quiz is open.
+  let worldEvent = null;     // { type:'meteor'|'raid', t, ... } — see startMeteorShower/startAirRaid
+  let eventTimer = 0;
+  let eventCooldown = 75;    // seconds until the next roll attempt
+
+  // re-plays whichever track fits where the player currently stands — shared
+  // by the island-change ground check, portal travel, and world-event cleanup
+  // so all three branch identically instead of duplicating the underground/
+  // secret/normal logic three times.
+  function playRegionMusic(isle) {
+    isle = isle || isleById(currentIsland) || SKY_ISLANDS[0];
+    try {
+      if (typeof MusicManager === 'undefined') return;
+      if (isle.underground) MusicManager.play('cave');
+      else if (isle.secret) MusicManager.play('mystic');
+      else MusicManager.playForZone('sky');
+    } catch (e) { /* music optional — never block gameplay */ }
+  }
+
+  // type omitted → let the scheduler pick; both bypass the "no concurrent
+  // event" / lock checks the same way so the __skyTest.triggerEvent hook can
+  // reuse this for its own eligibility assertions.
+  function canStartEvent(type) {
+    if (worldEvent || !playing || quizOpen || bossActive || raceActive) return false;
+    if (type === 'meteor' && regionUnderground) return false; // 地心世界 doesn't get a sky meteor shower
+    if (type === 'raid' && totalCleared() < 10) return false; // protect beginners from air raids
+    return true;
+  }
+
+  function rollWorldEvent() {
+    const canMeteor = canStartEvent('meteor');
+    const canRaid = canStartEvent('raid');
+    if (!canMeteor && !canRaid) return;
+    const type = (canMeteor && canRaid) ? (Math.random() < 0.5 ? 'meteor' : 'raid')
+      : (canMeteor ? 'meteor' : 'raid');
+    if (type === 'meteor') startMeteorShower(); else startAirRaid();
+  }
+
+  // ---- meteor shower ----
+  let _shardGlowTex = null;
+  function shardGlowTex() {
+    if (_shardGlowTex) return _shardGlowTex;
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = 64;
+    const ctx = cv.getContext('2d');
+    const grad = ctx.createRadialGradient(32, 32, 2, 32, 32, 32);
+    grad.addColorStop(0, 'rgba(255,230,102,0.9)');
+    grad.addColorStop(1, 'rgba(255,230,102,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 64, 64);
+    _shardGlowTex = new THREE.CanvasTexture(cv);
+    return _shardGlowTex;
+  }
+
+  function makeShardMesh() {
+    const g = new THREE.Group();
+    const core = new THREE.Mesh(new THREE.OctahedronGeometry(0.4, 0),
+      new THREE.MeshLambertMaterial({ color: 0xffe066, emissive: 0xcc9900 }));
+    g.add(core);
+    if (!lowPower()) {
+      const glow = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: shardGlowTex(), transparent: true, depthWrite: false, fog: false, opacity: 0.85,
+      }));
+      glow.scale.set(2.2, 2.2, 1);
+      g.add(glow);
+    }
+    return g;
+  }
+
+  function startMeteorShower() {
+    const isle = isleById(currentIsland) || isleById(lastGroundIsland) || SKY_ISLANDS[0];
+    const groundY = isle.pos[1] + bobOf(isle.id);
+    const shards = [];
+    const N = 8;
+    for (let i = 0; i < N; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const r = Math.random() * Math.max(2, isle.r - 3);
+      const gx = isle.pos[0] + Math.cos(a) * r;
+      const gz = isle.pos[2] + Math.sin(a) * r;
+      const mesh = makeShardMesh();
+      mesh.position.set(gx, groundY + 25, gz);
+      scene.add(mesh);
+      shards.push({
+        mesh, gx, gz, groundY, state: 'falling', t: 0,
+        fallDur: 1.5 + Math.random() * 0.5, got: false, gone: false,
+        spin: Math.random() * 6.28,
+      });
+    }
+    worldEvent = { type: 'meteor', t: 0, dur: 30, shards, collected: 0 };
+    showWorldToast('☄️ 流星雨來了！快撿拾墜落的星屑！');
+    if (typeof MusicManager !== 'undefined') { try { MusicManager.play('starfall'); } catch (e) { /* optional */ } }
+    buildMeteorStreaks();
+  }
+
+  function updateMeteorShower(dt) {
+    const ev = worldEvent;
+    for (const s of ev.shards) {
+      if (s.got || s.gone) continue;
+      if (s.state === 'falling') {
+        s.t += dt;
+        const k = Math.min(1, s.t / s.fallDur);
+        s.mesh.position.y = (s.groundY + 25) + ((s.groundY + 0.6) - (s.groundY + 25)) * k;
+        if (k >= 1) s.state = 'resting';
+      } else {
+        s.mesh.position.y = s.groundY + 0.6 + Math.sin(simTime * 3 + s.spin) * 0.15;
+      }
+      s.mesh.rotation.y += dt * 2;
+      const d = Math.hypot(pos.x - s.mesh.position.x, pos.z - s.mesh.position.z);
+      if (d < 1.8 && Math.abs(pos.y - s.mesh.position.y) < 3) {
+        s.got = true;
+        scene.remove(s.mesh);
+        ev.collected++;
+        skyAddGems(1);
+        SoundManager.playCorrect();
+        GameEngine.recordSkyShard?.();
+        spawnConfetti(6);
+      }
+    }
+    updateMeteorStreaks(dt);
+    if (ev.collected >= ev.shards.length) {
+      skyAddGems(5);
+      showWorldToast('🌟 全部接住了！額外 +5 💎');
+      endWorldEvent();
+      return;
+    }
+    if (ev.t >= ev.dur) endWorldEvent(); // uncollected shards fade via despawnEventVisuals
+  }
+
+  // decorative meteor streaks crossing the sky dome (cheap: 3 sprites, no new draw calls per streak)
+  let meteorStreaks = null;
+  let _streakTex = null;
+  function meteorStreakTex() {
+    if (_streakTex) return _streakTex;
+    const cv = document.createElement('canvas');
+    cv.width = 128; cv.height = 16;
+    const ctx = cv.getContext('2d');
+    const grad = ctx.createLinearGradient(0, 0, 128, 0);
+    grad.addColorStop(0, 'rgba(255,255,255,0)');
+    grad.addColorStop(0.7, 'rgba(255,240,180,0.9)');
+    grad.addColorStop(1, 'rgba(255,255,255,1)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 128, 16);
+    _streakTex = new THREE.CanvasTexture(cv);
+    return _streakTex;
+  }
+  function resetStreak(s, immediate) {
+    s.startX = pos.x - 150 + Math.random() * 100;
+    s.startZ = pos.z - 150 + Math.random() * 300;
+    s.y = pos.y + 60 + Math.random() * 40;
+    s.t = immediate ? Math.random() : 0;
+    s.dur = 1.2 + Math.random() * 0.8;
+  }
+  function buildMeteorStreaks() {
+    if (lowPower() || meteorStreaks) return;
+    meteorStreaks = [];
+    for (let i = 0; i < 3; i++) {
+      const spr = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: meteorStreakTex(), transparent: true, depthWrite: false, fog: false, rotation: -0.7,
+      }));
+      spr.scale.set(40, 5, 1);
+      scene.add(spr);
+      const s = { spr, t: 0, dur: 1 };
+      resetStreak(s, true);
+      meteorStreaks.push(s);
+    }
+  }
+  function updateMeteorStreaks(dt) {
+    if (!meteorStreaks) return;
+    meteorStreaks.forEach(s => {
+      s.t += dt / s.dur;
+      if (s.t >= 1) resetStreak(s, false);
+      const k = Math.min(1, s.t);
+      s.spr.position.set(s.startX + k * 90, s.y - k * 60, s.startZ + k * 40);
+      s.spr.material.opacity = Math.sin(k * Math.PI);
+    });
+  }
+  function clearMeteorStreaks() {
+    if (!meteorStreaks) return;
+    meteorStreaks.forEach(s => scene.remove(s.spr));
+    meteorStreaks = null;
+  }
+
+  // ---- air raid ----
+  function startAirRaid() {
+    const isle = isleById(currentIsland) || isleById(lastGroundIsland) || SKY_ISLANDS[0];
+    const falcons = [];
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * Math.PI * 2;
+      const m = spawnMob('storm_falcon', isle.id, Math.cos(a) * 8, Math.sin(a) * 8, '__raid');
+      if (m) falcons.push(m);
+    }
+    worldEvent = { type: 'raid', t: 0, dur: 45, falcons };
+    showWorldToast('🦅 空襲警報！風暴隼來襲！');
+    SoundManager.playAchievement();
+  }
+
+  function updateAirRaid(dt) {
+    const ev = worldEvent;
+    const alive = ev.falcons.filter(f => !f.dead && !f.gone);
+    if (alive.length === 0) {
+      skyAddGems(8);
+      showWorldToast('🛡️ 擊退空襲！+8 💎');
+      GameEngine.recordSkyRaid?.();
+      spawnConfetti(20);
+      endWorldEvent();
+      return;
+    }
+    if (ev.t >= ev.dur) {
+      showWorldToast('風暴隼飛走了…');
+      endWorldEvent();
+    }
+  }
+
+  // ---- shared lifecycle ----
+  // remove/fade whatever's left of an event's visuals without granting any
+  // reward — used by the timeout and player-KO exits (win exits have nothing
+  // left to clean up: shards are all `.got`, falcons all `.dead`).
+  function despawnEventVisuals(ev) {
+    if (!ev) return;
+    if (ev.type === 'meteor') {
+      ev.shards.forEach(s => { if (!s.got && !s.gone) { scene.remove(s.mesh); s.gone = true; } });
+      clearMeteorStreaks();
+    } else if (ev.type === 'raid') {
+      // mark still-alive falcons dead (no gems/toast) so updateMobs' existing
+      // shrink-and-fade animation carries them off screen — no extra code needed
+      ev.falcons.forEach(f => { if (!f.dead && !f.gone) f.dead = true; });
+      if (raidWarnRing) raidWarnRing.visible = false;
+    }
+  }
+
+  function endWorldEvent() {
+    despawnEventVisuals(worldEvent);
+    worldEvent = null;
+    playRegionMusic();
+  }
+
+  function updateWorldEvent(dt) {
+    if (!worldEvent) {
+      // only count toward the next roll while the player is genuinely free
+      // (not mid-quiz/quest, boss fight or race) — being busy pauses the
+      // countdown rather than silently spending it on a roll that would
+      // just get rejected by canStartEvent() anyway
+      if (playing && !quizOpen && !bossActive && !raceActive) {
+        eventTimer += dt;
+        if (eventTimer > eventCooldown) {
+          eventTimer = 0;
+          eventCooldown = 90 + Math.random() * 60;
+          rollWorldEvent();
+        }
+      }
+      return;
+    }
+    if (quizOpen) return; // events pause while any quiz is open
+    worldEvent.t += dt;
+    if (worldEvent.type === 'meteor') updateMeteorShower(dt);
+    else updateAirRaid(dt);
   }
 
   // ===================== player =====================
@@ -3404,13 +3835,7 @@ const SkyGame = (() => {
             // normal per-zone rotation — this also covers the stairway-only
             // secret realms and the underground cluster, neither of which are
             // always reached through usePortal()
-            try {
-              if (typeof MusicManager !== 'undefined') {
-                if (isle.underground) MusicManager.play('cave');
-                else if (isle.secret) MusicManager.play('mystic');
-                else MusicManager.playForZone('sky');
-              }
-            } catch (e) { /* music optional — never block movement */ }
+            playRegionMusic(isle);
             if (save.lastIsland !== currentIsland) {
               save.lastIsland = currentIsland;
               persist();
@@ -3508,6 +3933,7 @@ const SkyGame = (() => {
     updateRace(dt);
     updateRunePickup();
     checkSecretDiscovery();
+    updateWorldEvent(dt);
     // slowly regain hearts out of combat
     if (playing && hearts < maxHearts() && simTime - lastDamageAt > 20) {
       hearts++;

@@ -348,7 +348,9 @@ const SKY_QUESTS = [
 ];
 
 // ===== Mobs =====
-// shape: which body build makeMobMesh() uses ('slime' | 'wisp' | 'bat')
+// shape: which body build makeMobMesh() uses ('slime' | 'wisp' | 'bat' | 'flyer')
+// flies: true → free 3D flight AI (updateFlyer in js/sky.js) instead of the
+// island-pinned ground-mob AI; currently only used by world events (raids).
 const SKY_MOBS = [
   { id: 'slime', name: '雲史萊姆', hp: 1, quiz: 'vocab', diff: 'easy', color: 0x8fd4ff, speed: 3, shape: 'slime' },
   { id: 'wisp', name: '風靈', hp: 2, quiz: 'vocab', diff: 'medium', color: 0xa8ffd8, speed: 3.8, shape: 'wisp' },
@@ -364,6 +366,8 @@ const SKY_MOBS = [
   // underground (地心世界) mobs
   { id: 'magma_bat', name: '岩漿蝠', hp: 5, quiz: 'vocab', diff: 'hard', color: 0xd93a1e, speed: 2.6, shape: 'bat', scale: 1.2 },
   { id: 'magma_slime', name: '熔核史萊姆', hp: 6, quiz: 'grammar', diff: 'hard', color: 0xff6a26, speed: 1.6, shape: 'slime', scale: 1.3 },
+  // world-event mob (☄️ 天空事件系統 — air raids; see js/sky.js updateFlyer())
+  { id: 'storm_falcon', name: '風暴隼', hp: 4, quiz: 'vocab', diff: 'medium', color: 0x7a8fb8, speed: 3.2, shape: 'flyer', scale: 1.15, flies: true },
 ];
 
 // Skin id → body tint for the voxel hero (head shows the emoji itself)
