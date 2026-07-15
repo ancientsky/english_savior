@@ -75,6 +75,23 @@ const SkyGame = (() => {
   let gliderOn = false;        // sky_glider consumable active this adventure
   let jumpBoostOn = false;     // cloud_boots consumable active this adventure
 
+  // ----- active-use item consumables (⚡ Wave 4) -----
+  let shieldT = 0;             // 泡泡護罩 seconds remaining
+  let mountT = 0;              // 飛天雲 seconds remaining
+  let mountWarned = false;     // 3s-before-expiry warning already shown this ride
+  let shieldMesh = null;       // translucent bubble around the player
+  let mountMesh = null;        // small fluffy cloud under the player's feet
+  let lightningLines = [];     // { mesh, t } chain-lightning visuals, expire after ~0.3s
+  const ITEM_TYPES = ['lightning_staff', 'bubble_shield', 'cloud_mount'];
+  const ITEM_META = {
+    lightning_staff: { icon: '⚡', name: '雷霆法杖', key: 'Q' },
+    bubble_shield: { icon: '🫧', name: '泡泡護罩', key: 'R' },
+    cloud_mount: { icon: '☁️', name: '飛天雲', key: 'F' },
+  };
+  // ambient decoration Points systems (☁️ Wave 4 polish)
+  let waterMistSystems = [];
+  let fireflySystems = [];
+
   function computePerks() {
     const id = GameEngine.getEquippedTitle().id;
     perks = {
@@ -165,6 +182,7 @@ const SkyGame = (() => {
       journalBtn: document.getElementById('sky-btn-journal'),
       homeBtn: document.getElementById('sky-btn-home'),
       lowPower: document.getElementById('sky-lowpower'),
+      itemTray: document.getElementById('sky-item-tray'),
     };
     if (!els.zone) return;
 
@@ -189,6 +207,12 @@ const SkyGame = (() => {
     els.camReset?.addEventListener('click', () => { cam.theta = heroYaw + Math.PI; cam.phi = 0.42; cam.radius = SKY_CONFIG.camRadius; });
     window.addEventListener('resize', resizeRenderer);
     setupKeyboard();
+    els.itemTray?.addEventListener('pointerdown', e => {
+      const btn = e.target.closest('.aw-item-btn');
+      if (!btn) return;
+      e.preventDefault();
+      useActiveItem(btn.dataset.item);
+    });
 
     // test hooks
     window.__skyTest = {
@@ -244,6 +268,13 @@ const SkyGame = (() => {
       // perk hooks (Part 4)
       perks: () => ({ ...perks, maxHearts: maxHearts(), gliderOn, jumpBoostOn }),
       refreshEquipment,
+      // active-use item hooks (⚡ Wave 4)
+      useItem: useActiveItem,
+      itemTray: () => ITEM_TYPES.map(type => {
+        const b = (GameEngine.getState().activeBuffs || []).find(x => x.type === type && x.uses > 0);
+        return b ? { type, uses: b.uses, active: (type === 'bubble_shield' && shieldT > 0) || (type === 'cloud_mount' && mountT > 0) } : null;
+      }).filter(Boolean),
+      effects: () => ({ shieldT, mountT }),
       // secret realm hooks (Part 6)
       secretState: () => ({
         found: { ...save.secretsFound },
@@ -349,6 +380,9 @@ const SkyGame = (() => {
     if (gliderOn) showWorldToast('🪂 滑翔翼啟動！按住跳躍鍵緩慢降落');
     jumpBoostOn = GameEngine.consumeBuff('jump_boost');
     if (jumpBoostOn) showWorldToast('🌨️ 彈跳雲靴啟動！跳躍高度 +40%');
+    // active-use items reset per adventure (they're activated in-world, not consumed at start)
+    clearActiveItemEffects();
+    updateItemTray();
     if (!rafId) animate();
   }
 
@@ -751,6 +785,7 @@ const SkyGame = (() => {
         break;
       case 'forest':
         scatter(g, isle, rng, 11, 0.25, 0.9, r => makeTree(r, 0x2e6e38));
+        buildFireflies(g, isle);
         break;
       case 'water': {
         const pond = new THREE.Mesh(new THREE.CylinderGeometry(isle.r * 0.4, isle.r * 0.4, 0.16, 18),
@@ -767,6 +802,7 @@ const SkyGame = (() => {
           s.position.y = 0.4;
           return s;
         });
+        buildWaterMist(g, isle, fall.position.x, fall.position.z);
         break;
       }
       case 'flower':
@@ -1085,6 +1121,7 @@ const SkyGame = (() => {
           fly.position.y = 0.4 + r() * 1.2;
           return fly;
         });
+        buildFireflies(g, isle);
         break;
       case 'temple': {
         const trim = new THREE.Mesh(new THREE.TorusGeometry(isle.r * 0.94, 0.35, 6, 28),
@@ -2014,6 +2051,27 @@ const SkyGame = (() => {
     els.buffs.innerHTML = chips.map(c => `<span class="aw-buff-chip">${c}</span>`).join('');
   }
 
+  // ---- ⚡ active-use item tray (lightning staff / bubble shield / cloud mount) ----
+  function updateItemTray() {
+    if (!els.itemTray) return;
+    const buffs = (GameEngine.getState().activeBuffs) || [];
+    const items = ITEM_TYPES.map(type => {
+      const b = buffs.find(x => x.type === type && x.uses > 0);
+      return b ? { type, uses: b.uses } : null;
+    }).filter(Boolean);
+    if (!items.length) {
+      els.itemTray.innerHTML = '';
+      els.itemTray.style.display = 'none';
+      return;
+    }
+    els.itemTray.style.display = '';
+    els.itemTray.innerHTML = items.map(it => {
+      const meta = ITEM_META[it.type];
+      const active = (it.type === 'bubble_shield' && shieldT > 0) || (it.type === 'cloud_mount' && mountT > 0);
+      return `<button class="aw-item-btn${active ? ' active' : ''}" data-item="${it.type}" title="${meta.name}（${meta.key} 鍵）">${meta.icon}<span class="aw-item-uses">${it.uses}</span></button>`;
+    }).join('');
+  }
+
   function updateTracker() {
     if (!els.tracker) return;
     const it = save.tracked && interactables.find(x => x.q.id === save.tracked);
@@ -2170,6 +2228,53 @@ const SkyGame = (() => {
       color: 0xff7a2a, size: 1.4, transparent: true, opacity: 0.75, sizeAttenuation: true,
     }));
     scene.add(emberParticles);
+  }
+
+  // ---- rising mist at a waterfall's base (☁️ Wave 4 polish; ≤80 verts, one per water isle) ----
+  function buildWaterMist(g, isle, x, z) {
+    if (lowPower()) return;
+    const N = 60;
+    const geo = new THREE.BufferGeometry();
+    const arr = new Float32Array(N * 3);
+    const rng = mulberry32(SKY_CONFIG.worldSeed + isle.seed * 13 + 41);
+    for (let i = 0; i < N; i++) {
+      arr[i * 3] = (rng() - 0.5) * 2.4;
+      arr[i * 3 + 1] = rng() * 2.5;
+      arr[i * 3 + 2] = (rng() - 0.5) * 1.4;
+    }
+    geo.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+    const points = new THREE.Points(geo, new THREE.PointsMaterial({
+      color: 0xffffff, size: 0.5, transparent: true, opacity: 0.5, sizeAttenuation: true,
+    }));
+    // the waterfall box is centred at y -7.4 with height 16, so its base sits
+    // at roughly y -15.4 — that's where the mist should hover
+    points.position.set(x, -15.4, z);
+    g.add(points);
+    waterMistSystems.push(points);
+  }
+
+  // ---- gentle-drifting fireflies over forest/mist isles (☁️ Wave 4 polish; ≤40 verts) ----
+  function buildFireflies(g, isle, color = 0xd8ff8f) {
+    if (lowPower()) return;
+    const N = 24;
+    const geo = new THREE.BufferGeometry();
+    const arr = new Float32Array(N * 3);
+    const phase = new Float32Array(N);
+    const rng = mulberry32(SKY_CONFIG.worldSeed + isle.seed * 29 + 7);
+    for (let i = 0; i < N; i++) {
+      const a = rng() * Math.PI * 2;
+      const rr = isle.r * (0.15 + rng() * 0.7);
+      arr[i * 3] = Math.cos(a) * rr;
+      arr[i * 3 + 1] = 0.6 + rng() * 1.6;
+      arr[i * 3 + 2] = Math.sin(a) * rr;
+      phase[i] = rng() * Math.PI * 2;
+    }
+    geo.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+    const points = new THREE.Points(geo, new THREE.PointsMaterial({
+      color, size: 0.4, transparent: true, opacity: 0.85, sizeAttenuation: true,
+    }));
+    g.add(points);
+    fireflySystems.push({ points, base: arr.slice(), phase });
   }
 
   // ---- distance culling + fps watchdog (called from updateWorld) ----
@@ -2356,8 +2461,20 @@ const SkyGame = (() => {
     }
   }
 
+  function clearActiveItemEffects() {
+    shieldT = 0;
+    mountT = 0;
+    mountWarned = false;
+    if (shieldMesh) shieldMesh.visible = false;
+    if (mountMesh) mountMesh.visible = false;
+  }
+
   function damagePlayer(n, sx, sz) {
     if (!playing) return;
+    if (shieldT > 0) {
+      showWorldToast('🫧 泡泡護罩擋下了攻擊！');
+      return;
+    }
     hearts -= n;
     lastDamageAt = simTime;
     els.flash.classList.add('red', 'on');
@@ -2400,6 +2517,8 @@ const SkyGame = (() => {
     pos.y = dawn.pos[1] + bobOf(dawn.id) + 2;
     vy = 0;
     lastGroundIsland = dawn.id;
+    clearActiveItemEffects();
+    updateItemTray();
     showWorldToast('🏠 回到晨曦之島！');
     SoundManager.playCorrect();
   }
@@ -2419,6 +2538,8 @@ const SkyGame = (() => {
     const dawn = SKY_ISLANDS[0];
     pos.x = dawn.pos[0]; pos.z = dawn.pos[2]; pos.y = dawn.pos[1] + 2;
     vy = 0;
+    clearActiveItemEffects();
+    updateItemTray();
   }
 
   // ---- combat quiz ----
@@ -2568,6 +2689,104 @@ const SkyGame = (() => {
         showWorldToast(`⚔️ 還剩 ${arenaActive.remaining} 隻！`);
       }
     }
+  }
+
+  // ===================== ⚡ active-use item consumables (Wave 4) =====================
+  function spawnLightningLine(mob) {
+    const points = [
+      new THREE.Vector3(pos.x, pos.y + 1.4, pos.z),
+      new THREE.Vector3(mob.mesh.position.x, mob.mesh.position.y + 1, mob.mesh.position.z),
+    ];
+    const geo = new THREE.BufferGeometry().setFromPoints(points);
+    const mat = new THREE.LineBasicMaterial({ color: 0xbfe8ff, transparent: true, opacity: 1 });
+    const line = new THREE.Line(geo, mat);
+    scene.add(line);
+    lightningLines.push({ mesh: line, t: 0.3 });
+  }
+
+  function updateLightningLines(dt) {
+    for (let i = lightningLines.length - 1; i >= 0; i--) {
+      const L = lightningLines[i];
+      L.t -= dt;
+      L.mesh.material.opacity = Math.max(0, L.t / 0.3);
+      if (L.t <= 0) {
+        scene.remove(L.mesh);
+        L.mesh.geometry.dispose();
+        L.mesh.material.dispose();
+        lightningLines.splice(i, 1);
+      }
+    }
+  }
+
+  function ensureShieldMesh() {
+    if (shieldMesh || !player) return;
+    shieldMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(1.6, 12, 10),
+      new THREE.MeshBasicMaterial({ color: 0x8fe0ff, transparent: true, opacity: 0.25, depthWrite: false })
+    );
+    shieldMesh.position.y = 1.05;
+    shieldMesh.visible = false;
+    player.add(shieldMesh);
+  }
+
+  function ensureMountMesh() {
+    if (mountMesh || !player) return;
+    const g = new THREE.Group();
+    const base = new THREE.Mesh(new THREE.SphereGeometry(0.75, 10, 6), new THREE.MeshLambertMaterial({ color: 0xffffff }));
+    base.scale.set(1, 0.35, 1);
+    g.add(base);
+    const puff = new THREE.Mesh(new THREE.SphereGeometry(0.42, 8, 6), new THREE.MeshLambertMaterial({ color: 0xffffff }));
+    puff.position.set(0.4, 0.14, 0.1);
+    puff.scale.set(1, 0.55, 1);
+    g.add(puff);
+    const puff2 = new THREE.Mesh(new THREE.SphereGeometry(0.38, 8, 6), new THREE.MeshLambertMaterial({ color: 0xffffff }));
+    puff2.position.set(-0.38, 0.1, -0.12);
+    puff2.scale.set(1, 0.5, 1);
+    g.add(puff2);
+    g.position.y = -0.05;
+    g.visible = false;
+    mountMesh = g;
+    player.add(mountMesh);
+  }
+
+  // 按 Q/R/F 或點擊道具列啟用主動道具（僅在冒險中、非答題時可用）
+  function useActiveItem(type) {
+    if (!playing || quizOpen) return;
+    if (!GameEngine.hasBuff(type)) return;
+    if (type === 'lightning_staff') {
+      const targets = mobs.filter(m => !m.dead && !m.gone &&
+        Math.hypot(m.mesh.position.x - pos.x, m.mesh.position.z - pos.z) <= 12);
+      if (!targets.length) {
+        showWorldToast('附近沒有怪物');
+        return;
+      }
+      GameEngine.consumeBuff('lightning_staff');
+      targets.forEach(m => { hitMob(m); spawnLightningLine(m); });
+      els.flash.classList.add('on');
+      setTimeout(() => els.flash.classList.remove('on'), 300);
+      SoundManager.playCorrect();
+      showWorldToast(`⚡ 雷霆法杖電擊了 ${targets.length} 隻怪物！`);
+      GameEngine.recordSkyItemUse();
+    } else if (type === 'bubble_shield') {
+      GameEngine.consumeBuff('bubble_shield');
+      ensureShieldMesh();
+      shieldT = 15;
+      if (shieldMesh) shieldMesh.visible = true;
+      showWorldToast('🫧 泡泡護罩展開！15 秒內無敵');
+      GameEngine.recordSkyItemUse();
+    } else if (type === 'cloud_mount') {
+      GameEngine.consumeBuff('cloud_mount');
+      ensureMountMesh();
+      mountT = 12;
+      mountWarned = false;
+      if (mountMesh) mountMesh.visible = true;
+      showWorldToast('☁️ 飛天雲召喚成功！自由飛行 12 秒');
+      GameEngine.recordSkyItemUse();
+    } else {
+      return;
+    }
+    updateBuffBar();
+    updateItemTray();
   }
 
   function updateMobs(dt) {
@@ -4227,7 +4446,7 @@ const SkyGame = (() => {
     if (mlen > 0.001) {
       mx /= mlen; mz /= mlen;
       const speed = SKY_CONFIG.walkSpeed * (perks.speedMult || 1) *
-        (sprint ? SKY_CONFIG.sprintMult : 1) * Math.min(1, mag || 1);
+        (sprint ? SKY_CONFIG.sprintMult : 1) * Math.min(1, mag || 1) * (mountT > 0 ? 1.6 : 1);
       pos.x += mx * speed * dt;
       pos.z += mz * speed * dt;
       const targetYaw = Math.atan2(mx, mz);
@@ -4243,6 +4462,13 @@ const SkyGame = (() => {
 
     // vertical (hold jump to glide with 傳說勇者 title or 🪂 glider)
     const prevFeet = pos.y;
+    if (mountT > 0) {
+      // ☁️ 飛天雲: free flight — hold jump to ascend, release to sink gently;
+      // the entire gravity/collision/jump/void block below is skipped while mounted
+      vy = jumpHeld ? 6 : -2;
+      pos.y += vy * dt;
+      grounded = false;
+    } else {
     vy += SKY_CONFIG.gravity * dt;
     if (jumpHeld && vy < -3.2 && (perks.glide || gliderOn)) vy = -3.2;
     pos.y += vy * dt;
@@ -4303,10 +4529,13 @@ const SkyGame = (() => {
         jumpBufferedAt = -10;
       }
     }
+    }
 
     // fell into the void (地心世界 uses a much deeper threshold — its own
-    // islands sit at y -70..-95, well below the surface voidY of -40)
-    if (pos.y < (regionUnderground ? SKY_CONFIG.undergroundVoidY : SKY_CONFIG.voidY)) voidFall();
+    // islands sit at y -70..-95, well below the surface voidY of -40);
+    // skipped while ☁️ 飛天雲 is active so the free-flight ride never gets
+    // interrupted by a stray void check.
+    if (mountT <= 0 && pos.y < (regionUnderground ? SKY_CONFIG.undergroundVoidY : SKY_CONFIG.voidY)) voidFall();
 
     // apply to mesh
     player.position.set(pos.x, pos.y, pos.z);
@@ -4378,7 +4607,7 @@ const SkyGame = (() => {
     minimapTimer += dt;
     if (minimapTimer > 0.12) { minimapTimer = 0; drawMinimap(); }
     buffBarTimer += dt;
-    if (buffBarTimer > 1) { buffBarTimer = 0; updateBuffBar(); }
+    if (buffBarTimer > 1) { buffBarTimer = 0; updateBuffBar(); updateItemTray(); }
     trackerTimer += dt;
     if (trackerTimer > 0.15) { trackerTimer = 0; updateTracker(); }
     updateCulling();
@@ -4391,6 +4620,55 @@ const SkyGame = (() => {
         if (arr[i] > EMBER_Y_HI) arr[i] = EMBER_Y_LO;
       }
       emberParticles.geometry.attributes.position.needsUpdate = true;
+    }
+    // ambient decoration drift (☁️ Wave 4 polish; arrays stay empty under lowPower())
+    for (const mist of waterMistSystems) {
+      const arr = mist.geometry.attributes.position.array;
+      for (let i = 1; i < arr.length; i += 3) {
+        arr[i] += dt * 1.1;
+        if (arr[i] > 2.5) arr[i] = 0;
+      }
+      mist.geometry.attributes.position.needsUpdate = true;
+    }
+    for (const sys of fireflySystems) {
+      const arr = sys.points.geometry.attributes.position.array;
+      const base = sys.base, phase = sys.phase;
+      for (let i = 0; i < phase.length; i++) {
+        arr[i * 3] = base[i * 3] + Math.sin(simTime * 0.8 + phase[i]) * 0.4;
+        arr[i * 3 + 1] = base[i * 3 + 1] + Math.sin(simTime * 1.4 + phase[i] * 1.7) * 0.35;
+        arr[i * 3 + 2] = base[i * 3 + 2] + Math.cos(simTime * 0.8 + phase[i]) * 0.4;
+      }
+      sys.points.geometry.attributes.position.needsUpdate = true;
+    }
+    // ⚡ active-use item timers: chain-lightning fade + shield/mount durations
+    updateLightningLines(dt);
+    if (shieldT > 0) {
+      shieldT -= dt;
+      if (shieldMesh) {
+        shieldMesh.rotation.y += dt * 0.6;
+        shieldMesh.material.opacity = 0.18 + Math.sin(simTime * 3) * 0.07;
+      }
+      if (shieldT <= 0) {
+        shieldT = 0;
+        if (shieldMesh) shieldMesh.visible = false;
+        showWorldToast('🫧 泡泡護罩消失了！');
+        SoundManager.playCorrect();
+        updateItemTray();
+      }
+    }
+    if (mountT > 0) {
+      mountT -= dt;
+      if (mountMesh) mountMesh.position.y = -0.05 + Math.sin(simTime * 3) * 0.06;
+      if (!mountWarned && mountT <= 3) {
+        mountWarned = true;
+        showWorldToast('☁️ 雲朵即將散開⋯⋯');
+      }
+      if (mountT <= 0) {
+        mountT = 0;
+        if (mountMesh) mountMesh.visible = false;
+        showWorldToast('☁️ 雲朵散開了！');
+        updateItemTray();
+      }
     }
     // altitude atmosphere — deep-space tint climbing toward the galaxy region,
     // deep-red cave gloom descending toward 地心世界; the two bands never
@@ -4466,6 +4744,9 @@ const SkyGame = (() => {
           if (!jumpHeld) { jumpBufferedAt = simTime; jumpHeld = true; }
           break;
         case 'KeyE': interact(); break;
+        case 'KeyQ': useActiveItem('lightning_staff'); break;
+        case 'KeyR': useActiveItem('bubble_shield'); break;
+        case 'KeyF': useActiveItem('cloud_mount'); break;
         default: return;
       }
       e.preventDefault();

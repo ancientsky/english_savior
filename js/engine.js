@@ -163,6 +163,9 @@ const BUFF_META = {
   fire_bomb: { icon: '🔥', name: '火焰彈' },
   wall_repair: { icon: '🧱', name: '城牆工事' },
   freeze_trap: { icon: '❄️', name: '冰凍陷阱' },
+  lightning_staff: { icon: '⚡', name: '雷霆法杖' },
+  bubble_shield: { icon: '🫧', name: '泡泡護罩' },
+  cloud_mount: { icon: '☁️', name: '飛天雲' },
 };
 
 const GameEngine = (() => {
@@ -225,6 +228,7 @@ const GameEngine = (() => {
       skyShards: 0,
       skyRaids: 0,
       skyPuzzles: 0,
+      skyItemUses: 0,
       // history
       learnedWordsList: [],
       // shop system
@@ -588,6 +592,12 @@ const GameEngine = (() => {
 
   function recordSkyPuzzle() {
     state.skyPuzzles = (state.skyPuzzles || 0) + 1;
+    save();
+    checkAchievements();
+  }
+
+  function recordSkyItemUse() {
+    state.skyItemUses = (state.skyItemUses || 0) + 1;
     save();
     checkAchievements();
   }
@@ -1316,7 +1326,7 @@ const GameEngine = (() => {
     recordRpgTalk, recordRpgChapter,
     recordSkyQuest, recordSkyAnswer, recordSkyBoss,
     recordSkySecretFound, recordSkySecretBoss, recordSkySwitch,
-    recordSkyShard, recordSkyRaid, recordSkyPuzzle,
+    recordSkyShard, recordSkyRaid, recordSkyPuzzle, recordSkyItemUse,
     recordPerfectGrammar, recordStreak,
     updateHUD, updateStats, renderItemBar,
     showInventory, showAchievements, showToast,

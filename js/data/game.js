@@ -47,6 +47,7 @@ const ACHIEVEMENTS = [
   { id: 'sky_shards', name: '流星收藏家', desc: '在流星雨中撿到 20 顆星屑', icon: '☄️', pts: 20, condition: s => (s.skyShards || 0) >= 20 },
   { id: 'sky_raid_guard', name: '空襲守護者', desc: '擊退 3 次風暴隼空襲', icon: '🛡️', pts: 20, hidden: true, condition: s => (s.skyRaids || 0) >= 3 },
   { id: 'sky_puzzle_master', name: '解謎大師', desc: '完成 6 個天空之城解謎任務', icon: '🧩', pts: 20, condition: s => (s.skyPuzzles || 0) >= 6 },
+  { id: 'sky_gadgeteer', name: '道具達人', desc: '在天空之城使用 5 次主動道具', icon: '🧰', pts: 10, condition: s => (s.skyItemUses || 0) >= 5 },
 ];
 
 const DAILY_QUESTS = [
@@ -113,6 +114,12 @@ const SHOP_ITEMS = {
       desc: '天空之城：按住跳躍鍵緩慢滑翔降落（3 次冒險）', effect: 'glide' },
     { id: 'cloud_boots', name: '彈跳雲靴', icon: '🌨️', price: 100, uses: 3,
       desc: '天空之城：跳躍高度 +40%（3 次冒險）', effect: 'jump_boost' },
+    { id: 'lightning_staff', name: '雷霆法杖', icon: '⚡', price: 130, uses: 3,
+      desc: '天空之城：按 Q 釋放落雷，電擊附近所有怪物（3 次）', effect: 'lightning_staff' },
+    { id: 'bubble_shield', name: '泡泡護罩', icon: '🫧', price: 100, uses: 2,
+      desc: '天空之城：按 R 展開 15 秒無敵泡泡（2 次）', effect: 'bubble_shield' },
+    { id: 'cloud_mount', name: '飛天雲', icon: '☁️', price: 150, uses: 2,
+      desc: '天空之城：按 F 召喚雲朵坐騎，自由飛行 12 秒（2 次）', effect: 'cloud_mount' },
   ],
   // 皮膚（永久擁有）
   skins: [
