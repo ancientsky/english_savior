@@ -123,14 +123,25 @@ const BuilderGame = (() => {
   let pool = [];            // prepared sentences for current difficulty
   let current = null;       // { tokens: [...], zh, display }
   let placed = [];          // indices into tiles
-  let tiles = [];           // shuffled tokens [{ text, id }]
+  let tiles = [];           // shuffled tokens [{ text, id, decoy?, bolt? }]
   let sentenceNum = 0;      // 0-based within the landmark
   let wrongTries = 0;
   let checking = false;
 
   let deck = [];            // shuffled landmark indices, uncollected drawn first
   let landmark = null;      // current LANDMARKS entry
-  let collected = loadCollection();
+
+  let streak = 0;           // consecutive first-try-correct sentences (persists across landmarks)
+  let wrongTotal = 0;       // all wrong attempts (incl. reveals) for the CURRENT landmark
+  let goldLayers = new Set();   // built-layer indices earned while streak >= 3 (current landmark)
+  let sentenceHasBolt = false;  // does the current sentence's tile set include a golden-bolt tile
+
+  const PRAISE_GOOD = ['太棒了！', '蓋得好！', '就是這樣！'];
+  const PRAISE_BAD = ['哎呀…再試試！', '差一點點！'];
+
+  const collLoaded = loadCollection();
+  let collected = collLoaded.collected;
+  let perfectSet = collLoaded.perfect;
 
   let els = {};
 
@@ -162,12 +173,23 @@ const BuilderGame = (() => {
     els.startBtn.addEventListener('click', startHouse);
     els.doneBtn.addEventListener('click', startHouse);
     updateCollectionHUD();
+    buildScene();
 
     // Read-only hook for automated tests (token order is closure state)
     window.__builderTest = {
       current: () => (current ? { ...current } : null),
       landmark: () => (landmark ? { ...landmark } : null),
       collectedCount: () => collected.size,
+      streak: () => streak,
+      wrongTotal: () => wrongTotal,
+      perfect: () => [...perfectSet],
+      tilesInfo: () => tiles.map(t => ({ text: t.text, decoy: !!t.decoy, bolt: !!t.bolt })),
+      placeText: (text) => {
+        const idx = tiles.findIndex((t, i) => !placed.includes(i) && t.text === text);
+        if (idx === -1) return false;
+        placeTile(idx);
+        return true;
+      },
     };
   }
 
@@ -175,14 +197,17 @@ const BuilderGame = (() => {
   function loadCollection() {
     try {
       const d = JSON.parse(localStorage.getItem(STORAGE_KEY));
-      return new Set(d && Array.isArray(d.collected) ? d.collected : []);
+      return {
+        collected: new Set(d && Array.isArray(d.collected) ? d.collected : []),
+        perfect: new Set(d && Array.isArray(d.perfect) ? d.perfect : []),
+      };
     } catch {
-      return new Set();
+      return { collected: new Set(), perfect: new Set() };
     }
   }
 
   function saveCollection() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ collected: [...collected] }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ collected: [...collected], perfect: [...perfectSet] }));
   }
 
   function nextLandmark() {
@@ -236,6 +261,25 @@ const BuilderGame = (() => {
     shuffleInPlace(pool);
   }
 
+  // Pick up to n decoy words from other pool sentences that don't collide
+  // (case-insensitively) with any token of the current sentence or each other.
+  function pickDecoys(n) {
+    const lowerTokens = new Set(current.tokens.map(t => t.toLowerCase()));
+    const candidates = [];
+    pool.forEach(entry => entry.tokens.forEach(t => candidates.push(t)));
+    shuffleInPlace(candidates);
+    const chosen = [];
+    const used = new Set(lowerTokens);
+    for (const c of candidates) {
+      if (chosen.length >= n) break;
+      const cl = c.toLowerCase();
+      if (used.has(cl)) continue;
+      used.add(cl);
+      chosen.push(c);
+    }
+    return chosen;
+  }
+
   // ===== Round lifecycle =====
   function startHouse() {
     els.startScreen.style.display = 'none';
@@ -244,6 +288,9 @@ const BuilderGame = (() => {
     buildPool();
     landmark = nextLandmark();
     sentenceNum = 0;
+    wrongTotal = 0;
+    goldLayers = new Set();
+    if (els.mascot) els.mascot.classList.remove('party');
     GameEngine.setDeferLevelUp(true);
     renderHouse();
     nextSentence();
@@ -251,8 +298,10 @@ const BuilderGame = (() => {
 
   function houseComplete() {
     const isNew = !collected.has(landmark.id);
-    if (isNew) {
-      collected.add(landmark.id);
+    const isPerfect = wrongTotal === 0;
+    if (isNew) collected.add(landmark.id);
+    if (isPerfect) perfectSet.add(landmark.id);
+    if (isNew || isPerfect) {
       saveCollection();
       updateCollectionHUD();
     }
@@ -267,17 +316,25 @@ const BuilderGame = (() => {
       GameEngine.consumeBuff('gem_bonus');
       GameEngine.showToast('💠 寶石探測器生效！+5 額外寶石', 'gem');
     }
+    if (isPerfect) bonus += 10;
     GameEngine.addGems(bonus);
     SoundManager.playQuestComplete();
+    if (els.mascot) {
+      els.mascot.classList.remove('cheer', 'dizzy');
+      els.mascot.classList.add('party');
+    }
 
     els.gameArea.style.display = 'none';
     els.doneInfo.innerHTML =
       `<div class="bd-done-house">${landmark.layers.map(l => `<div class="bd-layer">${l}</div>`).join('')}</div>` +
       `<div class="bd-done-name">${landmark.flag} ${landmark.name}<br>${landmark.zh}（${landmark.country}）</div>` +
       (isNew ? '<div class="bd-new-badge">🎉 新地標入藏！</div>' : '') +
+      (isPerfect ? '<div class="bd-perfect-badge">🏆 完美建造！ +10 💎</div>' : '') +
       `<div class="bd-fact">💡 ${landmark.fact}</div>` +
       `<div>完工獎勵 <b>+${bonus} 💎</b> ・ 已收藏 <b>${collected.size} / ${LANDMARKS.length}</b> 座世界地標</div>`;
     els.doneScreen.style.display = 'flex';
+    bdConfetti(els.doneScreen, 28);
+    bdFireworks(els.doneScreen, 3);
     GameEngine.setDeferLevelUp(false);
     GameEngine.flushPendingLevelUps();
   }
@@ -302,6 +359,23 @@ const BuilderGame = (() => {
     }
 
     tiles = current.tokens.map((text, id) => ({ text, id }));
+
+    // Golden bolt: 20% chance one correct tile carries a hidden bonus
+    sentenceHasBolt = false;
+    if (Math.random() < 0.2) {
+      const idx = Math.floor(Math.random() * tiles.length);
+      tiles[idx].bolt = true;
+      sentenceHasBolt = true;
+    }
+
+    // Distractor decoys: medium +1, hard +2 (easy: none)
+    const decoyCount = difficulty === 'medium' ? 1 : difficulty === 'hard' ? 2 : 0;
+    if (decoyCount > 0) {
+      pickDecoys(decoyCount).forEach((text, i) => {
+        tiles.push({ text, id: current.tokens.length + i, decoy: true });
+      });
+    }
+
     shuffleInPlace(tiles);
     // Guard: a shuffle can accidentally be the correct order — reshuffle once
     if (tiles.every((t, i) => t.id === i) && tiles.length > 1) shuffleInPlace(tiles);
@@ -318,7 +392,7 @@ const BuilderGame = (() => {
     if (checking || placed.includes(tileIdx)) return;
     placed.push(tileIdx);
     render();
-    if (placed.length === tiles.length) checkAnswer();
+    if (placed.length === current.tokens.length) checkAnswer();
   }
 
   function removePlaced(pos) {
@@ -346,7 +420,15 @@ const BuilderGame = (() => {
 
     if (correct) {
       SoundManager.playCorrect();
-      els.feedback.innerHTML = `✅ ${current.display}`;
+
+      // Combo streak: this sentence reached correct with zero mistakes
+      if (wrongTries === 0) streak++; else streak = 0;
+      updateComboPill();
+      let extraGems = 0;
+      if (streak >= 5) extraGems = 2;
+      else if (streak >= 3) extraGems = 1;
+      if (streak >= 3) goldLayers.add(sentenceNum);
+
       els.feedback.className = 'bd-feedback correct';
       if (TTSManager.isSupported()) {
         TTSManager.speak(current.display, 'en-US', 0.9);
@@ -365,10 +447,23 @@ const BuilderGame = (() => {
         GameEngine.consumeBuff('gem_bonus');
         GameEngine.showToast('💠 寶石探測器生效！+2 額外寶石', 'gem');
       }
+      gems += extraGems;
       GameEngine.addXP(xp);
       GameEngine.addGems(gems);
       GameEngine.recordGrammar();
       GameEngine.recordBuilder();
+
+      let feedbackHtml = `✅ ${current.display}`;
+      if (extraGems > 0) feedbackHtml += ` ・ ⚡ 連擊加碼 +${extraGems} 💎`;
+
+      // Golden bolt bonus: sentence had a bolt tile and was solved first-try
+      if (sentenceHasBolt && wrongTries === 0) {
+        GameEngine.addGems(3);
+        GameEngine.showToast('🔩 黃金螺絲獎勵 +3 💎', 'gem');
+        feedbackHtml += ' ・ 🔩 +3 💎';
+      }
+      els.feedback.innerHTML = feedbackHtml;
+      mascotReact('cheer', PRAISE_GOOD[Math.floor(Math.random() * PRAISE_GOOD.length)]);
 
       sentenceNum++;
       renderHouse(true);
@@ -376,6 +471,10 @@ const BuilderGame = (() => {
     } else {
       SoundManager.playWrong();
       wrongTries++;
+      wrongTotal++;
+      streak = 0;
+      updateComboPill();
+      mascotReact('dizzy', PRAISE_BAD[Math.floor(Math.random() * PRAISE_BAD.length)]);
       // Find the first wrong position and bounce those tiles back
       let firstWrong = built.findIndex((w, i) => w !== current.tokens[i]);
       if (firstWrong === -1) firstWrong = 0;
@@ -421,8 +520,8 @@ const BuilderGame = (() => {
       b.addEventListener('click', () => removePlaced(pos));
       els.slots.appendChild(b);
     });
-    // Empty slot indicator
-    for (let i = placed.length; i < tiles.length; i++) {
+    // Empty slot indicator (slot count = sentence length; decoys inflate tiles.length)
+    for (let i = placed.length; i < current.tokens.length; i++) {
       const s = document.createElement('span');
       s.className = 'bd-slot-empty';
       els.slots.appendChild(s);
@@ -432,7 +531,7 @@ const BuilderGame = (() => {
     els.tiles.innerHTML = '';
     tiles.forEach((t, i) => {
       const b = document.createElement('button');
-      b.className = 'bd-block' + (placed.includes(i) ? ' used' : '');
+      b.className = 'bd-block' + (placed.includes(i) ? ' used' : '') + (t.bolt ? ' bolt' : '');
       b.textContent = t.text;
       b.disabled = placed.includes(i);
       b.addEventListener('click', () => placeTile(i));
@@ -440,7 +539,7 @@ const BuilderGame = (() => {
     });
 
     // Hint buff button
-    if (GameEngine.hasBuff('hint') && !checking && placed.length < tiles.length) {
+    if (GameEngine.hasBuff('hint') && !checking && placed.length < current.tokens.length) {
       const hintBtn = document.createElement('button');
       hintBtn.className = 'bd-hint-btn';
       hintBtn.textContent = '🔮 用提示水晶放一塊';
@@ -451,18 +550,166 @@ const BuilderGame = (() => {
 
   function renderHouse(justBuilt) {
     els.house.innerHTML = '';
-    for (let i = 0; i < sentenceNum && i < landmark.layers.length; i++) {
+    for (let i = 0; i < landmark.layers.length; i++) {
       const layer = document.createElement('div');
-      layer.className = 'bd-layer';
-      layer.textContent = landmark.layers[i];
-      if (justBuilt && i === sentenceNum - 1) layer.classList.add('new');
+      if (i < sentenceNum) {
+        // Built layer
+        layer.className = 'bd-layer' + (goldLayers.has(i) ? ' gold' : '');
+        layer.textContent = landmark.layers[i];
+        if (justBuilt && i === sentenceNum - 1) {
+          layer.classList.add('new');
+          spawnDust();
+        }
+      } else {
+        // Blueprint silhouette of a layer not built yet
+        layer.className = 'bd-layer ghost blueprint';
+        layer.textContent = landmark.layers[i];
+      }
       els.house.appendChild(layer);
     }
     if (sentenceNum === 0) {
       const ground = document.createElement('div');
       ground.className = 'bd-layer ghost';
       ground.textContent = '🏗️ 空地';
-      els.house.appendChild(ground);
+      els.house.insertBefore(ground, els.house.firstChild);
+    }
+  }
+
+  // ===== Construction-site scene (clouds/sun/bird/crane/mascot/combo pill) =====
+  function buildScene() {
+    const panel = els.house && els.house.parentElement;
+    if (!panel || panel.dataset.sceneBuilt) return;
+    panel.dataset.sceneBuilt = '1';
+
+    const cloudDefs = [
+      { top: '8%', size: '1.6rem', dur: '38s', delay: '-4s', op: 0.85 },
+      { top: '20%', size: '1.05rem', dur: '52s', delay: '-22s', op: 0.65 },
+      { top: '3%', size: '1.25rem', dur: '46s', delay: '-34s', op: 0.55 },
+    ];
+    cloudDefs.forEach(c => {
+      const cl = document.createElement('span');
+      cl.className = 'bd-cloud';
+      cl.textContent = '☁️';
+      cl.style.top = c.top;
+      cl.style.fontSize = c.size;
+      cl.style.animationDuration = c.dur;
+      cl.style.animationDelay = c.delay;
+      cl.style.opacity = c.op;
+      panel.appendChild(cl);
+    });
+
+    const sun = document.createElement('span');
+    sun.className = 'bd-sun';
+    sun.textContent = '☀️';
+    panel.appendChild(sun);
+
+    const bird = document.createElement('span');
+    bird.className = 'bd-bird';
+    bird.textContent = '🐦';
+    panel.appendChild(bird);
+
+    const crane = document.createElement('div');
+    crane.className = 'bd-crane';
+    crane.textContent = '🏗️';
+    panel.appendChild(crane);
+
+    const mascot = document.createElement('div');
+    mascot.className = 'bd-mascot';
+    mascot.textContent = '👷';
+    panel.appendChild(mascot);
+    els.mascot = mascot;
+
+    // Combo pill lives in the left instruction panel, right by the progress line
+    if (els.progress && els.progress.parentElement && els.slots) {
+      const combo = document.createElement('div');
+      combo.className = 'bd-combo-pill';
+      combo.id = 'bd-combo';
+      combo.style.display = 'none';
+      els.progress.parentElement.insertBefore(combo, els.slots);
+      els.combo = combo;
+    }
+  }
+
+  function updateComboPill() {
+    if (!els.combo) return;
+    if (streak >= 2) {
+      els.combo.textContent = `🔥 連擊 x ${streak}`;
+      els.combo.style.display = 'inline-block';
+      els.combo.classList.remove('pop');
+      void els.combo.offsetWidth; // restart the pop animation
+      els.combo.classList.add('pop');
+    } else {
+      els.combo.style.display = 'none';
+    }
+  }
+
+  function mascotReact(mood, message) {
+    if (!els.mascot) return;
+    els.mascot.classList.remove('cheer', 'dizzy');
+    void els.mascot.offsetWidth; // restart animation even if same mood repeats
+    els.mascot.classList.add(mood);
+    setTimeout(() => els.mascot.classList.remove(mood), 650);
+
+    if (message) {
+      const b = document.createElement('span');
+      b.className = 'bd-bubble';
+      b.textContent = message;
+      els.mascot.appendChild(b);
+      setTimeout(() => b.remove(), 1500);
+    }
+  }
+
+  function spawnDust() {
+    const panel = els.house && els.house.parentElement;
+    if (!panel) return;
+    panel.classList.remove('shake');
+    void panel.offsetWidth; // restart the shake animation
+    panel.classList.add('shake');
+    setTimeout(() => panel.classList.remove('shake'), 320);
+
+    const n = 3 + Math.floor(Math.random() * 2); // 3-4 puffs
+    for (let i = 0; i < n; i++) {
+      const d = document.createElement('span');
+      d.className = 'bd-dust';
+      d.style.left = 38 + Math.random() * 24 + '%';
+      d.style.animationDelay = Math.random() * 0.12 + 's';
+      panel.appendChild(d);
+      setTimeout(() => d.remove(), 700);
+    }
+  }
+
+  // Confetti burst — ported from js/tower.js towerConfetti(). Rendered onto
+  // the done screen (not the game panel): houseComplete() hides #bd-game via
+  // display:none in the same tick, so anything appended to the game panel at
+  // that point would never actually be seen.
+  function bdConfetti(container, n = 24) {
+    if (!container) return;
+    const colors = ['#ffd166', '#ff6b81', '#4ade80', '#7fd4ff', '#c77dff', '#fff'];
+    for (let i = 0; i < n; i++) {
+      const c = document.createElement('div');
+      c.className = 'bd-confetti';
+      c.style.left = 8 + Math.random() * 84 + '%';
+      c.style.background = colors[i % colors.length];
+      c.style.animationDelay = Math.random() * 0.4 + 's';
+      c.style.animationDuration = 1.3 + Math.random() * 0.9 + 's';
+      c.style.transform = `rotate(${Math.random() * 360}deg)`;
+      container.appendChild(c);
+      setTimeout(() => c.remove(), 2600);
+    }
+  }
+
+  function bdFireworks(container, n = 3) {
+    if (!container) return;
+    const colors = ['#ffd166', '#ff6b81', '#7fd4ff', '#c77dff', '#8ecf6a'];
+    for (let i = 0; i < n; i++) {
+      const f = document.createElement('div');
+      f.className = 'bd-firework';
+      f.style.left = 15 + Math.random() * 70 + '%';
+      f.style.top = 10 + Math.random() * 40 + '%';
+      f.style.color = colors[i % colors.length];
+      f.style.animationDelay = i * 0.25 + 's';
+      container.appendChild(f);
+      setTimeout(() => f.remove(), 1200);
     }
   }
 
