@@ -367,82 +367,87 @@
   border-radius: 50%;
   cursor: pointer;
   color: #fff;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  text-shadow:
+    0 0 4px rgba(15, 6, 0, 0.95),
+    0 0 8px rgba(15, 6, 0, 0.7),
+    0 1px 2px rgba(0, 0, 0, 0.75);
   box-shadow:
     inset 0 -6px 10px rgba(0, 0, 0, 0.45),
-    inset 0 6px 10px rgba(255, 255, 255, 0.35),
-    inset 2px 2px 3px rgba(255, 255, 255, 0.25);
+    inset 0 6px 10px rgba(255, 255, 255, 0.16),
+    inset 2px 2px 3px rgba(255, 255, 255, 0.1),
+    0 0 0 2px rgba(8, 10, 20, 0.35);
   transition: transform 0.08s, box-shadow 0.15s;
-  animation: tw-orb-sheen 3.6s ease-in-out infinite;
 }
-/* Stagger the idle sheen across the board so 30 orbs don't pulse in lockstep */
+/* Idle sheen animation (tw-orb-sheen) removed: it pushed filter:brightness
+   up to 1.12 on every orb, washing out the deepened body gradients and the
+   white lettering below. Orbs are static-lit now; the :nth-child delay
+   selectors are kept (harmless) in case a future subtle idle effect wants
+   the same staggering. */
 .tw-orb:nth-child(3n+1) { animation-delay: 0s; }
 .tw-orb:nth-child(3n+2) { animation-delay: 0.6s; }
 .tw-orb:nth-child(3n+3) { animation-delay: 1.2s; }
-@keyframes tw-orb-sheen {
-  0%, 100% { filter: brightness(1); }
-  50% { filter: brightness(1.12); }
-}
 
-/* Glossy spheres: a bright top-left specular highlight over the main
-   body gradient, with a darker rim so each family still reads as
-   gold / cyan / purple at a glance but looks 3D. */
+/* Glossy spheres: a small, off-center specular highlight over a deep
+   jewel-tone body gradient, with a dark rim so each family still reads as
+   gold / cyan / purple at a glance but looks 3D. The body gradient is kept
+   dark under the glyph (center of the orb) so white letters stay legible
+   (WCAG contrast) — only the specular dot and the outer rim are bright/dark
+   extremes, not the area behind the text. */
 .tw-orb.vowel {
   background:
-    radial-gradient(circle at 30% 22%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0) 24%),
-    radial-gradient(circle at 32% 28%, #fff2c4, #ffce54 42%, #c9860a 78%, #7a4d05 100%);
+    radial-gradient(circle at 26% 18%, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0) 16%),
+    radial-gradient(circle at 32% 28%, #ffd98a, #d99a1f 40%, #8a5c10 75%, #4a3005 100%);
 }
 .tw-orb.consonant {
   background:
-    radial-gradient(circle at 30% 22%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0) 24%),
-    radial-gradient(circle at 32% 28%, #eafcff, #7fd4f0 42%, #1f7aa8 78%, #0d3f52 100%);
+    radial-gradient(circle at 26% 18%, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0) 16%),
+    radial-gradient(circle at 32% 28%, #8fd4ec, #2f96c4 40%, #14567a 75%, #082c3e 100%);
 }
 .tw-orb.rare {
   background:
-    radial-gradient(circle at 30% 22%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0) 24%),
-    radial-gradient(circle at 32% 28%, #f5e6ff, #d3a7ff 42%, #7a3bbf 78%, #3d1a63 100%);
+    radial-gradient(circle at 26% 18%, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0) 16%),
+    radial-gradient(circle at 32% 28%, #c99df0, #8a4fd0 40%, #4a2180 75%, #251040 100%);
   /* Rare orbs get a constant pulsing glow instead of the generic idle
      sheen (ports css/candy.css .cd-cell.star + cd-star-glow) so they
-     read as "special" among the board. */
+     read as "special" among the board. Glow lives entirely in box-shadow
+     now — no whole-element filter:brightness() — so the letter and the
+     dark body gradient underneath never wash out at the pulse's peak. */
   animation: tw-rare-glow 1.2s infinite;
 }
 @keyframes tw-rare-glow {
   0%, 100% {
     box-shadow:
       inset 0 -6px 10px rgba(0, 0, 0, 0.45),
-      inset 0 6px 10px rgba(255, 255, 255, 0.35),
+      inset 0 6px 10px rgba(255, 255, 255, 0.16),
+      0 0 0 2px rgba(8, 10, 20, 0.35),
       0 0 8px rgba(211, 167, 255, 0.55);
-    filter: brightness(1);
   }
   50% {
     box-shadow:
       inset 0 -6px 10px rgba(0, 0, 0, 0.45),
-      inset 0 6px 10px rgba(255, 255, 255, 0.35),
+      inset 0 6px 10px rgba(255, 255, 255, 0.16),
+      0 0 0 2px rgba(8, 10, 20, 0.35),
       0 0 18px rgba(211, 167, 255, 0.95);
-    filter: brightness(1.25);
   }
 }
 
 /* 耀光珠 (charged orb) — an arcane amber glow that reads on TOP of any
    family colour (vowel/consonant/rare) so it's instantly recognizable no
    matter what letter it lands on. Placed after .rare in the cascade so it
-   wins the shared `animation`/`box-shadow`/`text-shadow` properties when an
-   orb happens to be both rare and charged.
+   wins the shared `animation`/`box-shadow` properties when an orb happens
+   to be both rare and charged.
    Deliberately does NOT use a whole-element `filter: brightness()` — that
    used to wash the white letter out along with the background at the
    pulse's peak. Instead the glow stays in the box-shadow/outline layer
-   (never touching the glyph itself) and the letter gets its own deep,
-   tight text-shadow so it stays crisp against the glow; a dim inner violet
-   vignette (inset box-shadow) keeps the center from reading as blown-out
-   white, giving the orb a moodier "enchanted rune" feel instead of a
-   flashbulb. */
+   (never touching the glyph itself); the deep, tight letter text-shadow
+   that used to live only here is now on the base .tw-orb rule (every orb
+   needs it against the darker jewel-tone bodies), so it's inherited rather
+   than redeclared. A dim inner violet vignette (inset box-shadow) keeps the
+   center from reading as blown-out white, giving the orb a moodier
+   "enchanted rune" feel instead of a flashbulb. */
 .tw-orb.charged {
   animation: tw-charged-pulse 1.9s ease-in-out infinite;
   outline: 2px solid rgba(255, 191, 92, 0.55);
-  text-shadow:
-    0 0 4px rgba(15, 6, 0, 0.95),
-    0 0 8px rgba(15, 6, 0, 0.7),
-    0 1px 2px rgba(0, 0, 0, 0.75);
 }
 .tw-orb.charged::before {
   content: '✦';
