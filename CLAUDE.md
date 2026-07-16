@@ -40,7 +40,7 @@ js/
   empire.js             — Age of Empires-style 3D castle defense (Three.js; procedural textures/sky dome, per-age scenery rebuilds, combo & floating-reward juice, battle consumables fire_bomb/wall_repair/freeze_trap)
   candy.js              — Candy Crush-style match-3 with vocabulary quizzes (FOOD_THEMES: 10 themed food days × 6 foods = 60 words; level N uses theme (N-1)%10, per-level intro card with TTS)
   sling.js              — Angry Birds-style word slingshot (canvas physics)
-  builder.js            — Duolingo-style sentence builder (word-order game building 33 world landmarks with cultural facts)
+  builder.js            — Duolingo-style sentence builder (word-order game building 33 world landmarks with cultural facts; animated site scene + crane drops + blueprint silhouette, worker mascot, combo streak/golden bolt, medium/hard decoy words, perfect-landmark trophies, landmark gallery overlay, postcard done-screen)
   speak.js              — Spell academy speaking game (Web Speech Recognition, honor-mode fallback)
   tower.js              — Tower of Saviors-style word boss battle (drag letter orbs to spell words; 12 bosses scale endlessly by floor; 12 elemental realm themes, glossy orbs + SVG drag-trail, charged orbs/crit-combo, particle FX)
   rpg.js                — Undertale-style 2D RPG engine for conversation practice (interprets RPG_CHAPTERS data)
@@ -153,7 +153,7 @@ python3 -m http.server 8000
 ```
 
 ### Cache busting
-All CSS/JS references in index.html carry a `?v=N` query string. GitHub Pages caches assets for 10 minutes, so a freshly deployed index.html can otherwise pair with stale cached JS/CSS (symptoms: a new game's zone shows but its dynamic UI is empty). **Bump the version number on every release that changes JS or CSS** (single `sed -i 's/?v=28/?v=29/g' index.html`-style edit).
+All CSS/JS references in index.html carry a `?v=N` query string. GitHub Pages caches assets for 10 minutes, so a freshly deployed index.html can otherwise pair with stale cached JS/CSS (symptoms: a new game's zone shows but its dynamic UI is empty). **Bump the version number on every release that changes JS or CSS** (single `sed -i 's/?v=29/?v=30/g' index.html`-style edit).
 
 ### Testing
 There is no automated test suite. Manual testing in a browser is the current workflow. Verify changes by opening `index.html` and exercising the affected game zone.
