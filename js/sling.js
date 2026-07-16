@@ -3,6 +3,13 @@
    A question appears (Chinese meaning + emoji, or a spoken word via TTS);
    crates in the structure each carry an English word — slingshot the bird
    into the CORRECT crate to score. Wrong crates waste a bird.
+
+   Five bird types cycle through a shuffled queue each shot, each with its
+   own in-flight ability (triggered by tapping the canvas mid-flight).
+   Obstacles (ice/stone/TNT) and floating balloons add extra juice; four
+   rotating outdoor scenes reskin the backdrop each round. None of this
+   touches the educational core: scoring only ever happens when a bird
+   BODY collides with the correct word crate (see crateHit()).
 */
 
 const SlingGame = (() => {
@@ -17,14 +24,38 @@ const SlingGame = (() => {
   // height above launch is v²/2g − g·d²/2v²; with v=1170 that is ~256 px
   // at d=700 — comfortably above the highest crate spot (~+120 px)
   const POWER = 15;
+  // Falcon birds fly steadier but slower (0.8×). The build-time
+  // reachability simulation always uses this conservative worst case so a
+  // question stays solvable no matter which bird type ends up in hand.
+  const POWER_SAFE = POWER * 0.8;
   const BIRD_R = 15;
   const QUESTIONS_PER_ROUND = 10;
+  const OW = 64, OH = 52; // obstacle size
 
   const DIFF_CONFIG = {
-    easy:   { crates: 3, xp: 12, ammo: 15, bonusGems: 10 },
-    medium: { crates: 4, xp: 16, ammo: 14, bonusGems: 15 },
-    hard:   { crates: 4, xp: 20, ammo: 12, bonusGems: 20 },
+    easy:   { crates: 3, xp: 12, ammo: 15, bonusGems: 10, obs: [0, 1] },
+    medium: { crates: 4, xp: 16, ammo: 14, bonusGems: 15, obs: [1, 2] },
+    hard:   { crates: 4, xp: 20, ammo: 12, bonusGems: 20, obs: [2, 3] },
   };
+
+  const BIRD_TYPES = {
+    chick:  { emoji: '🐤', name: '小雞', tip: '基本鳥，穩紮穩打！' },
+    dash:   { emoji: '🐦', name: '衝刺鳥', tip: '飛行中點擊畫面，直線加速衝刺！' },
+    split:  { emoji: '🐧', name: '分裂鳥', tip: '飛行中點擊畫面，分裂成三隻！' },
+    bomb:   { emoji: '🐔', name: '炸彈鳥', tip: '飛行中點擊畫面，爆炸震破障礙物！' },
+    falcon: { emoji: '🦉', name: '獵鷹鳥', tip: '飛得穩，拉弓時看得到完整彈道！' },
+  };
+
+  const SCENES = [
+    { name: 'grassland', skyTop: '#8ed1f5', skyBottom: '#d8f0d8', hill: '#a5d6a0',
+      ground: '#7cb85a', groundLine: '#659947', sun: '#ffe28a', sunR: 30, decor: ['🌳', '🌼'] },
+    { name: 'desert', skyTop: '#ffd9a0', skyBottom: '#ffefd0', hill: '#e0b36a',
+      ground: '#d4a355', groundLine: '#b8863c', sun: '#ffdd66', sunR: 30, decor: ['🌵', '🌵'] },
+    { name: 'snow', skyTop: '#cfe8ff', skyBottom: '#f0f8ff', hill: '#e8f2fa',
+      ground: '#eef6fc', groundLine: '#d7e8f4', sun: '#fff6dd', sunR: 26, decor: ['⛄', '❄️'] },
+    { name: 'sunset', skyTop: '#ff9a56', skyBottom: '#ffd1a3', hill: '#8a6a9e',
+      ground: '#7a9a4f', groundLine: '#5f7d3a', sun: '#ff7847', sunR: 42, decor: ['🌇', '🐦'] },
+  ];
 
   let canvas, ctx;
   let difficulty = 'easy';
@@ -37,8 +68,18 @@ const SlingGame = (() => {
   let question = null;   // { word, zh, hint, mode }
   let crates = [];       // { x,y,w,h, word, correct, state:'alive'|'used'|'flying', vx,vy,vr,rot, fade, reveal }
   let platforms = [];    // decorative wooden planks under elevated crates
-  let bird = null;       // { x,y,vx,vy, mode:'ready'|'aiming'|'flying'|'spent', spentT, bounces }
+  let obstacles = [];    // { x,y,w,h, type:'ice'|'stone'|'tnt', hp, maxHp, cracked, state, fade, vx,vy,vr,rot }
+  let balloons = [];     // { x,y,r,vy }
+  let floaters = [];     // { x,y,text,vy,t,life,color }
   let particles = [];
+  let queue = [];        // upcoming BIRD_TYPES keys
+  let bird = null;       // ready/aiming bird: { x,y,vx,vy, mode:'ready'|'aiming', type }
+  let birds = [];         // launched birds in flight/just-spent: { x,y,vx,vy,mode:'flying'|'spent',type,bounces,spentT }
+  let abilityUsed = false;
+  let shotActive = false;
+  let shakeMag = 0;
+  let sceneIdx = 0;
+  let roundNum = 0;
   let aimPos = null;
   let hintUsedThisQ = false;
   let nextQTimer = 0;    // countdown to next question after a correct hit
@@ -80,8 +121,24 @@ const SlingGame = (() => {
     canvas.addEventListener('pointerup', onPointerUp);
     canvas.addEventListener('pointerleave', onPointerUp);
 
-    // Read-only hook for automated tests (crate layout is canvas-only)
-    window.__slingTest = { crates: () => crates.map(c => ({ ...c })) };
+    // Read-only hooks for automated tests (crate/obstacle/bird layout is canvas-only)
+    window.__slingTest = {
+      crates: () => crates.map(c => ({ ...c })),
+      obstacles: () => obstacles.map(o => ({ ...o })),
+      birds: () => birds.map(b => ({ ...b })),
+      bird: () => (bird ? { ...bird } : null),
+      queue: () => queue.slice(),
+      scene: () => sceneIdx,
+      // Test-only deterministic balloon spawn (real gameplay uses
+      // spawnBalloons()). Placed in open sky well before the crate
+      // cluster (which starts around x=490) so a lofted test shot can
+      // reach it without any crate/obstacle in the way.
+      spawnBalloon: () => {
+        const b = { x: 320, y: 160, r: 20, vy: -16 };
+        balloons.push(b);
+        return { ...b };
+      },
+    };
   }
 
   // ===== Round lifecycle =====
@@ -91,6 +148,13 @@ const SlingGame = (() => {
     qIndex = 0;
     correctCount = 0;
     particles = [];
+    floaters = [];
+    balloons = [];
+    obstacles = [];
+    queue = [];
+    shakeMag = 0;
+    sceneIdx = roundNum % SCENES.length;
+    roundNum++;
     state = 'playing';
     els.startScreen.style.display = 'none';
     els.overScreen.style.display = 'none';
@@ -176,7 +240,8 @@ const SlingGame = (() => {
     question = { word: entry.word, zh: shortZh(entry.zh), hint: entry.hint, mode };
 
     buildStructure(shuffleArr(options), entry.word);
-    resetBird();
+    spawnBalloons();
+    resetBird(true);
     renderPrompt();
     updateHUD();
   }
@@ -272,15 +337,23 @@ const SlingGame = (() => {
           platforms.push({ x: c.x - 10, y: bottom, w: cw + 20, h: 10 });
         }
       });
+
+      // Obstacles (ice/stone/TNT) layered in front of wrong crates. The
+      // correct crate must stay reachable — buildObstacles() drops
+      // obstacles one by one if they seal off every path to it.
+      const finalCorrectIdx = crates.findIndex(c => c.correct);
+      buildObstacles(finalCorrectIdx);
       return;
     }
   }
 
   // Simulate every pull angle/strength with the game's own physics and
-  // check whether crate `idx` can be hit FIRST, with an 8px safety inset
-  // so borderline grazes don't count. Runs in a few ms per structure.
-  function canHitCrate(idx) {
-    const target = crates[idx];
+  // check whether `target` can be hit FIRST among `blockers`, with an 8px
+  // safety inset so borderline grazes don't count. Uses the conservative
+  // POWER_SAFE (falcon's reduced launch speed) so a question stays
+  // solvable regardless of which bird type ends up being thrown. Runs in
+  // a few ms per structure.
+  function simulateHit(target, blockers) {
     const INSET = 8;
     const dt = 1 / 60;
     for (let ang = 8; ang < 88; ang += 2) {
@@ -288,12 +361,12 @@ const SlingGame = (() => {
         const rad = ang * Math.PI / 180;
         let x = SLING_X - Math.cos(rad) * pull;
         let y = SLING_Y + Math.sin(rad) * pull;
-        let vx = (SLING_X - x) * POWER;
-        let vy = (SLING_Y - y) * POWER;
+        let vx = (SLING_X - x) * POWER_SAFE;
+        let vy = (SLING_Y - y) * POWER_SAFE;
         let outcome = null;
         for (let t = 0; t < 3 && !outcome; t += dt) {
           vy += GRAVITY * dt; x += vx * dt; y += vy * dt;
-          for (const c of crates) {
+          for (const c of blockers) {
             if (x + BIRD_R > c.x && x - BIRD_R < c.x + c.w &&
                 y + BIRD_R > c.y && y - BIRD_R < c.y + c.h) {
               outcome = (c === target &&
@@ -311,9 +384,97 @@ const SlingGame = (() => {
     return false;
   }
 
-  function resetBird() {
-    bird = { x: SLING_X, y: SLING_Y, vx: 0, vy: 0, mode: 'ready', spentT: 0, bounces: 0 };
+  function canHitCrate(idx) {
+    return simulateHit(crates[idx], crates);
+  }
+
+  function canHitCrateWithObstacles(idx) {
+    return simulateHit(crates[idx], crates.concat(obstacles.filter(o => o.hp > 0)));
+  }
+
+  // Place 0-3 obstacles (by difficulty) in front of wrong crates as partial
+  // shields; anything left over is purely decorative. Never allowed to
+  // seal off every path to the correct crate.
+  function buildObstacles(correctIdx) {
+    obstacles = [];
+    const [lo, hi] = DIFF_CONFIG[difficulty].obs;
+    const count = lo + Math.floor(Math.random() * (hi - lo + 1));
+    if (count <= 0) return;
+
+    const wrongIdxs = shuffleArr(crates.map((c, i) => i).filter(i => i !== correctIdx));
+    const types = difficulty === 'easy' ? ['ice'] : ['ice', 'stone', 'tnt'];
+
+    for (let i = 0; i < count; i++) {
+      let x, y;
+      const wrongIdx = wrongIdxs[i];
+      if (wrongIdx !== undefined) {
+        const wc = crates[wrongIdx];
+        x = wc.x - OW - 14;
+        y = Math.min(wc.y, GROUND_Y - OH);
+      } else {
+        x = 250 + Math.random() * 150;
+        y = GROUND_Y - OH;
+      }
+      if (x < SLING_X + 60) x = SLING_X + 60; // never sit on the slingshot itself
+      const type = types[Math.floor(Math.random() * types.length)];
+      const hp = type === 'stone' ? 2 : 1;
+      obstacles.push({
+        x, y, w: OW, h: OH, type, hp, maxHp: hp,
+        cracked: false, state: 'alive', fade: 1, vx: 0, vy: 0, vr: 0, rot: 0,
+      });
+    }
+
+    // Drop obstacles (last placed first) until the correct crate is
+    // provably reachable again.
+    while (obstacles.length > 0 && !canHitCrateWithObstacles(correctIdx)) {
+      obstacles.pop();
+    }
+  }
+
+  function spawnBalloons() {
+    balloons = [];
+    if (Math.random() < 0.25) {
+      const n = 1 + Math.floor(Math.random() * 2);
+      for (let i = 0; i < n; i++) {
+        balloons.push({
+          x: W * 0.58 + Math.random() * (W * 0.38),
+          y: GROUND_Y - 40 - Math.random() * 100,
+          r: 20,
+          vy: -(12 + Math.random() * 12),
+        });
+      }
+    }
+  }
+
+  // `announce` shows the new bird's name/tip in the feedback bar. Only
+  // nextQuestion() passes true — resolveShotEnd()'s resets happen while a
+  // question is still in progress (mid-breather after a correct hit, or a
+  // fresh bird after a miss/obstacle hit) and must not clobber that
+  // feedback message before the player has had a chance to read it.
+  function resetBird(announce) {
+    const type = nextBirdType();
+    bird = { x: SLING_X, y: SLING_Y, vx: 0, vy: 0, mode: 'ready', type };
+    birds = [];
+    abilityUsed = false;
     aimPos = null;
+    if (announce) {
+      const info = BIRD_TYPES[type];
+      els.feedback.textContent = `${info.emoji} ${info.name}：${info.tip}`;
+      els.feedback.className = 'sg-feedback';
+    }
+  }
+
+  function refillQueue() {
+    queue.push(...shuffleArr(Object.keys(BIRD_TYPES)));
+  }
+
+  function nextBirdType() {
+    if (queue.length === 0) refillQueue();
+    return queue.shift();
+  }
+
+  function birdPower(type) {
+    return type === 'falcon' ? POWER * 0.8 : POWER;
   }
 
   // ===== Input =====
@@ -326,7 +487,14 @@ const SlingGame = (() => {
   }
 
   function onPointerDown(e) {
-    if (state !== 'playing' || !bird || bird.mode !== 'ready') return;
+    if (state !== 'playing') return;
+    // A bird is already in the air — this tap triggers its ability instead
+    // of starting a new aim.
+    if (birds.some(b => b.mode === 'flying')) {
+      triggerAbility();
+      return;
+    }
+    if (!bird || bird.mode !== 'ready') return;
     if (ammo <= 0 || nextQTimer > 0) return;
     const p = canvasPos(e);
     const dist = Math.hypot(p.x - bird.x, p.y - bird.y);
@@ -354,12 +522,19 @@ const SlingGame = (() => {
       aimPos = null;
       return;
     }
-    bird.vx = dx * POWER;
-    bird.vy = dy * POWER;
+    const pw = birdPower(bird.type);
+    bird.vx = dx * pw;
+    bird.vy = dy * pw;
     bird.mode = 'flying';
     bird.x = pull.x; bird.y = pull.y;
+    bird.bounces = 0;
+    bird.spentT = 0;
     aimPos = null;
     ammo--;
+    abilityUsed = false;
+    shotActive = true;
+    birds.push(bird);
+    bird = null;
     updateHUD();
   }
 
@@ -376,12 +551,52 @@ const SlingGame = (() => {
     return { x: SLING_X + dx, y: SLING_Y + dy };
   }
 
+  // ===== Bird abilities =====
+  function triggerAbility() {
+    if (abilityUsed) return;
+    const primary = birds.find(b => b.mode === 'flying');
+    if (!primary) return;
+    abilityUsed = true;
+    const info = BIRD_TYPES[primary.type];
+
+    if (primary.type === 'dash') {
+      const sign = Math.sign(primary.vx) || 1;
+      primary.vx = sign * Math.max(Math.abs(primary.vx) * 1.9, 950);
+      primary.vy *= 0.25;
+      spawnSpeedLines(primary.x, primary.y, primary.vx);
+      els.feedback.textContent = `${info.emoji} ${info.name}衝刺！`;
+      els.feedback.className = 'sg-feedback';
+    } else if (primary.type === 'split') {
+      const clone1 = { x: primary.x, y: primary.y, vx: primary.vx, vy: primary.vy - 110, mode: 'flying', type: primary.type, bounces: 0, spentT: 0 };
+      const clone2 = { x: primary.x, y: primary.y, vx: primary.vx, vy: primary.vy + 110, mode: 'flying', type: primary.type, bounces: 0, spentT: 0 };
+      birds.push(clone1, clone2);
+      spawnEmojiParticles(primary.x, primary.y, '🪶', 10);
+      els.feedback.textContent = `${info.emoji} ${info.name}分裂！`;
+      els.feedback.className = 'sg-feedback';
+    } else if (primary.type === 'bomb') {
+      explodeAt(primary.x, primary.y, 95);
+      markSpent(primary, 0.3);
+      els.feedback.textContent = `${info.emoji} ${info.name}爆炸！`;
+      els.feedback.className = 'sg-feedback';
+    }
+    // chick/falcon: no active ability (falcon's edge is passive — see
+    // resetBird/onPointerUp/render for its slower launch + full trajectory
+    // preview).
+  }
+
   // ===== Hit handling =====
+  function markSpent(b, delay) {
+    b.mode = 'spent';
+    b.spentT = delay;
+    spawnParticles(b.x, b.y, '#ffdd55', 6);
+  }
+
   function crateHit(crate) {
     if (crate.correct) {
       correctCount++;
       SoundManager.playCorrect();
       breakCrate(crate, true);
+      spawnEmojiParticles(crate.x + crate.w / 2, crate.y + crate.h / 2, '✨', 12);
       // Fling the leftovers for juice
       crates.forEach(c => {
         if (c.state === 'alive') {
@@ -412,6 +627,9 @@ const SlingGame = (() => {
       GameEngine.addGems(gems);
       GameEngine.recordWord(question.word);
       GameEngine.recordSling();
+
+      floaters.push({ x: crate.x + crate.w / 2 - 16, y: crate.y, text: `+${xp} XP`, vy: -42, t: 0, life: 1.1, color: '#ffd166' });
+      floaters.push({ x: crate.x + crate.w / 2 + 16, y: crate.y - 14, text: `+${gems}💎`, vy: -42, t: 0, life: 1.1, color: '#7cf29a' });
 
       nextQTimer = 1.4; // breather, then next question
     } else {
@@ -445,6 +663,70 @@ const SlingGame = (() => {
       celebrate ? '#ffd166' : '#8b5a2b', celebrate ? 22 : 10);
   }
 
+  // ===== Obstacles =====
+  function damageObstacle(o, dmg) {
+    if (o.state !== 'alive') return;
+    o.hp -= dmg;
+    if (o.hp <= 0) {
+      destroyObstacle(o);
+    } else if (o.type === 'stone') {
+      o.cracked = true;
+    }
+  }
+
+  function destroyObstacle(o) {
+    o.state = 'flying';
+    o.vx = (Math.random() - 0.5) * 140;
+    o.vy = -160;
+    o.vr = (Math.random() - 0.5) * 6;
+    o.fade = 0.99;
+    if (o.type === 'ice') {
+      spawnParticles(o.x + o.w / 2, o.y + o.h / 2, '#bfe8ff', 14);
+    } else if (o.type === 'stone') {
+      spawnParticles(o.x + o.w / 2, o.y + o.h / 2, '#9a9a9a', 14);
+      shakeMag = Math.max(shakeMag, 10);
+    } else if (o.type === 'tnt') {
+      spawnParticles(o.x + o.w / 2, o.y + o.h / 2, '#ff8c42', 18);
+      spawnParticles(o.x + o.w / 2, o.y + o.h / 2, '#ffe28a', 12);
+      explodeAt(o.x + o.w / 2, o.y + o.h / 2, 100);
+    }
+  }
+
+  // Explosion (bomb-bird ability or a chained TNT crate): damages every
+  // live obstacle within `radius`, chaining further TNTs, plus juice.
+  // Deliberately only ever touches `obstacles` — never `crates` — so it
+  // can't score or destroy word crates.
+  function explodeAt(x, y, radius) {
+    shakeMag = Math.max(shakeMag, 16);
+    spawnParticles(x, y, '#ff8c42', 22);
+    spawnParticles(x, y, '#ffe28a', 14);
+    obstacles.forEach(o => {
+      if (o.state !== 'alive') return;
+      const cx = Math.max(o.x, Math.min(x, o.x + o.w));
+      const cy = Math.max(o.y, Math.min(y, o.y + o.h));
+      if (Math.hypot(x - cx, y - cy) <= radius) damageObstacle(o, 2);
+    });
+  }
+
+  function hitObstacle(o, b) {
+    damageObstacle(o, 1);
+    const msg = o.type === 'ice' ? '🧊 冰塊碎了！' : o.type === 'stone' ? '🪨 石塊裂了！' : '💥 轟隆！';
+    els.feedback.textContent = msg;
+    els.feedback.className = 'sg-feedback';
+    markSpent(b, 0.2);
+  }
+
+  // ===== Balloons =====
+  function popBalloon(bl, i) {
+    balloons.splice(i, 1);
+    GameEngine.addGems(2);
+    spawnParticles(bl.x, bl.y, '#ff6fa5', 12);
+    floaters.push({ x: bl.x, y: bl.y, text: '+2💎', vy: -42, t: 0, life: 1.0, color: '#7cf29a' });
+    els.feedback.textContent = '🎈 +2 💎';
+    els.feedback.className = 'sg-feedback correct';
+  }
+
+  // ===== Particles / floaters =====
   function spawnParticles(x, y, color, n) {
     for (let i = 0; i < n; i++) {
       particles.push({
@@ -459,18 +741,34 @@ const SlingGame = (() => {
     }
   }
 
-  // Bird is done (hit something, stopped, or flew away)
-  function spendBird() {
-    spawnParticles(bird.x, bird.y, '#ffdd55', 6);
-    if (nextQTimer > 0) {
-      resetBird();
-      return;
+  function spawnEmojiParticles(x, y, emoji, n) {
+    for (let i = 0; i < n; i++) {
+      particles.push({
+        x, y,
+        vx: (Math.random() - 0.5) * 300,
+        vy: -80 - Math.random() * 260,
+        life: 0.5 + Math.random() * 0.5,
+        t: 0,
+        emoji,
+        size: 8 + Math.random() * 6,
+      });
     }
-    if (ammo <= 0) {
-      endRound(false);
-      return;
+  }
+
+  function spawnSpeedLines(x, y, vx) {
+    const dir = vx >= 0 ? 1 : -1;
+    for (let i = 0; i < 10; i++) {
+      particles.push({
+        x: x - dir * 10 * i,
+        y: y + (Math.random() - 0.5) * 20,
+        vx: -dir * 250 + (Math.random() - 0.5) * 40,
+        vy: (Math.random() - 0.5) * 40,
+        life: 0.25 + Math.random() * 0.15,
+        t: 0,
+        color: '#ffffff',
+        size: 3 + Math.random() * 2,
+      });
     }
-    resetBird();
   }
 
   // ===== Main loop =====
@@ -491,6 +789,21 @@ const SlingGame = (() => {
     render();
   }
 
+  function resolveShotEnd() {
+    if (nextQTimer > 0) {
+      // A correct hit already queued the next question — just get a bird
+      // ready in the meantime (nextQuestion() will replace everything and
+      // announce the bird that actually matters once the breather ends).
+      resetBird(false);
+      return;
+    }
+    if (ammo <= 0) {
+      endRound(false);
+      return;
+    }
+    resetBird(false);
+  }
+
   function update(dt) {
     // Delayed question switch after a correct hit
     if (nextQTimer > 0) {
@@ -501,43 +814,72 @@ const SlingGame = (() => {
       }
     }
 
-    // Bird physics
-    if (bird && bird.mode === 'flying') {
-      bird.vy += GRAVITY * dt;
-      bird.x += bird.vx * dt;
-      bird.y += bird.vy * dt;
+    // Launched birds' physics
+    birds.forEach(b => {
+      if (b.mode === 'spent') {
+        b.spentT -= dt;
+        return;
+      }
+      if (b.mode !== 'flying') return;
+
+      b.vy += GRAVITY * dt;
+      b.x += b.vx * dt;
+      b.y += b.vy * dt;
+
+      // Balloons: bonus pickups, never block flight
+      for (let i = balloons.length - 1; i >= 0; i--) {
+        const bl = balloons[i];
+        if (Math.hypot(b.x - bl.x, b.y - bl.y) < bl.r + BIRD_R) {
+          popBalloon(bl, i);
+        }
+      }
+
+      // Obstacles block flight
+      for (const o of obstacles) {
+        if (o.state !== 'alive') continue;
+        if (b.x + BIRD_R > o.x && b.x - BIRD_R < o.x + o.w &&
+            b.y + BIRD_R > o.y && b.y - BIRD_R < o.y + o.h) {
+          hitObstacle(o, b);
+          return;
+        }
+      }
 
       // Crate collisions
       for (const c of crates) {
         if (c.state !== 'alive' && c.state !== 'used') continue;
-        if (bird.x + BIRD_R > c.x && bird.x - BIRD_R < c.x + c.w &&
-            bird.y + BIRD_R > c.y && bird.y - BIRD_R < c.y + c.h) {
+        if (b.x + BIRD_R > c.x && b.x - BIRD_R < c.x + c.w &&
+            b.y + BIRD_R > c.y && b.y - BIRD_R < c.y + c.h) {
           if (c.state === 'alive') crateHit(c);
-          bird.mode = 'spent';
-          setTimeout(() => spendBird(), 0);
+          markSpent(b, 0.15);
           return;
         }
       }
 
       // Ground bounce
-      if (bird.y + BIRD_R >= GROUND_Y) {
-        bird.y = GROUND_Y - BIRD_R;
-        bird.vy *= -0.45;
-        bird.vx *= 0.7;
-        bird.bounces++;
-        if (bird.bounces >= 3 || Math.abs(bird.vy) < 60) {
-          bird.mode = 'spent';
-          setTimeout(() => spendBird(), 350);
+      if (b.y + BIRD_R >= GROUND_Y) {
+        b.y = GROUND_Y - BIRD_R;
+        b.vy *= -0.45;
+        b.vx *= 0.7;
+        b.bounces++;
+        if (b.bounces >= 3 || Math.abs(b.vy) < 60) {
+          markSpent(b, 0.35);
           return;
         }
       }
 
       // Off screen
-      if (bird.x - BIRD_R > W + 40 || bird.x + BIRD_R < -40) {
-        bird.mode = 'spent';
-        setTimeout(() => spendBird(), 0);
+      if (b.x - BIRD_R > W + 40 || b.x + BIRD_R < -40) {
+        markSpent(b, 0.1);
         return;
       }
+    });
+
+    // Drop birds once their post-impact pause has elapsed; when none are
+    // left, the shot is fully resolved.
+    birds = birds.filter(b => !(b.mode === 'spent' && b.spentT <= 0));
+    if (shotActive && birds.length === 0) {
+      shotActive = false;
+      resolveShotEnd();
     }
 
     // Aiming position follows the pointer
@@ -558,6 +900,25 @@ const SlingGame = (() => {
     });
     crates = crates.filter(c => !(c.state === 'flying' && (c.y > H + 80 || c.fade <= 0)));
 
+    // Tumbling (destroyed) obstacles
+    obstacles.forEach(o => {
+      if (o.state !== 'flying') return;
+      o.vy += GRAVITY * dt;
+      o.x += o.vx * dt;
+      o.y += o.vy * dt;
+      o.rot += o.vr * dt;
+      if (o.fade < 1) o.fade = Math.max(0, o.fade - dt * 1.8);
+    });
+    obstacles = obstacles.filter(o => !(o.state === 'flying' && (o.y > H + 80 || o.fade <= 0)));
+
+    // Balloons drift upward and despawn off the top
+    balloons.forEach(bl => { bl.y += bl.vy * dt; });
+    balloons = balloons.filter(bl => bl.y + bl.r > -20);
+
+    // Floating reward texts
+    floaters.forEach(f => { f.t += dt; f.y += f.vy * dt; });
+    floaters = floaters.filter(f => f.t < f.life);
+
     // Particles
     particles.forEach(p => {
       p.t += dt;
@@ -566,51 +927,68 @@ const SlingGame = (() => {
       p.y += p.vy * dt;
     });
     particles = particles.filter(p => p.t < p.life);
+
+    // Screen shake decay
+    if (shakeMag > 0) shakeMag = Math.max(0, shakeMag - dt * 50);
   }
 
   // ===== Rendering =====
   function render() {
+    ctx.save();
+    if (shakeMag > 0.3) {
+      ctx.translate((Math.random() - 0.5) * shakeMag, (Math.random() - 0.5) * shakeMag);
+    }
+
+    const scene = SCENES[sceneIdx];
+
     // Sky
     const sky = ctx.createLinearGradient(0, 0, 0, H);
-    sky.addColorStop(0, '#8ed1f5');
-    sky.addColorStop(1, '#d8f0d8');
+    sky.addColorStop(0, scene.skyTop);
+    sky.addColorStop(1, scene.skyBottom);
     ctx.fillStyle = sky;
     ctx.fillRect(0, 0, W, H);
 
     // Distant hills
-    ctx.fillStyle = '#a5d6a0';
+    ctx.fillStyle = scene.hill;
     ctx.beginPath();
     ctx.ellipse(180, GROUND_Y + 30, 260, 90, 0, Math.PI, 0);
     ctx.ellipse(620, GROUND_Y + 40, 340, 120, 0, Math.PI, 0);
     ctx.fill();
 
     // Sun
-    ctx.fillStyle = '#ffe28a';
+    ctx.fillStyle = scene.sun;
     ctx.beginPath();
-    ctx.arc(820, 60, 30, 0, Math.PI * 2);
+    ctx.arc(820, 60, scene.sunR, 0, Math.PI * 2);
     ctx.fill();
 
     // Ground
-    ctx.fillStyle = '#7cb85a';
+    ctx.fillStyle = scene.ground;
     ctx.fillRect(0, GROUND_Y, W, H - GROUND_Y);
-    ctx.fillStyle = '#659947';
+    ctx.fillStyle = scene.groundLine;
     ctx.fillRect(0, GROUND_Y, W, 6);
+
+    // Theme decorations
+    ctx.font = '26px serif';
+    ctx.textAlign = 'center';
+    scene.decor.forEach((emo, i) => ctx.fillText(emo, 205 + i * 70, GROUND_Y - 6));
 
     // Trajectory preview while aiming
     if (bird && bird.mode === 'aiming') {
       const pull = pulledPos();
+      const pw = birdPower(bird.type);
       let px = pull.x, py = pull.y;
-      let vx = (SLING_X - pull.x) * POWER;
-      let vy = (SLING_Y - pull.y) * POWER;
+      let vx = (SLING_X - pull.x) * pw;
+      let vy = (SLING_Y - pull.y) * pw;
       ctx.fillStyle = 'rgba(255,255,255,0.75)';
       const step = 0.055;
-      for (let i = 0; i < 22; i++) {
+      const steps = bird.type === 'falcon' ? 60 : 22;
+      for (let i = 0; i < steps; i++) {
         vy += GRAVITY * step;
         px += vx * step;
         py += vy * step;
         if (py > GROUND_Y) break;
         ctx.beginPath();
-        ctx.arc(px, py, 3.4 - i * 0.12, 0, Math.PI * 2);
+        ctx.arc(px, py, Math.max(0.6, 3.4 - i * 0.12), 0, Math.PI * 2);
         ctx.fill();
       }
     }
@@ -630,11 +1008,17 @@ const SlingGame = (() => {
       ctx.fillRect(p.x + p.w - 15, p.y + p.h, 7, GROUND_Y - p.y - p.h);
     });
 
+    // Obstacles
+    obstacles.forEach(drawObstacle);
+
     // Crates
     crates.forEach(drawCrate);
 
-    // Bird
-    if (bird) drawBird();
+    // Balloons
+    balloons.forEach(drawBalloon);
+
+    // Birds (ready + in-flight + waiting queue)
+    drawBird();
 
     // Rubber bands over the bird while aiming
     if (bird && bird.mode === 'aiming') {
@@ -650,10 +1034,29 @@ const SlingGame = (() => {
     // Particles
     particles.forEach(p => {
       ctx.globalAlpha = Math.max(0, 1 - p.t / p.life);
-      ctx.fillStyle = p.color;
-      ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+      if (p.emoji) {
+        ctx.font = `${p.size * 2}px serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(p.emoji, p.x, p.y);
+      } else {
+        ctx.fillStyle = p.color;
+        ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+      }
     });
     ctx.globalAlpha = 1;
+
+    // Floating reward texts
+    floaters.forEach(f => {
+      ctx.globalAlpha = Math.max(0, 1 - f.t / f.life);
+      ctx.fillStyle = f.color;
+      ctx.font = "bold 15px 'Noto Sans TC', sans-serif";
+      ctx.textAlign = 'center';
+      ctx.fillText(f.text, f.x, f.y);
+    });
+    ctx.globalAlpha = 1;
+
+    ctx.restore();
   }
 
   function drawSlingshot() {
@@ -671,23 +1074,87 @@ const SlingGame = (() => {
   }
 
   function drawBird() {
-    ctx.save();
-    ctx.translate(bird.x, bird.y);
-    if (bird.mode === 'flying') {
-      ctx.rotate(Math.atan2(bird.vy, bird.vx) * 0.25);
+    if (bird) {
+      ctx.save();
+      ctx.translate(bird.x, bird.y);
+      ctx.font = `${BIRD_R * 2.4}px serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(BIRD_TYPES[bird.type].emoji, 0, 2);
+      ctx.restore();
     }
-    ctx.font = `${BIRD_R * 2.4}px serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('🐤', 0, 2);
-    ctx.restore();
 
-    // Waiting flock beside the sling
+    birds.forEach(b => {
+      ctx.save();
+      ctx.translate(b.x, b.y);
+      if (b.mode === 'flying') {
+        ctx.rotate(Math.atan2(b.vy, b.vx) * 0.25);
+      }
+      ctx.font = `${BIRD_R * 2.4}px serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(BIRD_TYPES[b.type].emoji, 0, 2);
+      ctx.restore();
+    });
+
+    // Waiting queue beside the sling — next few bird types to come
     ctx.font = '20px serif';
     ctx.textAlign = 'center';
-    for (let i = 0; i < Math.min(Math.max(ammo - 1, 0), 3); i++) {
-      ctx.fillText('🐤', 34 + i * 22, GROUND_Y - 10);
+    queue.slice(0, 3).forEach((t, i) => {
+      ctx.fillText(BIRD_TYPES[t].emoji, 34 + i * 22, GROUND_Y - 10);
+    });
+  }
+
+  function drawObstacle(o) {
+    ctx.save();
+    ctx.globalAlpha = o.fade;
+    ctx.translate(o.x + o.w / 2, o.y + o.h / 2);
+    ctx.rotate(o.rot);
+
+    if (o.type === 'ice') {
+      ctx.fillStyle = 'rgba(173, 216, 255, 0.55)';
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 3;
+      ctx.fillRect(-o.w / 2, -o.h / 2, o.w, o.h);
+      ctx.strokeRect(-o.w / 2, -o.h / 2, o.w, o.h);
+    } else if (o.type === 'stone') {
+      ctx.fillStyle = '#8d8d8d';
+      ctx.strokeStyle = '#555555';
+      ctx.lineWidth = 3;
+      ctx.fillRect(-o.w / 2, -o.h / 2, o.w, o.h);
+      ctx.strokeRect(-o.w / 2, -o.h / 2, o.w, o.h);
+      if (o.cracked) {
+        ctx.strokeStyle = '#3a3a3a';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(-o.w / 4, -o.h / 2);
+        ctx.lineTo(0, 0);
+        ctx.lineTo(o.w / 4, o.h / 2);
+        ctx.stroke();
+      }
+    } else {
+      ctx.fillStyle = '#e0662e';
+      ctx.strokeStyle = '#8b3a12';
+      ctx.lineWidth = 3;
+      ctx.fillRect(-o.w / 2, -o.h / 2, o.w, o.h);
+      ctx.strokeRect(-o.w / 2, -o.h / 2, o.w, o.h);
+      ctx.font = '20px serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('🧨', 0, 0);
     }
+    ctx.restore();
+  }
+
+  function drawBalloon(bl) {
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `${bl.r * 1.8}px serif`;
+    ctx.fillText('🎈', bl.x, bl.y);
+    ctx.font = `${bl.r * 0.9}px serif`;
+    ctx.fillText('💎', bl.x, bl.y - bl.r * 1.1);
+    ctx.restore();
   }
 
   function drawCrate(c) {
