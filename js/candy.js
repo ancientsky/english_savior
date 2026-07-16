@@ -13,14 +13,129 @@ const CandyGame = (() => {
   const COLS = 8, ROWS = 8;
   const STAR = 'star'; // special candy type
 
-  const TYPES = [
-    { id: 'apple',  emoji: '🍎', word: 'APPLE',  zh: '蘋果' },
-    { id: 'banana', emoji: '🍌', word: 'BANANA', zh: '香蕉' },
-    { id: 'grape',  emoji: '🍇', word: 'GRAPE',  zh: '葡萄' },
-    { id: 'candy',  emoji: '🍬', word: 'CANDY',  zh: '糖果' },
-    { id: 'donut',  emoji: '🍩', word: 'DONUT',  zh: '甜甜圈' },
-    { id: 'cookie', emoji: '🍪', word: 'COOKIE', zh: '餅乾' },
+  // Themed-foods expansion: 10 daily food themes × 6 foods. Each level picks
+  // a theme (level - 1) % 10, so the board's candies + goal words rotate
+  // through a different food vocabulary set every day/level. Every emoji and
+  // English word is unique across all 60 foods.
+  const FOOD_THEMES = [
+    {
+      id: 'fruit1', name: '水果日 I', icon: '🍎',
+      foods: [
+        { id: 'apple',      emoji: '🍎', word: 'APPLE',      zh: '蘋果' },
+        { id: 'banana',     emoji: '🍌', word: 'BANANA',     zh: '香蕉' },
+        { id: 'grape',      emoji: '🍇', word: 'GRAPE',      zh: '葡萄' },
+        { id: 'strawberry', emoji: '🍓', word: 'STRAWBERRY', zh: '草莓' },
+        { id: 'orange',     emoji: '🍊', word: 'ORANGE',     zh: '柳橙' },
+        { id: 'watermelon', emoji: '🍉', word: 'WATERMELON', zh: '西瓜' },
+      ],
+    },
+    {
+      id: 'fruit2', name: '水果日 II', icon: '🍑',
+      foods: [
+        { id: 'peach',     emoji: '🍑', word: 'PEACH',     zh: '桃子' },
+        { id: 'cherry',    emoji: '🍒', word: 'CHERRY',    zh: '櫻桃' },
+        { id: 'pineapple', emoji: '🍍', word: 'PINEAPPLE', zh: '鳳梨' },
+        { id: 'kiwi',      emoji: '🥝', word: 'KIWI',      zh: '奇異果' },
+        { id: 'lemon',     emoji: '🍋', word: 'LEMON',     zh: '檸檬' },
+        { id: 'mango',     emoji: '🥭', word: 'MANGO',     zh: '芒果' },
+      ],
+    },
+    {
+      id: 'veggie', name: '蔬菜日', icon: '🥕',
+      foods: [
+        { id: 'carrot',   emoji: '🥕', word: 'CARROT',   zh: '紅蘿蔔' },
+        { id: 'corn',     emoji: '🌽', word: 'CORN',     zh: '玉米' },
+        { id: 'broccoli', emoji: '🥦', word: 'BROCCOLI', zh: '花椰菜' },
+        { id: 'tomato',   emoji: '🍅', word: 'TOMATO',   zh: '番茄' },
+        { id: 'potato',   emoji: '🥔', word: 'POTATO',   zh: '馬鈴薯' },
+        { id: 'onion',    emoji: '🧅', word: 'ONION',    zh: '洋蔥' },
+      ],
+    },
+    {
+      id: 'breakfast', name: '早餐日', icon: '🍳',
+      foods: [
+        { id: 'bread',   emoji: '🍞', word: 'BREAD',   zh: '麵包' },
+        { id: 'egg',     emoji: '🥚', word: 'EGG',     zh: '雞蛋' },
+        { id: 'bacon',   emoji: '🥓', word: 'BACON',   zh: '培根' },
+        { id: 'waffle',  emoji: '🧇', word: 'WAFFLE',  zh: '鬆餅' },
+        { id: 'pancake', emoji: '🥞', word: 'PANCAKE', zh: '薄煎餅' },
+        { id: 'milk',    emoji: '🥛', word: 'MILK',    zh: '牛奶' },
+      ],
+    },
+    {
+      id: 'dessert', name: '甜點日', icon: '🍰',
+      foods: [
+        { id: 'candy',     emoji: '🍬', word: 'CANDY',     zh: '糖果' },
+        { id: 'donut',     emoji: '🍩', word: 'DONUT',     zh: '甜甜圈' },
+        { id: 'cookie',    emoji: '🍪', word: 'COOKIE',    zh: '餅乾' },
+        { id: 'cake',      emoji: '🍰', word: 'CAKE',      zh: '蛋糕' },
+        { id: 'chocolate', emoji: '🍫', word: 'CHOCOLATE', zh: '巧克力' },
+        { id: 'lollipop',  emoji: '🍭', word: 'LOLLIPOP',  zh: '棒棒糖' },
+      ],
+    },
+    {
+      id: 'fastfood', name: '速食日', icon: '🍔',
+      foods: [
+        { id: 'burger',   emoji: '🍔', word: 'BURGER',   zh: '漢堡' },
+        { id: 'fries',    emoji: '🍟', word: 'FRIES',    zh: '薯條' },
+        { id: 'hot_dog',  emoji: '🌭', word: 'HOT DOG',  zh: '熱狗' },
+        { id: 'pizza',    emoji: '🍕', word: 'PIZZA',    zh: '披薩' },
+        { id: 'taco',     emoji: '🌮', word: 'TACO',     zh: '塔可' },
+        { id: 'sandwich', emoji: '🥪', word: 'SANDWICH', zh: '三明治' },
+      ],
+    },
+    {
+      id: 'drinks', name: '飲料日', icon: '🥤',
+      foods: [
+        { id: 'soda',    emoji: '🥤', word: 'SODA',    zh: '汽水' },
+        { id: 'juice',   emoji: '🧃', word: 'JUICE',   zh: '果汁' },
+        { id: 'tea',     emoji: '🍵', word: 'TEA',     zh: '茶' },
+        { id: 'coffee',  emoji: '☕', word: 'COFFEE',  zh: '咖啡' },
+        { id: 'boba',    emoji: '🧋', word: 'BOBA',    zh: '珍珠奶茶' },
+        { id: 'coconut', emoji: '🥥', word: 'COCONUT', zh: '椰子' },
+      ],
+    },
+    {
+      id: 'seafood', name: '海鮮日', icon: '🦀',
+      foods: [
+        { id: 'shrimp',  emoji: '🍤', word: 'SHRIMP',  zh: '蝦子' },
+        { id: 'crab',    emoji: '🦀', word: 'CRAB',    zh: '螃蟹' },
+        { id: 'squid',   emoji: '🦑', word: 'SQUID',   zh: '魷魚' },
+        { id: 'sushi',   emoji: '🍣', word: 'SUSHI',   zh: '壽司' },
+        { id: 'lobster', emoji: '🦞', word: 'LOBSTER', zh: '龍蝦' },
+        { id: 'octopus', emoji: '🐙', word: 'OCTOPUS', zh: '章魚' },
+      ],
+    },
+    {
+      id: 'asian', name: '亞洲美食日', icon: '🍜',
+      foods: [
+        { id: 'noodles',  emoji: '🍜', word: 'NOODLES',  zh: '麵條' },
+        { id: 'rice',     emoji: '🍚', word: 'RICE',     zh: '白飯' },
+        { id: 'dumpling', emoji: '🥟', word: 'DUMPLING', zh: '餃子' },
+        { id: 'bento',    emoji: '🍱', word: 'BENTO',    zh: '便當' },
+        { id: 'soup',     emoji: '🍲', word: 'SOUP',     zh: '湯' },
+        { id: 'curry',    emoji: '🍛', word: 'CURRY',    zh: '咖哩飯' },
+      ],
+    },
+    {
+      id: 'party', name: '派對點心日', icon: '🎉',
+      foods: [
+        { id: 'popcorn',   emoji: '🍿', word: 'POPCORN',   zh: '爆米花' },
+        { id: 'cupcake',   emoji: '🧁', word: 'CUPCAKE',   zh: '杯子蛋糕' },
+        { id: 'pudding',   emoji: '🍮', word: 'PUDDING',   zh: '布丁' },
+        { id: 'ice_cream', emoji: '🍨', word: 'ICE CREAM', zh: '冰淇淋' },
+        { id: 'pretzel',   emoji: '🥨', word: 'PRETZEL',   zh: '蝴蝶餅' },
+        { id: 'skewer',    emoji: '🍢', word: 'SKEWER',    zh: '串燒' },
+      ],
+    },
   ];
+  let currentTheme = FOOD_THEMES[0];
+  let TYPES = currentTheme.foods;
+
+  // Which theme a given level uses (rotates through all 10 themes)
+  function themeForLevel(level) {
+    return FOOD_THEMES[(level - 1) % FOOD_THEMES.length];
+  }
 
   // ===== Persistent progress =====
   let progress = { level: 1, bestLevel: 0, quizCorrect: 0, quizWrong: 0, totalCleared: 0, hintsSeen: {} };
@@ -31,6 +146,7 @@ const CandyGame = (() => {
   let moves = 0;
   let playing = false;     // a level is in progress
   let busy = false;        // input locked while animating / quiz open
+  let introOpen = false;   // level-intro/theme-reveal card is showing (blocks input)
   let selected = null;     // { r, c }
   let pointerStart = null;
   let quizWord = null;
@@ -73,10 +189,14 @@ const CandyGame = (() => {
     };
 
     loadProgress();
+    currentTheme = themeForLevel(progress.level);
+    TYPES = currentTheme.foods;
     renderStartStats();
-    els.level.textContent = `第 ${progress.level} 關`;
+    els.level.textContent = `第 ${progress.level} 關 · ${currentTheme.name}`;
     // Screens are normal-flow panels; the board grid is hidden while one shows
     els.board.style.display = 'none';
+
+    buildIntroOverlay();
 
     els.startBtn.addEventListener('click', () => startLevel(progress.level));
     els.nextBtn.addEventListener('click', () => startLevel(progress.level));
@@ -98,6 +218,11 @@ const CandyGame = (() => {
       board: () => board.map(row => row.map(c => (c ? { ...c } : null))),
       setCell: (r, c, cell) => { board[r][c] = cell; renderBoard(); },
       lastSpawn: () => lastSpawnBatch.map(p => ({ ...p })),
+      types: () => TYPES.map(t => ({ ...t })),
+      theme: () => currentTheme.id,
+      themes: () => FOOD_THEMES.map(th => ({ id: th.id, name: th.name, foods: th.foods.map(f => ({ ...f })) })),
+      introOpen: () => introOpen,
+      startPlay: () => { if (introOpen) hideIntro(); },
     };
   }
 
@@ -134,6 +259,9 @@ const CandyGame = (() => {
 
   // ===== Level lifecycle =====
   function startLevel(level) {
+    currentTheme = themeForLevel(level);
+    TYPES = currentTheme.foods;
+
     els.startScreen.style.display = 'none';
     els.clearScreen.style.display = 'none';
     els.failScreen.style.display = 'none';
@@ -157,6 +285,7 @@ const CandyGame = (() => {
     renderHUD();
     renderGoals();
     renderBoard();
+    showIntro();
   }
 
   function levelClear() {
@@ -223,9 +352,83 @@ const CandyGame = (() => {
 
   // ===== Rendering =====
   function renderHUD() {
-    els.level.textContent = `第 ${progress.level} 關`;
+    els.level.textContent = `第 ${progress.level} 關 · ${currentTheme.name}`;
     els.moves.textContent = moves;
     els.moves.parentElement.classList.toggle('low', moves <= 5);
+  }
+
+  // ===== Level-intro / theme-reveal card =====
+  // Built once (DOM injected into cd-board-wrap, since index.html isn't
+  // touched by this expansion) and shown at the top of every startLevel().
+  // Blocks board input until the player taps 開始 (or a test dismisses it via
+  // __candyTest.startPlay()).
+  function buildIntroOverlay() {
+    const el = document.createElement('div');
+    el.className = 'cd-intro';
+    el.style.display = 'none';
+
+    const card = document.createElement('div');
+    card.className = 'cd-intro-card';
+
+    const title = document.createElement('div');
+    title.className = 'cd-intro-title';
+    const iconEl = document.createElement('span');
+    iconEl.className = 'cd-intro-icon';
+    const nameEl = document.createElement('span');
+    nameEl.className = 'cd-intro-name';
+    title.appendChild(iconEl);
+    title.appendChild(nameEl);
+
+    const grid = document.createElement('div');
+    grid.className = 'cd-intro-grid';
+
+    const playBtn = document.createElement('button');
+    playBtn.type = 'button';
+    playBtn.className = 'cd-intro-play';
+    playBtn.textContent = '🎮 開始';
+    playBtn.addEventListener('click', () => hideIntro());
+
+    card.appendChild(title);
+    card.appendChild(grid);
+    card.appendChild(playBtn);
+    el.appendChild(card);
+    els.wrap.appendChild(el);
+
+    els.intro = el;
+    els.introIcon = iconEl;
+    els.introName = nameEl;
+    els.introGrid = grid;
+  }
+
+  function renderIntro() {
+    els.introIcon.textContent = currentTheme.icon;
+    els.introName.textContent = currentTheme.name;
+    els.introGrid.innerHTML = '';
+    currentTheme.foods.forEach(f => {
+      const tile = document.createElement('button');
+      tile.type = 'button';
+      tile.className = 'cd-intro-food';
+      tile.innerHTML = `<span class="cd-intro-emoji">${f.emoji}</span>
+        <span class="cd-intro-word">${f.word}</span>
+        <span class="cd-intro-zh">${f.zh}</span>`;
+      tile.addEventListener('click', () => {
+        tile.classList.add('press');
+        setTimeout(() => tile.classList.remove('press'), 220);
+        TTSManager.speak(f.word.toLowerCase(), 'en-US', 0.85);
+      });
+      els.introGrid.appendChild(tile);
+    });
+  }
+
+  function showIntro() {
+    introOpen = true;
+    renderIntro();
+    els.intro.style.display = 'flex';
+  }
+
+  function hideIntro() {
+    introOpen = false;
+    els.intro.style.display = 'none';
   }
 
   function renderGoals() {
@@ -282,14 +485,14 @@ const CandyGame = (() => {
   }
 
   function onPointerDown(e) {
-    if (!playing || busy) return;
+    if (!playing || busy || introOpen) return;
     const cell = cellFromEvent(e);
     if (!cell) return;
     pointerStart = { ...cell, x: e.clientX, y: e.clientY };
   }
 
   function onPointerUp(e) {
-    if (!playing || busy || !pointerStart) return;
+    if (!playing || busy || introOpen || !pointerStart) return;
     const start = pointerStart;
     pointerStart = null;
 

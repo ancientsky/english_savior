@@ -460,3 +460,89 @@ body.game-max .cd-container { max-width: min(96vw, 84vh); }
   .cd-quiz-options { grid-template-columns: 1fr; }
   .cd-goal { font-size: 0.78rem; padding: 3px 8px; }
 }
+
+/* ===== Level-intro / theme-reveal card (themed-foods expansion) =====
+   Injected by js/candy.js (buildIntroOverlay) into #cd-board-wrap, which is
+   already `position: relative` (see .cd-board-wrap above) — this overlay
+   sits on top of the board and blocks input until the player taps 開始.
+   Reuses the same rounded-card / quiz-option visual language as .cd-quiz. */
+.cd-intro {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(43, 14, 29, 0.96);
+  border-radius: 0 0 10px 10px;
+  padding: 14px;
+  overflow: auto;
+}
+
+.cd-intro-card {
+  width: 100%;
+  max-width: 460px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  text-align: center;
+}
+
+.cd-intro-title {
+  font-size: 1.3rem;
+  font-weight: bold;
+  color: #ff7eb9;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cd-intro-icon { font-size: 1.8rem; }
+
+.cd-intro-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  width: 100%;
+}
+
+.cd-intro-food {
+  font-family: inherit;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 6px;
+  border: 2px solid #c44b8c;
+  border-radius: 12px;
+  background: rgba(196, 75, 140, 0.2);
+  color: #ffd6e8;
+  cursor: pointer;
+  transition: transform 0.1s, background 0.15s;
+}
+.cd-intro-food:hover { background: rgba(255, 126, 185, 0.35); border-color: #ff7eb9; }
+.cd-intro-food.press { transform: scale(0.92); background: rgba(255, 126, 185, 0.5); }
+.cd-intro-emoji { font-size: 1.8rem; line-height: 1.1; }
+.cd-intro-word { font-size: 0.78rem; font-weight: bold; letter-spacing: 0.5px; }
+.cd-intro-zh { font-size: 0.72rem; color: #d9a3bd; }
+
+.cd-intro-play {
+  font-family: inherit;
+  font-size: 1.1rem;
+  font-weight: bold;
+  padding: 12px 32px;
+  border: none;
+  border-radius: 24px;
+  cursor: pointer;
+  background: linear-gradient(135deg, #ff7eb9, #c44b8c);
+  color: #fff;
+  box-shadow: 0 4px 0 #7a2048;
+  transition: transform 0.1s;
+}
+.cd-intro-play:hover { transform: translateY(-2px); }
+.cd-intro-play:active { transform: translateY(2px); box-shadow: 0 1px 0 #7a2048; }
+
+@media (max-width: 480px) {
+  .cd-intro-grid { grid-template-columns: repeat(2, 1fr); }
+  .cd-intro-word { font-size: 0.7rem; }
+}
