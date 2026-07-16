@@ -174,6 +174,9 @@ const BuilderGame = (() => {
     els.doneBtn.addEventListener('click', startHouse);
     updateCollectionHUD();
     buildScene();
+    buildGallery();
+    els.houses.classList.add('bd-houses-btn');
+    els.houses.addEventListener('click', openGallery);
 
     // Read-only hook for automated tests (token order is closure state)
     window.__builderTest = {
@@ -190,6 +193,9 @@ const BuilderGame = (() => {
         placeTile(idx);
         return true;
       },
+      galleryOpen: () => !!(els.gallery && els.gallery.style.display !== 'none'),
+      openGallery: () => openGallery(),
+      closeGallery: () => closeGallery(),
     };
   }
 
@@ -222,8 +228,116 @@ const BuilderGame = (() => {
   }
 
   function updateCollectionHUD() {
-    els.houses.textContent = `🗼 ${collected.size} / ${LANDMARKS.length}`;
-    els.houses.title = `已收藏 ${collected.size} / ${LANDMARKS.length} 座世界地標`;
+    els.houses.textContent = `🗼 ${collected.size} / ${LANDMARKS.length} 📖`;
+    els.houses.title = '點擊打開地標圖鑑';
+  }
+
+  // ===== Landmark gallery (圖鑑) — view-only overlay, never touches game state =====
+  function buildGallery() {
+    const container = els.houses.closest('.bd-container') || document.body;
+    if (!container || container.dataset.galleryBuilt) return;
+    container.dataset.galleryBuilt = '1';
+
+    const overlay = document.createElement('div');
+    overlay.className = 'bd-gallery';
+    overlay.style.display = 'none';
+
+    const backdrop = document.createElement('div');
+    backdrop.className = 'bd-gallery-backdrop';
+    backdrop.addEventListener('click', closeGallery);
+    overlay.appendChild(backdrop);
+
+    const panel = document.createElement('div');
+    panel.className = 'bd-gallery-panel';
+
+    const header = document.createElement('div');
+    header.className = 'bd-gallery-header';
+    const title = document.createElement('h3');
+    title.textContent = '🗺️ 世界地標圖鑑';
+    const counts = document.createElement('div');
+    counts.className = 'bd-gallery-counts';
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'bd-gallery-close';
+    closeBtn.textContent = '✕';
+    closeBtn.addEventListener('click', closeGallery);
+    header.appendChild(title);
+    header.appendChild(counts);
+    header.appendChild(closeBtn);
+
+    const grid = document.createElement('div');
+    grid.className = 'bd-gallery-grid';
+
+    const detail = document.createElement('div');
+    detail.className = 'bd-gallery-detail';
+    detail.style.display = 'none';
+
+    panel.appendChild(header);
+    panel.appendChild(grid);
+    panel.appendChild(detail);
+    overlay.appendChild(panel);
+    container.appendChild(overlay);
+
+    els.gallery = overlay;
+    els.galleryCounts = counts;
+    els.galleryGrid = grid;
+    els.galleryDetail = detail;
+  }
+
+  function renderGalleryGrid() {
+    els.galleryCounts.textContent = `已收藏 ${collected.size} / ${LANDMARKS.length} ・ 🏆 ${perfectSet.size}`;
+    els.galleryGrid.innerHTML = '';
+    LANDMARKS.forEach(lm => {
+      const card = document.createElement('div');
+      const isCollected = collected.has(lm.id);
+      card.className = 'bd-gallery-card' + (isCollected ? ' collected' : ' locked');
+      if (isCollected) {
+        const topLayer = lm.layers[lm.layers.length - 1];
+        card.innerHTML =
+          `<div class="bd-gallery-flag">${lm.flag}</div>` +
+          `<div class="bd-gallery-icon">${topLayer}</div>` +
+          `<div class="bd-gallery-name">${lm.zh}</div>` +
+          (perfectSet.has(lm.id) ? '<div class="bd-gallery-trophy">🏆</div>' : '');
+        card.addEventListener('click', () => showGalleryDetail(lm));
+      } else {
+        card.innerHTML = '<div class="bd-gallery-icon">❓</div><div class="bd-gallery-name">？？？</div>';
+        card.addEventListener('click', () => {
+          card.classList.remove('shake');
+          void card.offsetWidth; // restart the shake animation
+          card.classList.add('shake');
+        });
+      }
+      els.galleryGrid.appendChild(card);
+    });
+  }
+
+  function showGalleryDetail(lm) {
+    els.galleryDetail.innerHTML =
+      `<div class="bd-done-house">${lm.layers.map(l => `<div class="bd-layer">${l}</div>`).join('')}</div>` +
+      `<div class="bd-done-name">${lm.flag} ${lm.name}<br>${lm.zh}（${lm.country}）</div>` +
+      (perfectSet.has(lm.id) ? '<div class="bd-perfect-badge">🏆 完美建造！</div>' : '') +
+      `<div class="bd-fact">💡 ${lm.fact}</div>` +
+      '<button type="button" class="bd-btn bd-gallery-back">↩️ 返回</button>';
+    els.galleryDetail.querySelector('.bd-gallery-back').addEventListener('click', backToGalleryGrid);
+    els.galleryGrid.style.display = 'none';
+    els.galleryDetail.style.display = 'flex';
+  }
+
+  function backToGalleryGrid() {
+    els.galleryDetail.style.display = 'none';
+    els.galleryGrid.style.display = 'grid';
+  }
+
+  function openGallery() {
+    if (!els.gallery) return;
+    renderGalleryGrid();
+    els.galleryDetail.style.display = 'none';
+    els.galleryGrid.style.display = 'grid';
+    els.gallery.style.display = 'flex';
+  }
+
+  function closeGallery() {
+    if (els.gallery) els.gallery.style.display = 'none';
   }
 
   // ===== Sentence pool =====
@@ -325,7 +439,9 @@ const BuilderGame = (() => {
     }
 
     els.gameArea.style.display = 'none';
+    els.doneInfo.className = 'bd-postcard';
     els.doneInfo.innerHTML =
+      `<span class="bd-stamp">${landmark.flag}</span>` +
       `<div class="bd-done-house">${landmark.layers.map(l => `<div class="bd-layer">${l}</div>`).join('')}</div>` +
       `<div class="bd-done-name">${landmark.flag} ${landmark.name}<br>${landmark.zh}（${landmark.country}）</div>` +
       (isNew ? '<div class="bd-new-badge">🎉 新地標入藏！</div>' : '') +
