@@ -24,10 +24,12 @@ const SlingGame = (() => {
   // height above launch is v²/2g − g·d²/2v²; with v=1170 that is ~256 px
   // at d=700 — comfortably above the highest crate spot (~+120 px)
   const POWER = 15;
-  // Falcon birds fly steadier but slower (0.8×). The build-time
+  // Falcon birds fly steadier but slower (0.92×). The build-time
   // reachability simulation always uses this conservative worst case so a
   // question stays solvable no matter which bird type ends up in hand.
-  const POWER_SAFE = POWER * 0.8;
+  // (Must match birdPower()'s falcon factor exactly — the guarantee is
+  // only as good as the actual weakest real bird.)
+  const POWER_SAFE = POWER * 0.92;
   const BIRD_R = 15;
   const QUESTIONS_PER_ROUND = 10;
   const OW = 64, OH = 52; // obstacle size
@@ -83,6 +85,11 @@ const SlingGame = (() => {
   let aimPos = null;
   let hintUsedThisQ = false;
   let nextQTimer = 0;    // countdown to next question after a correct hit
+  // Diagnostics: how many times the word-swap fallback in buildStructure()
+  // actually fired (i.e. even the retried spot shuffles never landed the
+  // correct crate on a reachable spot). Session-lifetime counter, never
+  // reset — a healthy layout system should keep this rare across a session.
+  let swapCount = 0;
 
   let els = {};
 
@@ -156,6 +163,7 @@ const SlingGame = (() => {
       bird: () => (bird ? { ...bird } : null),
       queue: () => queue.slice(),
       scene: () => sceneIdx,
+      stats: () => ({ swapCount }),
       // Test-only deterministic balloon spawn (real gameplay uses
       // spawnBalloons()). Placed in open sky well before the crate
       // cluster (which starts around x=360) so a lofted test shot can
@@ -391,6 +399,61 @@ const SlingGame = (() => {
   }
 
   // ===== Structure building =====
+  // Builds one candidate crate layout (a fresh shuffled spot assignment
+  // for `template`), resolves y positions, and checks non-overlap. Returns
+  // {overlap:true} on failure, otherwise {overlap:false} with `crates`/
+  // `platforms` (module state) already populated for this attempt.
+  function placeCrates(template, options, correctWord) {
+    const G = GROUND_Y;
+    const chosen = shuffleArr(template).slice(0, options.length);
+
+    crates = [];
+    platforms = [];
+    options.forEach((opt, i) => {
+      const spot = chosen[i];
+      const { style, w, h, giftColor } = rollCrateStyle();
+      crates.push({
+        x: spot.x, y: 0, w, h,
+        word: opt.word,
+        correct: opt.word === correctWord,
+        state: 'alive',
+        vx: 0, vy: 0, vr: 0, rot: 0, fade: 1,
+        reveal: false,
+        style, giftColor,
+        _tier: spot.tier, _col: spot.col, _fallbackY: spot.fallbackY,
+      });
+    });
+
+    // Resolve y bottom-up: ground tier first (depends only on the crate's
+    // own height), then each higher tier rests on a same-column crate one
+    // tier down IF that spot was actually chosen this round, otherwise it
+    // floats at its fixed fallbackY (platform added below).
+    const maxTier = Math.max(...crates.map(c => c._tier));
+    for (let t = 0; t <= maxTier; t++) {
+      crates.forEach(c => {
+        if (c._tier !== t) return;
+        if (t === 0) {
+          c.y = G - c.h;
+        } else {
+          const support = crates.find(o => o._tier === t - 1 && o._col === c._col);
+          c.y = support ? support.y - c.h - 8 : c._fallbackY;
+        }
+      });
+    }
+
+    // Guaranteed non-overlap check: every pair of crates' AABBs must be
+    // clear by >=8px (a crate resting directly on another is already
+    // separated by the 8px stacking gap above, so this never rejects an
+    // intentional stack)
+    let overlap = false;
+    for (let i = 0; i < crates.length && !overlap; i++) {
+      for (let j = i + 1; j < crates.length; j++) {
+        if (aabbOverlap(crates[i], crates[j], 8)) { overlap = true; break; }
+      }
+    }
+    return { overlap };
+  }
+
   function buildStructure(options, correctWord) {
     const G = GROUND_Y;
 
@@ -398,68 +461,55 @@ const SlingGame = (() => {
     order.push(FLAT_FALLBACK());
 
     for (const template of order) {
-      const chosen = shuffleArr(template).slice(0, options.length);
+      let success = false;
+      let lastReachable = null, lastCorrectIdx = -1;
 
-      crates = [];
-      platforms = [];
-      options.forEach((opt, i) => {
-        const spot = chosen[i];
-        const { style, w, h, giftColor } = rollCrateStyle();
-        crates.push({
-          x: spot.x, y: 0, w, h,
-          word: opt.word,
-          correct: opt.word === correctWord,
-          state: 'alive',
-          vx: 0, vy: 0, vr: 0, rot: 0, fade: 1,
-          reveal: false,
-          style, giftColor,
-          _tier: spot.tier, _col: spot.col, _fallbackY: spot.fallbackY,
-        });
-      });
+      // Try the SAME template with up to 3 freshly-shuffled spot
+      // assignments (4 attempts total) before giving up on reachability
+      // and falling back to a word swap — a reshuffle often moves the
+      // correct word onto an already-reachable spot with no swap needed
+      // at all, which is what actually fixes the front-crate bias (the
+      // old code swapped on the very first unreachable roll).
+      for (let attempt = 0; attempt < 4; attempt++) {
+        const { overlap } = placeCrates(template, options, correctWord);
+        if (overlap) {
+          if (attempt < 3) continue; // reshuffle and retry this template
+          break; // exhausted retries while still overlapping — next template
+        }
 
-      // Resolve y bottom-up: ground tier first (depends only on the
-      // crate's own height), then each higher tier rests on a same-column
-      // crate one tier down IF that spot was actually chosen this round,
-      // otherwise it floats at its fixed fallbackY (platform added below).
-      const maxTier = Math.max(...crates.map(c => c._tier));
-      for (let t = 0; t <= maxTier; t++) {
-        crates.forEach(c => {
-          if (c._tier !== t) return;
-          if (t === 0) {
-            c.y = G - c.h;
-          } else {
-            const support = crates.find(o => o._tier === t - 1 && o._col === c._col);
-            c.y = support ? support.y - c.h - 8 : c._fallbackY;
-          }
-        });
+        // Verify which crates are actually hittable given the FULL
+        // structure (other crates block shots — a rear-bottom crate can be
+        // in complete shadow even though its spot alone is reachable)
+        const reachable = crates.map((_, i) => canHitCrate(i));
+        const correctIdx = crates.findIndex(c => c.correct);
+        if (reachable[correctIdx]) { success = true; break; }
+
+        if (attempt < 3) continue; // reshuffle and retry this template
+        // Retries exhausted and still unreachable — remember this last
+        // attempt's layout so the fallback below can swap onto it.
+        lastReachable = reachable;
+        lastCorrectIdx = correctIdx;
       }
 
-      // Guaranteed non-overlap check: every pair of crates' AABBs must be
-      // clear by >=8px (a crate resting directly on another is already
-      // separated by the 8px stacking gap above, so this never rejects an
-      // intentional stack)
-      let overlap = false;
-      for (let i = 0; i < crates.length && !overlap; i++) {
-        for (let j = i + 1; j < crates.length; j++) {
-          if (aabbOverlap(crates[i], crates[j], 8)) { overlap = true; break; }
+      if (!success && lastReachable) {
+        // Move the correct answer onto a hittable crate by swapping words.
+        // Pick uniformly at random among ALL reachable crates (not just
+        // the first one) so the fallback itself doesn't reintroduce a
+        // front-crate bias.
+        const reachableIdxs = [];
+        lastReachable.forEach((ok, i) => { if (ok) reachableIdxs.push(i); });
+        if (reachableIdxs.length > 0) {
+          const okIdx = reachableIdxs[Math.floor(Math.random() * reachableIdxs.length)];
+          const a = crates[lastCorrectIdx], b = crates[okIdx];
+          [a.word, b.word] = [b.word, a.word];
+          a.correct = false;
+          b.correct = true;
+          swapCount++;
+          success = true;
         }
       }
-      if (overlap) continue; // try the next template
 
-      // Verify which crates are actually hittable given the FULL structure
-      // (other crates block shots — a rear-bottom crate can be in complete
-      // shadow even though its spot alone is reachable)
-      const reachable = crates.map((_, i) => canHitCrate(i));
-      const correctIdx = crates.findIndex(c => c.correct);
-      if (!reachable[correctIdx]) {
-        // Move the correct answer onto a hittable crate by swapping words
-        const okIdx = reachable.findIndex(ok => ok);
-        if (okIdx === -1) continue; // no hittable spot at all — next template
-        const a = crates[correctIdx], b = crates[okIdx];
-        [a.word, b.word] = [b.word, a.word];
-        a.correct = false;
-        b.correct = true;
-      }
+      if (!success) continue; // no hittable spot at all — try the next template
 
       // Wooden platform under crates that would otherwise float mid-air
       // (elevated spots that aren't sitting right on another crate)
@@ -624,7 +674,7 @@ const SlingGame = (() => {
   }
 
   function birdPower(type) {
-    return type === 'falcon' ? POWER * 0.8 : POWER;
+    return type === 'falcon' ? POWER * 0.92 : POWER;
   }
 
   // ===== Input =====
