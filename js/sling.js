@@ -86,11 +86,38 @@ const SlingGame = (() => {
 
   let els = {};
 
+  // Render at the canvas's actual CSS display size × devicePixelRatio (capped
+  // 3x buffer) instead of a fixed 880×420 backing store, so the game stays
+  // crisp when the responsive #sg-canvas{width:100%} stretches it up (e.g.
+  // game-max / large desktop windows) instead of blurring a 1x buffer.
+  // All drawing code stays in logical 880×420 coordinates — only the CSS
+  // pixel <-> device pixel mapping changes, via ctx.setTransform.
+  function fitCanvas() {
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.width) {
+      // Zone hidden (display:none) — getBoundingClientRect is 0×0 here, so
+      // fall back to a plain 1x logical buffer. onShow()/resize will
+      // upgrade it once the zone is actually visible.
+      if (canvas.width !== W || canvas.height !== H) {
+        canvas.width = W;
+        canvas.height = H;
+      }
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      return;
+    }
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const scale = Math.min((rect.width * dpr) / W, 3);   // cap 3x buffer
+    const bw = Math.round(W * scale), bh = Math.round(H * scale);
+    if (canvas.width === bw && canvas.height === bh) return;
+    canvas.width = bw; canvas.height = bh;
+    ctx.setTransform(scale, 0, 0, scale, 0, 0); // logical space stays 880x420
+  }
+
   function init() {
     canvas = document.getElementById('sg-canvas');
     ctx = canvas.getContext('2d');
-    canvas.width = W;
-    canvas.height = H;
+    fitCanvas();
+    window.addEventListener('resize', fitCanvas);
 
     els = {
       prompt: document.getElementById('sg-prompt'),
@@ -131,7 +158,7 @@ const SlingGame = (() => {
       scene: () => sceneIdx,
       // Test-only deterministic balloon spawn (real gameplay uses
       // spawnBalloons()). Placed in open sky well before the crate
-      // cluster (which starts around x=490) so a lofted test shot can
+      // cluster (which starts around x=360) so a lofted test shot can
       // reach it without any crate/obstacle in the way.
       spawnBalloon: () => {
         const b = { x: 320, y: 160, r: 20, vy: -16 };
@@ -273,44 +300,151 @@ const SlingGame = (() => {
     }
   }
 
+  // ===== Crate visual variety =====
+  const CRATE_STYLES = ['wood', 'cardboard', 'gift', 'barrel'];
+  const GIFT_COLORS = ['#e05a6d', '#5aa9e0', '#8ac26a', '#c98add'];
+  // Two size profiles; physics/collision code only ever reads c.w/c.h so
+  // either just works everywhere already written against a fixed 108x52.
+  const CRATE_SIZE_STANDARD = { w: 108, h: 52 };
+  const CRATE_SIZE_SQUARE = { w: 92, h: 64 };
+  // Gift/barrel read visually better boxy; wood/cardboard read better long
+  const SQUARISH_CHANCE = { wood: 0.15, cardboard: 0.2, gift: 0.65, barrel: 0.7 };
+
+  function rollCrateStyle() {
+    const style = CRATE_STYLES[Math.floor(Math.random() * CRATE_STYLES.length)];
+    const size = Math.random() < SQUARISH_CHANCE[style] ? CRATE_SIZE_SQUARE : CRATE_SIZE_STANDARD;
+    const giftColor = style === 'gift' ? GIFT_COLORS[Math.floor(Math.random() * GIFT_COLORS.length)] : null;
+    return { style, w: size.w, h: size.h, giftColor };
+  }
+
+  // Two safe x-grids (4 evenly spaced columns each) sized for the WORST
+  // case crate width (108px, the 'standard' profile) with >=16px clearance
+  // between same-tier neighbors, x >= 360, and rightmost right edge <= 860.
+  const GRID_A = [360, 487, 614, 741];  // pitch 127
+  const GRID_B = [380, 504, 628, 752];  // pitch 124 (staircases)
+
+  // Layout templates: each returns 4 spot specs {x, tier, col, fallbackY}.
+  // `tier` 0 sits on the ground; a higher tier rests on a same-`col` spot
+  // one tier below IF that spot is actually used this round (fewer crates
+  // on easy difficulty can leave a tier unused) — otherwise it floats at
+  // `fallbackY` and picks up an auto wooden platform (see the platform
+  // pass below). Every template is checked for overlap/reachability at
+  // build time and skipped in favor of the next on failure, with a
+  // guaranteed-safe flat row as the last resort.
+  const STRUCT_TEMPLATES = [
+    // Flat row — every crate at ground level
+    () => GRID_A.map((x, i) => ({ x, tier: 0, col: `flat${i}` })),
+    // Pyramid — 2 base + 1 centered on top, +1 extra base for 4-crate rounds
+    () => [
+      { x: 470, tier: 0, col: 'pyA' },
+      { x: 610, tier: 0, col: 'pyB' },
+      { x: 540, tier: 1, col: 'pyTop', fallbackY: 235 },
+      { x: 750, tier: 0, col: 'pyC' },
+    ],
+    // Twin towers — two 2-high stacks
+    () => [
+      { x: 460, tier: 0, col: 'twA' },
+      { x: 460, tier: 1, col: 'twA', fallbackY: 235 },
+      { x: 700, tier: 0, col: 'twB' },
+      { x: 700, tier: 1, col: 'twB', fallbackY: 235 },
+    ],
+    // Staircase ascending (low -> high, left to right)
+    () => [
+      { x: GRID_B[0], tier: 0, col: 'ascA' },
+      { x: GRID_B[1], tier: 1, col: 'ascB', fallbackY: 290 },
+      { x: GRID_B[2], tier: 1, col: 'ascC', fallbackY: 250 },
+      { x: GRID_B[3], tier: 1, col: 'ascD', fallbackY: 210 },
+    ],
+    // Staircase descending (high -> low, left to right)
+    () => [
+      { x: GRID_B[0], tier: 1, col: 'descA', fallbackY: 210 },
+      { x: GRID_B[1], tier: 1, col: 'descB', fallbackY: 250 },
+      { x: GRID_B[2], tier: 1, col: 'descC', fallbackY: 290 },
+      { x: GRID_B[3], tier: 0, col: 'descD' },
+    ],
+    // Elevated shelf row — every crate floats at the same height on its
+    // own plank (no crate sits underneath any of them)
+    () => GRID_A.map((x, i) => ({ x, tier: 1, col: `shelf${i}`, fallbackY: 255 })),
+    // U-shape — low outer sides, elevated middle platform
+    () => [
+      { x: GRID_A[0], tier: 0, col: 'uL' },
+      { x: GRID_A[1], tier: 1, col: 'uML', fallbackY: 225 },
+      { x: GRID_A[2], tier: 1, col: 'uMR', fallbackY: 225 },
+      { x: GRID_A[3], tier: 0, col: 'uR' },
+    ],
+    // Wide scatter — alternating ground/elevated across the full width
+    () => [
+      { x: GRID_A[0], tier: 0, col: 'scA' },
+      { x: GRID_A[1], tier: 1, col: 'scB', fallbackY: 250 },
+      { x: GRID_A[2], tier: 0, col: 'scC' },
+      { x: GRID_A[3], tier: 1, col: 'scD', fallbackY: 210 },
+    ],
+  ];
+  // Guaranteed-solvable, guaranteed non-overlapping fallback (all ground)
+  const FLAT_FALLBACK = () => GRID_A.map((x, i) => ({ x, tier: 0, col: `fb${i}` }));
+
+  // AABB intersection test with a safety margin (crates/obstacles are
+  // plain {x,y,w,h} rects here)
+  function aabbOverlap(a, b, margin) {
+    return a.x - margin < b.x + b.w && a.x + a.w + margin > b.x &&
+           a.y - margin < b.y + b.h && a.y + a.h + margin > b.y;
+  }
+
   // ===== Structure building =====
   function buildStructure(options, correctWord) {
-    const cw = 108, ch = 52;
     const G = GROUND_Y;
-    // Layout templates: [x, y] anchor spots (y = crate top).
-    // Kept at most 2 tiers high and x ≤ 745 so every spot is reachable
-    // with the sling's max launch velocity (see POWER note above)
-    const templates = [
-      // Ground row with one stacked
-      [[520, G - ch], [660, G - ch], [590, G - ch * 2 - 8], [745, G - ch]],
-      // Two towers
-      [[540, G - ch], [540, G - ch * 2 - 8], [720, G - ch], [720, G - ch * 2 - 8]],
-      // Low steps
-      [[500, G - ch], [620, G - ch], [620, G - ch * 2 - 8], [745, G - ch]],
-      // Elevated platforms
-      [[550, G - ch], [690, G - ch], [620, G - ch * 2 - 24], [745, G - ch * 2 - 8]],
-    ];
-    // Guaranteed-solvable fallback: a flat row, every top face exposed
-    const flatRow = [[490, G - ch], [615, G - ch], [740, G - ch], [560, G - ch * 2 - 8]];
 
-    const order = shuffleArr(templates);
-    order.push(flatRow);
+    const order = shuffleArr(STRUCT_TEMPLATES.map(fn => fn()));
+    order.push(FLAT_FALLBACK());
 
     for (const template of order) {
-      const spots = shuffleArr(template);
+      const chosen = shuffleArr(template).slice(0, options.length);
+
       crates = [];
       platforms = [];
       options.forEach((opt, i) => {
-        const [x, y] = spots[i];
+        const spot = chosen[i];
+        const { style, w, h, giftColor } = rollCrateStyle();
         crates.push({
-          x, y, w: cw, h: ch,
+          x: spot.x, y: 0, w, h,
           word: opt.word,
           correct: opt.word === correctWord,
           state: 'alive',
           vx: 0, vy: 0, vr: 0, rot: 0, fade: 1,
           reveal: false,
+          style, giftColor,
+          _tier: spot.tier, _col: spot.col, _fallbackY: spot.fallbackY,
         });
       });
+
+      // Resolve y bottom-up: ground tier first (depends only on the
+      // crate's own height), then each higher tier rests on a same-column
+      // crate one tier down IF that spot was actually chosen this round,
+      // otherwise it floats at its fixed fallbackY (platform added below).
+      const maxTier = Math.max(...crates.map(c => c._tier));
+      for (let t = 0; t <= maxTier; t++) {
+        crates.forEach(c => {
+          if (c._tier !== t) return;
+          if (t === 0) {
+            c.y = G - c.h;
+          } else {
+            const support = crates.find(o => o._tier === t - 1 && o._col === c._col);
+            c.y = support ? support.y - c.h - 8 : c._fallbackY;
+          }
+        });
+      }
+
+      // Guaranteed non-overlap check: every pair of crates' AABBs must be
+      // clear by >=8px (a crate resting directly on another is already
+      // separated by the 8px stacking gap above, so this never rejects an
+      // intentional stack)
+      let overlap = false;
+      for (let i = 0; i < crates.length && !overlap; i++) {
+        for (let j = i + 1; j < crates.length; j++) {
+          if (aabbOverlap(crates[i], crates[j], 8)) { overlap = true; break; }
+        }
+      }
+      if (overlap) continue; // try the next template
 
       // Verify which crates are actually hittable given the FULL structure
       // (other crates block shots — a rear-bottom crate can be in complete
@@ -332,9 +466,9 @@ const SlingGame = (() => {
       crates.forEach(c => {
         const bottom = c.y + c.h;
         const restsOnCrate = crates.some(o =>
-          o !== c && Math.abs(o.y - (bottom + 8)) < 2 && Math.abs(o.x - c.x) < cw * 0.8);
+          o !== c && Math.abs(o.y - (bottom + 8)) < 2 && Math.abs(o.x - c.x) < Math.max(c.w, o.w) * 0.8);
         if (bottom < G - 4 && !restsOnCrate) {
-          platforms.push({ x: c.x - 10, y: bottom, w: cw + 20, h: 10 });
+          platforms.push({ x: c.x - 10, y: bottom, w: c.w + 20, h: 10 });
         }
       });
 
@@ -394,7 +528,11 @@ const SlingGame = (() => {
 
   // Place 0-3 obstacles (by difficulty) in front of wrong crates as partial
   // shields; anything left over is purely decorative. Never allowed to
-  // seal off every path to the correct crate.
+  // seal off every path to the correct crate. Each candidate obstacle is
+  // also checked against every crate and every already-placed obstacle for
+  // AABB overlap (8px margin): the left slot is tried first, then the
+  // right side of the same crate, and the obstacle is dropped entirely if
+  // both are blocked (purely decorative, so simply skipping it is safe).
   function buildObstacles(correctIdx) {
     obstacles = [];
     const [lo, hi] = DIFF_CONFIG[difficulty].obs;
@@ -409,13 +547,25 @@ const SlingGame = (() => {
       const wrongIdx = wrongIdxs[i];
       if (wrongIdx !== undefined) {
         const wc = crates[wrongIdx];
-        x = wc.x - OW - 14;
         y = Math.min(wc.y, GROUND_Y - OH);
+        const blockers = crates.concat(obstacles);
+        let leftX = Math.max(wc.x - OW - 14, SLING_X + 60); // never sit on the sling itself
+        if (!blockers.some(b => aabbOverlap({ x: leftX, y, w: OW, h: OH }, b, 8))) {
+          x = leftX;
+        } else {
+          const rightX = wc.x + wc.w + 14;
+          if (!blockers.some(b => aabbOverlap({ x: rightX, y, w: OW, h: OH }, b, 8))) {
+            x = rightX;
+          } else {
+            continue; // both sides blocked — skip this obstacle entirely
+          }
+        }
       } else {
         x = 250 + Math.random() * 150;
         y = GROUND_Y - OH;
+        const cand = { x, y, w: OW, h: OH };
+        if (crates.concat(obstacles).some(b => aabbOverlap(cand, b, 8))) continue;
       }
-      if (x < SLING_X + 60) x = SLING_X + 60; // never sit on the slingshot itself
       const type = types[Math.floor(Math.random() * types.length)];
       const hp = type === 'stone' ? 2 : 1;
       obstacles.push({
@@ -1157,28 +1307,140 @@ const SlingGame = (() => {
     ctx.restore();
   }
 
+  // Rounded-rect path helper (used by the gift-style plaque behind labels)
+  function roundRectPath(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  // Crate body only — branches by c.style. Called with the crate already
+  // translated/rotated to its own local origin (0,0 = center).
+  function drawCrateBody(c, used) {
+    const hw = c.w / 2, hh = c.h / 2;
+    if (used) {
+      // Busted crates always read the same way regardless of style
+      ctx.fillStyle = '#5a4632';
+      ctx.strokeStyle = '#3d2f22';
+      ctx.lineWidth = 3;
+      ctx.fillRect(-hw, -hh, c.w, c.h);
+      ctx.strokeRect(-hw, -hh, c.w, c.h);
+      return;
+    }
+
+    if (c.style === 'cardboard') {
+      ctx.fillStyle = '#d9b98a';
+      ctx.strokeStyle = '#a9865a';
+      ctx.lineWidth = 2.5;
+      ctx.fillRect(-hw, -hh, c.w, c.h);
+      ctx.strokeRect(-hw, -hh, c.w, c.h);
+      // Brown tape stripe across the middle, with a light highlight seam
+      ctx.fillStyle = '#b8763f';
+      ctx.fillRect(-hw, -7, c.w, 14);
+      ctx.fillStyle = 'rgba(255,255,255,0.25)';
+      ctx.fillRect(-hw, -2, c.w, 2);
+    } else if (c.style === 'gift') {
+      ctx.fillStyle = c.giftColor || '#e05a6d';
+      ctx.strokeStyle = 'rgba(0,0,0,0.22)';
+      ctx.lineWidth = 2;
+      ctx.fillRect(-hw, -hh, c.w, c.h);
+      ctx.strokeRect(-hw, -hh, c.w, c.h);
+      // Ribbon cross
+      ctx.fillStyle = '#fff8ec';
+      ctx.fillRect(-6, -hh, 12, c.h);
+      ctx.fillRect(-hw, -6, c.w, 12);
+      // Bow at top
+      ctx.beginPath();
+      ctx.ellipse(-9, -hh, 9, 6, 0.5, 0, Math.PI * 2);
+      ctx.ellipse(9, -hh, 9, 6, -0.5, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (c.style === 'barrel') {
+      ctx.fillStyle = '#a9702f';
+      ctx.strokeStyle = '#6e4520';
+      ctx.lineWidth = 3;
+      // Rounded left/right sides via quadratic-curve edges
+      ctx.beginPath();
+      ctx.moveTo(-hw + 10, -hh);
+      ctx.lineTo(hw - 10, -hh);
+      ctx.quadraticCurveTo(hw, -hh, hw, 0);
+      ctx.quadraticCurveTo(hw, hh, hw - 10, hh);
+      ctx.lineTo(-hw + 10, hh);
+      ctx.quadraticCurveTo(-hw, hh, -hw, 0);
+      ctx.quadraticCurveTo(-hw, -hh, -hw + 10, -hh);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      // Dark metal hoop bands
+      ctx.strokeStyle = '#3a2a18';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(-hw + c.w * 0.28, -hh); ctx.lineTo(-hw + c.w * 0.28, hh);
+      ctx.moveTo(-hw + c.w * 0.72, -hh); ctx.lineTo(-hw + c.w * 0.72, hh);
+      ctx.stroke();
+    } else {
+      // 'wood' — original crate look
+      ctx.fillStyle = '#c98d4f';
+      ctx.strokeStyle = '#8b5a2b';
+      ctx.lineWidth = 3;
+      ctx.fillRect(-hw, -hh, c.w, c.h);
+      ctx.strokeRect(-hw, -hh, c.w, c.h);
+      ctx.beginPath();
+      ctx.moveTo(-hw, -hh); ctx.lineTo(hw, hh);
+      ctx.moveTo(hw, -hh); ctx.lineTo(-hw, hh);
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+  }
+
+  // Word/✗ label — shrinks to fit the crate, with a subtle dark plaque
+  // behind it so bright styles (gift/cardboard) stay readable. Stores the
+  // fitted font size on the crate object as `fontPx` (read by tests).
+  function drawCrateLabel(c, used) {
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    if (used) {
+      ctx.fillStyle = '#9c8a75';
+      ctx.font = "bold 20px 'Noto Sans TC', sans-serif";
+      ctx.fillText('✗', 0, 0);
+      return;
+    }
+
+    const text = c.word;
+    const maxW = c.w - 14;
+    let px = 20;
+    ctx.font = `bold ${px}px 'Noto Sans TC', sans-serif`;
+    while (px > 12 && ctx.measureText(text).width > maxW) {
+      px -= 1;
+      ctx.font = `bold ${px}px 'Noto Sans TC', sans-serif`;
+    }
+    c.fontPx = px;
+
+    const metrics = ctx.measureText(text);
+    const plaqueW = metrics.width + 12, plaqueH = px + 8;
+    ctx.fillStyle = 'rgba(0,0,0,0.28)';
+    roundRectPath(-plaqueW / 2, -plaqueH / 2, plaqueW, plaqueH, 6);
+    ctx.fill();
+
+    ctx.fillStyle = '#fff8ec';
+    ctx.fillText(text, 0, 0);
+  }
+
   function drawCrate(c) {
     ctx.save();
     ctx.globalAlpha = c.fade;
     ctx.translate(c.x + c.w / 2, c.y + c.h / 2);
     ctx.rotate(c.rot);
 
-    // Box
-    ctx.fillStyle = c.state === 'used' ? '#5a4632' : '#c98d4f';
-    ctx.strokeStyle = c.state === 'used' ? '#3d2f22' : '#8b5a2b';
-    ctx.lineWidth = 3;
-    ctx.fillRect(-c.w / 2, -c.h / 2, c.w, c.h);
-    ctx.strokeRect(-c.w / 2, -c.h / 2, c.w, c.h);
-    // Cross planks
-    ctx.beginPath();
-    ctx.moveTo(-c.w / 2, -c.h / 2);
-    ctx.lineTo(c.w / 2, c.h / 2);
-    ctx.moveTo(c.w / 2, -c.h / 2);
-    ctx.lineTo(-c.w / 2, c.h / 2);
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
+    const used = c.state === 'used';
+    drawCrateBody(c, used);
 
-    // Reveal glow for the correct crate after two misses
+    // Reveal glow for the correct crate after two misses — identical for
+    // every style
     if (c.reveal && c.state === 'alive') {
       ctx.shadowColor = '#ffd166';
       ctx.shadowBlur = 18 + Math.sin(performance.now() / 150) * 8;
@@ -1188,12 +1450,7 @@ const SlingGame = (() => {
       ctx.shadowBlur = 0;
     }
 
-    // Word label
-    ctx.fillStyle = c.state === 'used' ? '#9c8a75' : '#fff8ec';
-    ctx.font = `bold ${c.word.length > 6 ? 17 : 20}px 'Noto Sans TC', sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(c.state === 'used' ? '✗' : c.word, 0, 0);
+    drawCrateLabel(c, used);
 
     ctx.restore();
   }
@@ -1216,6 +1473,10 @@ const SlingGame = (() => {
 
   // Called by app.js when the zone becomes visible — resume the loop
   function onShow() {
+    // getBoundingClientRect only reports real dimensions once the zone is
+    // actually visible (display:block), so (re-)fit the HD backing store
+    // here too, not just in init()/resize.
+    fitCanvas();
     if (state === 'playing' && !rafId) {
       lastTime = performance.now();
       rafId = requestAnimationFrame(loop);
