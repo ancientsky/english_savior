@@ -195,6 +195,10 @@ const GameEngine = (() => {
       dailyEmpire: 0,
       dailyCandy: 0,
       dailySling: 0,
+      dailyPets: 0,
+      dailyTyping: 0,
+      dailyDetective: 0,
+      dailyFishing: 0,
       dailyBuilder: 0,
       dailySpeak: 0,
       dailyTower: 0,
@@ -210,6 +214,11 @@ const GameEngine = (() => {
       empireMaxAge: 1,
       candyLevels: 0,
       slingHits: 0,
+      petCatches: 0,
+      petGyms: 0,
+      typingWords: 0,
+      detectiveCases: 0,
+      fishCatches: 0,
       builderSentences: 0,
       builderLandmarks: 0,
       speakCasts: 0,
@@ -298,6 +307,10 @@ const GameEngine = (() => {
       state.dailyEmpire = 0;
       state.dailyCandy = 0;
       state.dailySling = 0;
+      state.dailyPets = 0;
+      state.dailyTyping = 0;
+      state.dailyDetective = 0;
+      state.dailyFishing = 0;
       state.dailyBuilder = 0;
       state.dailySpeak = 0;
       state.dailyTower = 0;
@@ -605,6 +618,44 @@ const GameEngine = (() => {
   function recordSling() {
     state.slingHits = (state.slingHits || 0) + 1;
     state.dailySling = (state.dailySling || 0) + 1;
+    save();
+    checkAchievements();
+    checkDailyQuests();
+  }
+
+  function recordPetCatch() {
+    state.petCatches = (state.petCatches || 0) + 1;
+    state.dailyPets = (state.dailyPets || 0) + 1;
+    save();
+    checkAchievements();
+    checkDailyQuests();
+  }
+
+  function recordPetGym() {
+    state.petGyms = (state.petGyms || 0) + 1;
+    save();
+    checkAchievements();
+  }
+
+  function recordTypingWord() {
+    state.typingWords = (state.typingWords || 0) + 1;
+    state.dailyTyping = (state.dailyTyping || 0) + 1;
+    save();
+    checkAchievements();
+    checkDailyQuests();
+  }
+
+  function recordDetectiveCase() {
+    state.detectiveCases = (state.detectiveCases || 0) + 1;
+    state.dailyDetective = (state.dailyDetective || 0) + 1;
+    save();
+    checkAchievements();
+    checkDailyQuests();
+  }
+
+  function recordFishCatch() {
+    state.fishCatches = (state.fishCatches || 0) + 1;
+    state.dailyFishing = (state.dailyFishing || 0) + 1;
     save();
     checkAchievements();
     checkDailyQuests();
@@ -1321,6 +1372,7 @@ const GameEngine = (() => {
     recordWord, recordGrammar, recordVideo,
     recordSpelling, recordListening,
     recordEmpire, recordEmpireAge, recordCandy, recordSling,
+    recordPetCatch, recordPetGym, recordTypingWord, recordDetectiveCase, recordFishCatch,
     recordBuilder, recordBuilderLandmark, recordSpeak,
     recordTowerWord, recordTowerBoss,
     recordRpgTalk, recordRpgChapter,
