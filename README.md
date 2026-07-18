@@ -9,257 +9,138 @@
 
 ## 📖 專案簡介 | Project Overview
 
-**English Savior** 將英語學習融入孩子們最喜愛的遊戲世界中！透過四種不同主題的遊戲模式，讓學習英語變得有趣且充滿動力。
+**English Savior** 將英語學習融入孩子們最喜愛的遊戲世界中！15 款不同玩法的學習遊戲——從挖礦拼字、3D 城堡防禦、開放世界冒險到 Undertale 式對話 RPG——讓學習英語變得有趣且充滿動力。內容對齊台灣十二年國教課綱（2,000 字表與國中基礎文法句構）。
 
-**English Savior** transforms English learning into an engaging adventure inspired by popular games! Through four different game modes, learning English becomes fun and motivating.
+**English Savior** transforms English learning into an engaging adventure! Fifteen game modes — mining, match-3, tower-defense, open-world 3D, conversation RPG and more — make English fun and motivating, aligned with Taiwan's national curriculum.
 
 ## ✨ 特色功能 | Features
 
-### 🎮 四大遊戲模式 | Four Game Modes
+### 🎮 15 款學習遊戲 | Fifteen Game Modes
 
-1. **⛏️ 挖礦學單字 (Minecraft Vocabulary)**
-   - 像 Minecraft 一樣挖掘方塊收集字母
-   - 將字母合成正確的英文單字
-   - 三種難度等級：簡單、中等、困難
-   - 每個單字都有圖示提示和中文解釋
+| 遊戲 | 玩法 | 學習重點 |
+|------|------|----------|
+| ⛏️ 挖礦學單字 | Minecraft 式挖方塊集字母合成單字 | 單字拼寫 |
+| 🏃 跑酷學文法 | Roblox Obby 式闖關選文法 | 文法 |
+| 📺 看片學英文 | 遊戲主題影片腳本＋理解測驗 | 閱讀理解 |
+| 🦖 拼字跑酷 | Chrome Dino 式橫向捲軸接字母（道具/蹲下/生態場景/連擊變身） | 單字拼寫 |
+| 🔮 魔法聽力 | 魔法卡牌聽音辨字 | 聽力 |
+| 🏰 英語帝國 | 世紀帝國式 3D 城堡防禦，答題擊退敵軍、四時代場景 | 對話/單字/文法 |
+| 🍬 糖果消消樂 | Candy Crush 式三消＋魔法星題目，10 個主題食物日 ×60 種食物 | 單字 |
+| 🐤 單字彈弓 | 憤怒鳥式彈弓，5 種能力鳥、冰/石/TNT 障礙、四場景 | 單字/聽力 |
+| 🏗️ 句子建築工地 | Duolingo 式排字建句，蓋出 33 座世界地標＋圖鑑明信片 | 句型/語序 |
+| 🎤 魔法咒語學院 | 語音辨識唸咒語（不支援時榮譽模式） | 口說 |
+| 🧿 單字魔王塔 | 神魔之塔式轉珠拼字打魔王，12 元素場景 | 單字拼寫 |
+| 🗺️ 英語冒險物語 | Undertale 式 2D RPG，36 章對話冒險＋解謎機關（鑰匙門/機關閘/傳送門/脆牆/寶箱） | 生活對話 |
+| 🏝️ 天空之城 | 開放世界 3D 冒險：41 座空島、84 個任務、4 大魔王、地心世界、流星雨拼字 | 綜合 |
+| 📋 每日任務 | 每天 3 個任務保持動力 | 習慣養成 |
+| 🏠 基地 | 商店/背包/成就/雲端存檔 | — |
 
-2. **🏃 跑酷學文法 (Roblox Grammar)**
-   - 像 Roblox Obby 一樣的跑酷闖關遊戲
-   - 選擇正確的文法選項才能前進
-   - 430+ 道題目，涵蓋 62 種文法主題
-   - 即時回饋和詳細解釋
+### 🎯 遊戲化系統 | Gamification
 
-3. **📺 看片學英文 (YouTube Comprehension)**
-   - 遊戲相關的英文影片腳本
-   - 重點單字標註和中文解釋
-   - 理解測驗檢驗學習成果
-   - 真實情境的英語運用
-
-4. **🦖 拼字跑酷 (Spelling Runner)**
-   - Chrome Dino 風格的橫向捲軸遊戲
-   - 跳躍收集正確字母拼出單字
-   - 三種難度等級，速度與障礙物逐漸增加
-   - HP 系統、粒子特效、畫面震動效果
-
-### 🎯 遊戲化系統 | Gamification Features
-
-- **經驗值與等級** - 完成任務賺取 XP，持續升級
-- **寶石獎勵系統** - 累積寶石解鎖更多內容
-- **寶石商店** - 使用寶石購買道具，提升學習效率
-- **成就徽章** - 14 種成就等你解鎖
-- **道具系統** - 收集各種遊戲道具
-- **連續天數** - 追蹤學習連勝紀錄
-- **每日任務** - 每天三個任務保持學習動力
-- **音效系統** - 使用 Web Audio API 提供即時遊戲音效
+- **XP 與等級**：動態升級曲線，每 5 級里程碑獎勵（至 50 級）
+- **寶石商店**：消耗道具、13 款造型、15 個稱號（天空之城中化為實際能力）、6 種介面主題
+- **成就系統**：50 個成就（含隱藏成就）共 1,030 點，點數門檻解鎖專屬獎勵
+- **幸運吊飾**：裝備收藏品獲得被動加成，集滿 8 種有收藏獎勵
+- **每日任務與連續天數**：12 種每日任務輪替
+- **背景音樂**：24 首 Web Audio 即時合成循環曲，依遊戲分區輪播
+- **音效**：全部 Web Audio 合成，零音檔
 
 ### 💾 其他功能 | Additional Features
 
-- **本地儲存** - 使用 localStorage 自動儲存進度
-- **完全離線** - 無需網路連線即可使用
-- **響應式設計** - 支援各種裝置螢幕
-- **無需安裝** - 直接在瀏覽器中開啟即可使用
-- **語音朗讀** - 支援 TTS 文字轉語音功能，練習單字發音
+- **本地儲存＋雲端備份**：localStorage 自動存檔；檔案匯出/匯入；可選 Google Drive 同步
+- **完全離線可用**、**免安裝**、**免建置**（純前端）
+- **響應式設計**：桌機鍵鼠與手機觸控（虛擬搖桿/D-pad）都支援
+- **語音朗讀**：Web Speech API 單字/句子發音（en-US）
 
 ## 🚀 快速開始 | Quick Start
 
-### 安裝方式 | Installation
-
 ```bash
-# 1. Clone 專案
 git clone https://github.com/ancientsky/english_savior.git
-
-# 2. 進入專案目錄
 cd english_savior
-
-# 3. 用瀏覽器開啟 index.html
-# 直接雙擊 index.html 或使用本地伺服器
+# 直接雙擊 index.html，或起本地伺服器：
+python3 -m http.server 8000   # → http://localhost:8000
 ```
-
-### 使用本地伺服器 | Using Local Server (Optional)
-
-```bash
-# 使用 Python
-python -m http.server 8000
-
-# 使用 Node.js (需安裝 http-server)
-npx http-server
-
-# 使用 PHP
-php -S localhost:8000
-```
-
-然後在瀏覽器開啟 `http://localhost:8000`
 
 ## 📁 專案結構 | Project Structure
 
 ```
 english_savior/
-├── index.html          # 主要 HTML 檔案
-├── css/
-│   ├── style.css       # 全域樣式與 UI 元件
-│   ├── minecraft.css   # Minecraft 主題樣式
-│   ├── roblox.css      # Roblox 主題樣式
-│   ├── youtube.css     # YouTube 主題樣式
-│   └── spelling.css    # 拼字跑酷主題樣式
+├── index.html              # 單頁應用外殼（所有遊戲區、HUD、彈窗）
+├── css/                    # 每款遊戲一個主題樣式檔
 ├── js/
-│   ├── data/           # 學習內容資料（分類）
-│   │   ├── vocab.js    # 單字庫（1,200+ 單字）
-│   │   ├── grammar.js  # 文法題庫（430+ 題）
-│   │   ├── video.js    # 影片課程（42 課）
-│   │   └── game.js     # 成就、任務、道具、商店
-│   ├── engine.js       # 遊戲引擎（XP、等級、成就、商店、Buff、儲存、音效）
-│   ├── minecraft.js    # Minecraft 單字遊戲邏輯
-│   ├── roblox.js       # Roblox 文法遊戲邏輯
-│   ├── youtube.js      # YouTube 影片課程邏輯
-│   ├── spelling.js     # 拼字跑酷遊戲邏輯（Canvas）
-│   ├── daily.js        # 每日任務系統
-│   ├── tts.js          # 文字轉語音模組
-│   └── app.js          # 應用程式初始化與導航
-├── reference/          # 參考資料
-├── CLAUDE.md           # Claude Code 開發指南
-├── CHANGELOG.md        # 更新日誌
-├── CONTRIBUTING.md     # 貢獻指南
-└── README.md           # 專案說明文件
+│   ├── data/               # 學習內容（純資料，新增內容改這裡）
+│   │   ├── vocab.js/vocab2.js       # 單字庫 3,080 字（課綱 2000 字全涵蓋）
+│   │   ├── grammar.js/grammar2.js   # 文法題 1,480 題（68 主題）
+│   │   ├── video.js                 # 影片課程 42 課＋126 題
+│   │   ├── empire.js/empire2.js     # 生活對話 1,260 則＋情境 856 則
+│   │   ├── rpg.js/rpg2-4.js         # RPG 36 章（每章 10 題對話＋解謎地圖）
+│   │   ├── sky.js                   # 天空之城世界資料（41 島/84 任務）
+│   │   └── game.js                  # 成就/任務/道具/商店
+│   ├── engine.js           # 核心引擎（XP/寶石/成就/商店/Buff/存檔/音效）
+│   ├── music.js            # 背景音樂（24 首合成曲）
+│   ├── <遊戲>.js           # 各遊戲模組（IIFE，單一全域物件）
+│   ├── cloud.js            # 存檔備份與 Google Drive 同步
+│   ├── tts.js / daily.js / app.js
+│   └── vendor/three.min.js # Three.js r149（帝國/天空之城 3D）
+├── CLAUDE.md               # 開發指南（架構與慣例）
+├── CHANGELOG.md            # 更新日誌
+└── DEPLOYMENT.md           # 部署說明（GitHub Pages）
 ```
 
 ## 🎓 學習內容 | Learning Content
 
-### 單字庫 | Vocabulary Database
-- **簡單難度**: 基礎遊戲相關單字
-- **中等難度**: 進階詞彙
-- **困難難度**: 高階詞彙
-- **總計**: 1,200+ 個精選單字（涵蓋台灣國小英語 1000 字）
-
-### 文法主題 | Grammar Topics
-430+ 道題目，涵蓋 62 種重要文法概念：
-- 基礎時態：現在簡單式、現在進行式、過去式、過去進行式、未來式
-- 完成式：現在完成式、現在完成進行式、過去完成式、過去完成進行式、未來完成式
-- 比較級、最高級
-- 條件句（第一～第三條件句）、假設語氣
-- 被動語態、關係子句、非限定關係子句
-- 不定詞、動名詞、分詞構句
-- 助動詞、情態動詞、使役動詞、感官動詞
-- 連接詞、介系詞、冠詞、代名詞、反身代名詞、不定代名詞
-- 間接引語、附和句、附加問句、感嘆句
-- 片語動詞、名詞複數、所有格、-ing/-ed 形容詞等
-
-### 影片課程 | Video Lessons
-42 堂遊戲主題英文課程，含 126 道理解測驗題，主題包括：
-- Minecraft 生存、挖礦、附魔、釀藥、農場、建築、終界龍
-- Roblox 入門遊戲、安全交易、Blox Fruits、Adopt Me!、Obby 技巧
-- YouTube 遊戲頻道經營等
+- **單字庫**：3,080 字（easy/medium/hard 三難度，涵蓋十二年國教 2,000 字表）
+- **文法題**：1,480 題、68 個主題（涵蓋國中基礎文法句構參考表）
+- **生活對話**：1,260 則日常對話＋856 個生活情境問答
+- **RPG 章節**：36 章 ×10 題劇情對話（四大世界：英語大陸/生活城市/探索樂園/奇幻次元，主題從家庭問候到太空探索）
+- **影片課程**：42 課＋126 題理解測驗
+- **世界地標**：33 座（句子建築工地，含文化小知識）
 
 ## 🛠️ 技術架構 | Technology Stack
 
-- **前端框架**: 純 JavaScript (Vanilla JS)
-- **樣式**: CSS3 with CSS Variables
-- **儲存**: LocalStorage API
-- **音效**: Web Audio API（合成音效）
-- **語音**: Web Speech API（TTS 文字轉語音）
-- **繪圖**: Canvas 2D API（拼字跑酷遊戲）
-- **字體**: Google Fonts (Press Start 2P, Noto Sans TC)
-- **構建工具**: 無（免構建工具）
-- **依賴項**: 零外部依賴
+- 純 JavaScript（Vanilla JS）＋ CSS3，**零 npm 依賴、免建置**
+- Web Audio API（音效與 24 首背景音樂全合成）
+- Web Speech API（TTS 朗讀＋語音辨識）
+- Canvas 2D（拼字跑酷/單字彈弓/小地圖，DPR 高解析度）
+- WebGL / Three.js r149（英語帝國、天空之城 3D，vendored）
+- localStorage（9 個存檔鍵）＋可選 Google Drive appDataFolder 同步
 
 ## 🎨 自訂內容 | Customization
 
-### 新增單字 | Adding Vocabulary
+各類內容都是純資料檔，新增即生效（詳見 `CLAUDE.md`）：
 
-編輯 `js/data/vocab.js`，在 `VOCAB_DATA` 中新增：
+- **單字**：`js/data/vocab.js` → `VOCAB_DATA`（word/hint/zh/sentence）
+- **文法題**：`js/data/grammar.js` → `GRAMMAR_DATA`（sentence/blank/options/explain/topic）
+- **RPG 章節**：`js/data/rpg.js` 系列 → `RPG_CHAPTERS`——13×9 ASCII 地圖支援解謎字元：`K` 鑰匙、`D` 鎖門、`S` 機關、`G` 閘門、`P/Q` 傳送門對、`H` 脆牆、`!` 寶箱；引擎自動解讀，無需改程式
+- **天空之城任務**：`js/data/sky.js` → `SKY_QUESTS`（12 種任務型別）
+- **成就/任務/商店**：`js/data/game.js`
 
-```javascript
-const VOCAB_DATA = {
-  easy: [
-    {
-      word: 'JUMP',
-      hint: '🦘',
-      zh: '跳躍 — 按空白鍵跳起來',
-      sentence: 'Press space to _____.'
-    },
-    // ... 更多單字
-  ]
-};
-```
+## 📊 遊戲數據 | Game Data
 
-### 新增文法題 | Adding Grammar Questions
-
-在 `js/data/grammar.js` 的 `GRAMMAR_DATA` 中新增：
-
-```javascript
-const GRAMMAR_DATA = [
-  {
-    sentence: 'I _____ playing Minecraft right now.',
-    blank: 'am',
-    options: ['am', 'is', 'are', 'was'],
-    explain: '主詞是 I，現在進行式用 am + V-ing',
-    topic: '現在進行式'
-  },
-  // ... 更多題目
-];
-```
-
-### 新增影片課程 | Adding Video Lessons
-
-在 `js/data/video.js` 的 `VIDEO_LESSONS` 中新增課程。
-
-## 📊 遊戲數據系統 | Game Data System
-
-### 儲存資料 | Saved Data
-- 等級與經驗值
-- 寶石數量
-- 連續天數
-- 已學單字列表
-- 成就解鎖狀態
-- 道具清單（消耗品效果）
-- 每日任務進度
-- 音效設定偏好
-
-### 成就系統 | Achievement System
-14 種成就類型：
-- 學習里程碑（首個單字、10 個單字、50 個單字、100 個單字）
-- 文法精通（首次通關、10 次通關、完美通關）
-- 影片課程（完成首個影片）
-- 等級獎勵（等級 5、等級 10）
-- 連勝獎勵（3 天、7 天）
-- 財富累積（100 寶石）
-- 拼字跑酷（完成首個單字）
+- 存檔：等級/XP/寶石/連續天數/已學單字/成就/道具/每日任務/各遊戲進度
+- 成就：50 個（10/20/40 點三檔，共 1,030 點；點數門檻贈專屬稱號/造型/主題）
+- 雲端備份：一鍵匯出/匯入 JSON；設定 GOOGLE_CLIENT_ID 後可用 Google Drive 同步
 
 ## 🤝 貢獻指南 | Contributing
 
-歡迎貢獻！請遵循以下步驟：
+1. Fork 本專案 → 2. 建立功能分支 → 3. 提交變更 → 4. 開啟 Pull Request
 
-1. Fork 本專案
-2. 建立功能分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交變更 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 開啟 Pull Request
-
-### 開發建議 | Development Guidelines
-- 保持程式碼簡潔易讀
-- 新增功能時請更新相關文件
-- 確保跨瀏覽器相容性
-- 遵循現有的程式碼風格
+- 保持程式碼簡潔易讀，遵循現有風格（模組 IIFE、kebab-case CSS、camelCase JS）
+- 新增功能時同步更新 `CLAUDE.md` 與 `CHANGELOG.md`
+- 改動 JS/CSS 後記得把 index.html 的 `?v=N` 快取版本 +1
 
 ## 📝 授權條款 | License
 
-本專案採用 MIT 授權條款 - 詳見 [LICENSE](LICENSE) 檔案
+MIT — 詳見 [LICENSE](LICENSE)
 
 ## 🙏 致謝 | Acknowledgments
 
 - 感謝所有熱愛學習英語的孩子們
-- 靈感來源：Minecraft、Roblox 遊戲社群
-- 字體：Google Fonts
+- 靈感來源：Minecraft、Roblox、Candy Crush、Angry Birds、Undertale、神魔之塔、世紀帝國
 - 開發工具：Claude Code
-
-## 📮 聯絡方式 | Contact
-
-有任何問題或建議？歡迎開 Issue 或 Pull Request！
 
 ---
 
 **Made with ❤️ for young English learners**
 
 **用 ❤️ 為年輕的英語學習者打造**
-
-
-<!-- redeploy: 2026-07-06 tower game -->
