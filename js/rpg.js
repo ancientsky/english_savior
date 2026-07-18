@@ -21,6 +21,13 @@ const RpgGame = (() => {
   let typeTimer = null;
   let els = {};
 
+  // ----- puzzle-tile session state (reset per enterChapter, never persisted) -----
+  let overrides = {};             // 'x,y' -> effective tile char (opened doors, broken walls...)
+  let keysHeld = 0;               // 🔑 collected this run
+  let switchesFired = new Set();  // 'x,y' of S tiles already triggered
+  let portalPairs = {};           // 'x,y' -> {x,y} of the paired P/Q tile
+  let lastDoorToastAt = 0;        // throttle the "need a key" toast
+
   function init() {
     els = {
       select: document.getElementById('rpg-select'),
@@ -126,6 +133,9 @@ const RpgGame = (() => {
       },
       progress: () => JSON.parse(JSON.stringify(save)),
       npcDone: () => (ch ? chProg().npcs.slice() : []),
+      keys: () => keysHeld,
+      tile: (x, y) => tileAt(x, y),
+      overrides: () => ({ ...overrides }),
     };
   }
 
@@ -163,9 +173,17 @@ const RpgGame = (() => {
     renderSelect();
   }
 
+  const WORLD_NAMES = ['第一世界 · 英語大陸', '第二世界 · 生活城市', '第三世界 · 探索樂園', '第四世界 · 奇幻次元'];
+
   function renderSelect() {
     els.chapters.innerHTML = '';
     RPG_CHAPTERS.forEach((c, i) => {
+      if (i % 9 === 0 && WORLD_NAMES[Math.floor(i / 9)]) {
+        const h = document.createElement('div');
+        h.className = 'rpg-world-header';
+        h.textContent = `🗺️ ${WORLD_NAMES[Math.floor(i / 9)]}`;
+        els.chapters.appendChild(h);
+      }
       const unlocked = isUnlocked(i);
       const stars = save.done[c.id] || 0;
       const card = document.createElement('button');
@@ -188,6 +206,24 @@ const RpgGame = (() => {
     px = ch.spawn.x;
     py = ch.spawn.y;
     mode = 'explore';
+    // Fresh puzzle state every run (nothing persisted — replays reset)
+    overrides = {};
+    keysHeld = 0;
+    switchesFired = new Set();
+    portalPairs = {};
+    lastDoorToastAt = 0;
+    let pTile = null, qTile = null;
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < cols; x++) {
+        if (ch.map[y][x] === 'P') pTile = { x, y };
+        if (ch.map[y][x] === 'Q') qTile = { x, y };
+      }
+    }
+    if (pTile && qTile) {
+      portalPairs[`${pTile.x},${pTile.y}`] = qTile;
+      portalPairs[`${qTile.x},${qTile.y}`] = pTile;
+    }
+    updateKeyChip();
     els.select.style.display = 'none';
     els.clear.style.display = 'none';
     els.world.style.display = 'block';
@@ -202,12 +238,17 @@ const RpgGame = (() => {
 
   function tileAt(x, y) {
     if (x < 0 || x >= cols || y < 0 || y >= rows) return '#';
-    return ch.map[y][x];
+    const o = overrides[`${x},${y}`];
+    return o !== undefined ? o : ch.map[y][x];
+  }
+
+  function setOverride(x, y, t) {
+    overrides[`${x},${y}`] = t;
   }
 
   function walkable(x, y) {
     const t = tileAt(x, y);
-    return t === '.' || t === '=';
+    return t === '.' || t === '=' || t === 'K' || t === 'S' || t === 'P' || t === 'Q';
   }
 
   function npcAt(x, y) {
@@ -224,10 +265,18 @@ const RpgGame = (() => {
       for (let x = 0; x < cols; x++) {
         const t = tileAt(x, y);
         const d = document.createElement('div');
-        d.className = 'rpg-tile' +
-          (t === '#' ? ' wall' : t === '*' ? ' deco' : t === '=' ? ' path' : ' floor');
-        if (t === '#') d.textContent = ch.wall;
-        if (t === '*') d.textContent = ch.deco;
+        if (t === '#') { d.className = 'rpg-tile wall'; d.textContent = ch.wall; }
+        else if (t === '*') { d.className = 'rpg-tile deco'; d.textContent = ch.deco; }
+        else if (t === '=') { d.className = 'rpg-tile path'; }
+        else if (t === 'K') { d.className = 'rpg-tile floor key'; d.textContent = '🔑'; }
+        else if (t === 'D') { d.className = 'rpg-tile wall door'; d.textContent = ch.door || '🚪'; }
+        else if (t === 'S') { d.className = 'rpg-tile floor switch'; d.textContent = '🎚️'; }
+        else if (t === 'G') { d.className = 'rpg-tile wall gate'; d.textContent = ch.gate || '⛓️'; }
+        else if (t === 'P') { d.className = 'rpg-tile floor portal portal-p'; d.textContent = '🌀'; }
+        else if (t === 'Q') { d.className = 'rpg-tile floor portal portal-q'; d.textContent = '🌀'; }
+        else if (t === 'H') { d.className = 'rpg-tile wall cracked'; d.textContent = ch.wall; }
+        else if (t === '!') { d.className = 'rpg-tile floor chest'; d.textContent = '🎁'; }
+        else { d.className = 'rpg-tile floor'; }
         els.map.appendChild(d);
       }
     }
@@ -274,22 +323,123 @@ const RpgGame = (() => {
       : `💬 和村民對話（${done} / ${ch.npcs.length}），再挑戰首領`;
   }
 
-  function tryMove(dx, dy) {
-    if (mode !== 'explore') return;
-    const nx = px + dx, ny = py + dy;
-    const npc = npcAt(nx, ny);
-    if (npc) { startTalk(npc); return; }
-    if (!walkable(nx, ny)) {
-      const p = document.getElementById('rpg-player');
-      if (p) { p.classList.remove('bump'); void p.offsetWidth; p.classList.add('bump'); }
-      return;
-    }
-    px = nx; py = ny;
+  function bumpPlayer() {
+    const p = document.getElementById('rpg-player');
+    if (p) { p.classList.remove('bump'); void p.offsetWidth; p.classList.add('bump'); }
+  }
+
+  function movePlayerSprite(dx) {
     const p = document.getElementById('rpg-player');
     if (p) {
       placeSprite(p, px, py);
       if (dx !== 0) p.style.transform = dx < 0 ? 'scaleX(-1)' : 'scaleX(1)';
       p.classList.remove('hop'); void p.offsetWidth; p.classList.add('hop');
+    }
+  }
+
+  function flashTile(x, y) {
+    const d = els.map.children[y * cols + x];
+    if (!d) return;
+    d.classList.add('rpg-tile-flash');
+    setTimeout(() => d.classList.remove('rpg-tile-flash'), 400);
+  }
+
+  // Open every G gate on the map; returns whether anything changed
+  function openAllGates() {
+    let changed = false;
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < cols; x++) {
+        if (tileAt(x, y) === 'G') { setOverride(x, y, '.'); changed = true; }
+      }
+    }
+    return changed;
+  }
+
+  function updateKeyChip() {
+    if (!els.keyChip) {
+      const chip = document.createElement('div');
+      chip.className = 'rpg-key-chip';
+      els.objective.parentElement.appendChild(chip);
+      els.keyChip = chip;
+    }
+    els.keyChip.textContent = '🔑×' + keysHeld;
+    els.keyChip.style.display = keysHeld > 0 ? '' : 'none';
+  }
+
+  function tryMove(dx, dy) {
+    if (mode !== 'explore') return;
+    const nx = px + dx, ny = py + dy;
+    const npc = npcAt(nx, ny);
+    if (npc) { startTalk(npc); return; }
+    const t = tileAt(nx, ny);
+    // Puzzle tiles: bump-and-transform blockers (the tile opens on this
+    // press; a second press walks through — mirrors NPC-bump semantics)
+    if (t === 'D') {
+      if (keysHeld > 0) {
+        keysHeld--;
+        setOverride(nx, ny, '.');
+        SoundManager.playAchievement();
+        GameEngine.showToast('🚪 鑰匙打開了門！', 'achievement');
+        updateKeyChip();
+        renderMap();
+        flashTile(nx, ny);
+      } else {
+        bumpPlayer();
+        const now = Date.now();
+        if (now - lastDoorToastAt > 1500) {
+          lastDoorToastAt = now;
+          GameEngine.showToast('🔒 需要鑰匙！先去找 🔑', 'error');
+        }
+      }
+      return;
+    }
+    if (t === 'G') { bumpPlayer(); return; }
+    if (t === '!') {
+      setOverride(nx, ny, '.');
+      GameEngine.addGems(3);
+      GameEngine.showToast('🎁 打開寶箱！+3 💎', 'gem');
+      SoundManager.playQuestComplete();
+      renderMap();
+      flashTile(nx, ny);
+      return;
+    }
+    if (t === 'H') {
+      setOverride(nx, ny, '.');
+      GameEngine.showToast('🧱 牆壁碎了！發現通道', 'info');
+      SoundManager.playCorrect();
+      renderMap();
+      flashTile(nx, ny);
+      return;
+    }
+    if (!walkable(nx, ny)) { bumpPlayer(); return; }
+    px = nx; py = ny;
+    movePlayerSprite(dx);
+    // Walk-onto puzzle tiles: side effect fires after the move
+    if (t === 'K') {
+      keysHeld++;
+      setOverride(nx, ny, '.');
+      SoundManager.playCorrect();
+      GameEngine.showToast('🔑 撿到鑰匙！', 'gem');
+      updateKeyChip();
+      renderMap();
+    } else if (t === 'S') {
+      const key = `${nx},${ny}`;
+      if (!switchesFired.has(key)) {
+        switchesFired.add(key);
+        if (openAllGates()) {
+          SoundManager.playAchievement();
+          GameEngine.showToast('🎚️ 機關啟動！閘門打開了', 'achievement');
+          renderMap();
+        }
+      }
+    } else if (t === 'P' || t === 'Q') {
+      const partner = portalPairs[`${nx},${ny}`];
+      if (partner) {
+        px = partner.x; py = partner.y;
+        SoundManager.playAchievement();
+        GameEngine.showToast('🌀 傳送！', 'info');
+        movePlayerSprite(0);
+      }
     }
   }
 
@@ -515,8 +665,10 @@ const RpgGame = (() => {
     const ratio = prog.asked ? prog.right / prog.asked : 0;
     const stars = ratio >= 0.9 ? 3 : ratio >= 0.7 ? 2 : 1;
     const idx = RPG_CHAPTERS.findIndex(c => c.id === ch.id);
-    let xp = 40 + idx * 15;
-    let gems = 10 + idx * 2;
+    // Capped so 36 chapters don't inflate rewards endlessly (idx 0-8 —
+    // the original 9 chapters — are below both caps, values unchanged)
+    let xp = 40 + 15 * Math.min(idx, 12);
+    let gems = 10 + 2 * Math.min(idx, 15);
     if (GameEngine.hasBuff('double_xp')) {
       xp *= 2;
       GameEngine.consumeBuff('double_xp');
