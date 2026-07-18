@@ -43,7 +43,7 @@ js/
   builder.js            — Duolingo-style sentence builder (word-order game building 33 world landmarks with cultural facts; animated site scene + crane drops + blueprint silhouette, worker mascot, combo streak/golden bolt, medium/hard decoy words, perfect-landmark trophies, landmark gallery overlay, postcard done-screen)
   speak.js              — Spell academy speaking game (Web Speech Recognition, honor-mode fallback)
   tower.js              — Tower of Saviors-style word boss battle (drag letter orbs to spell words; 12 bosses scale endlessly by floor; 12 elemental realm themes, jewel-tone high-contrast orbs + SVG drag-trail, charged orbs/crit-combo, particle FX)
-  rpg.js                — Undertale-style 2D RPG engine for conversation practice (interprets RPG_CHAPTERS data)
+  rpg.js                — Undertale-style 2D RPG engine for conversation practice (interprets RPG_CHAPTERS data; puzzle tiles K key/D locked door/S switch/G gate/P,Q portal pair/H cracked wall/! chest, chapter-select world grouping every 9 chapters)
   sky.js                — Sky Citadel open-world 3D adventure (Three.js; islands/physics/camera/mobs/84 quests incl. 18 hidden/4 bosses/galaxy+secret+underground regions/world events/puzzle types/active-item tray/title perks/minimap)
   cloud.js              — Save backup: file export/import + optional Google Drive appDataFolder sync (owner fills GOOGLE_CLIENT_ID; see DEPLOYMENT.md)
   daily.js              — Daily quest tracking and rendering
@@ -58,9 +58,12 @@ js/
     video.js            — Video lessons (VIDEO_LESSONS, 42 lessons with 126 quiz questions)
     empire.js           — Empire dialogues (EMPIRE_DIALOGUES) and daily-life English (EMPIRE_LIFE), easy/medium/hard
     empire2.js          — Conversation expansion pack #2 (+1,200 dialogues → 1,260, +800 life scenes → 856; loaded after empire.js)
-    rpg.js              — RPG chapters (RPG_CHAPTERS, 9 chapters mapped to 課綱學習主題; maps, NPCs, dialogue scripts)
+    rpg.js              — RPG chapters (RPG_CHAPTERS, chapters 1-9 mapped to 課綱學習主題; maps, NPCs, dialogue scripts)
+    rpg2.js             — RPG expansion pack 2 (chapters 10-18 第二世界·生活城市; loaded after rpg.js)
+    rpg3.js             — RPG expansion pack 3 (chapters 19-27 第三世界·探索樂園)
+    rpg4.js             — RPG expansion pack 4 (chapters 28-36 第四世界·奇幻次元 incl. world_finale) → 36 chapters total, 360 dialogue questions
     sky.js              — Sky Citadel world data (SKY_CONFIG, SKY_ISLANDS ×41 incl. 12 galaxy + 8 secret + 5 underground isles, SKY_BRIDGES, SKY_PADS, SKY_PORTALS ×12, SKY_SWITCHES ×4, SKY_QUESTS ×84 incl. 18 hidden sqh_ + 8 underground squ_, SKY_MOBS ×12, SKY_SKIN_TINTS)
-    game.js             — Achievements (48, each with pts; `hidden` ones show ??? until unlocked), daily quests (12), inventory items (8, usable as charms), shop items (consumables/skins/titles/themes), ACH_POINT_REWARDS, LEVEL_MILESTONES, CHARM_PERKS, SELL_PRICES
+    game.js             — Achievements (50, each with pts; `hidden` ones show ??? until unlocked), daily quests (12), inventory items (8, usable as charms), shop items (consumables/skins/titles/themes), ACH_POINT_REWARDS, LEVEL_MILESTONES, CHARM_PERKS, SELL_PRICES
 reference/
   taiwan_elementary_1000_minecraft_flavor.csv  — Source word list reference
 ```
@@ -95,14 +98,14 @@ Each game module exports `{ init }`. `app.js` calls all `.init()` methods on `DO
 - **Grammar**: add entries to `GRAMMAR_DATA` in `js/data/grammar.js`. Each entry needs `sentence`, `blank`, `options` (4 choices), `explain`, `topic`.
 - **Video lessons**: add entries to `VIDEO_LESSONS` in `js/data/video.js`. Each entry needs `title`, `titleZh`, `thumbnail`, `script`, `vocab`, and quiz `questions`.
 - **Empire dialogues**: add entries to `EMPIRE_DIALOGUES` in `js/data/empire.js` (easy/medium/hard). Each entry needs `q` (line spoken to the player), `qZh` (Chinese meaning), `a` (correct response), `wrong` (3 distractors).
-- **RPG chapters**: append entries to `RPG_CHAPTERS` in `js/data/rpg.js`. Each chapter needs `id`, `title`, `theme` (課綱學習主題), `icon`, tile emoji (`wall`/`deco`) and colours (`floor`/`path`), a 13×9 ASCII `map`, `spawn`, `npcs` (each with a `talk` script of say/ask entries), and a `boss`. The engine in js/rpg.js interprets everything — no code changes needed for new chapters.
+- **RPG chapters**: append entries to `RPG_CHAPTERS` in `js/data/rpg.js`. Each chapter needs `id`, `title`, `theme` (課綱學習主題), `icon`, tile emoji (`wall`/`deco`) and colours (`floor`/`path`), a 13×9 ASCII `map`, `spawn`, `npcs` (each with a `talk` script of say/ask entries), and a `boss`. Map tiles: `#` wall, `*` deco, `=` path, `.` floor, plus puzzle tiles `K` key, `D` locked door (consumes a key), `S` switch, `G` gate (opened by any S), `P`/`Q` portal pair, `H` cracked wall (breaks on bump), `!` treasure chest (+3 gems). Expansion chapters live in rpg2/rpg3/rpg4.js (`RPG_CHAPTERS.push(...)`, loaded in order after rpg.js). Run `node validate_rpg_chapters.js` (scratchpad) before shipping new chapters — it checks the schema, 10-asks rule and fixpoint-BFS puzzle solvability (every NPC/boss/key/chest reachable). The engine in js/rpg.js interprets everything — no code changes needed for new chapters.
 - **Empire life English**: add entries to `EMPIRE_LIFE` in `js/data/empire.js` (easy/medium/hard). Each entry needs `scene` (Chinese scenario), `q` (English question), `a`, `wrong` (3 distractors). Empire also reuses `VOCAB_DATA` and `GRAMMAR_DATA` for vocabulary/grammar questions.
 - **Sky quests**: add entries to `SKY_QUESTS` in `js/data/sky.js`. Each quest needs `id`, `island` (a SKY_ISLANDS id), `type` (`chest`/`gate`/`npc`/`listen`/`pillars`/`runes`/`arena`/`bridge`/`race`/`boss`/`order` word-order stepping stones/`maze` portal maze), `name`, `diff` (`easy`/`medium`/`hard`/`boss` — sets the reward tier), `n` (questions/pairs/mobs/rings/words by type), `dx`/`dz` (position relative to the island centre), `intro`, and optionally `npc` (emoji), `mob` (SKY_MOBS id for arenas), `time` (race seconds), `lock` (total clears required). js/sky.js builds the quest object, marker and quiz flow automatically. New islands go in `SKY_ISLANDS` (id/name/type/pos/r/seed) and are decorated procedurally by type. The galaxy region (`isle_gx_*` islands, `sqg_*` quests, all `lock: 22`+) is reached through `SKY_PORTALS` after 22 total clears; bosses are parameterized via BOSS_DEFS in js/sky.js. The secret realm (`isle_sc_*` isles with `secret: true`, `sqh_*` quests with `hidden: true`) is entered through hidden portals OR rune-stone switches (`SKY_SWITCHES` — interacting builds a hidden stepstone staircase, persisted in `save.stairsBuilt`); both reveal within 12u proximity (persisted in `save.secretsFound`); hidden quests are masked as ??? in the journal, excluded from `totalCleared()` lock math, and tracked by the engine's `skySecretQuests`/`skySecretFound`/`skySecretBoss`/`skySwitches` counters for the 4 `hidden` achievements. The underground region (`isle_und_*` isles with `underground: true`, `squ_*` quests, locks 30-40) is entered via the crater portal on the lava island; below y≈-20 the atmosphere blends to dark-red cave fog, `undergroundVoidY: -160` replaces the surface void line while inside, and `cave` music plays. Random world events (meteor-shower shard collecting — each shard carries a letter badge and collecting them in the word's letter order pays a +10-gem spelling bonus via pickShardWord/updateMeteorHud; storm-falcon air raids with a dive-bombing `flies: true` mob AI) fire every 90-150s of free roaming (`skyShards`/`skyRaids` counters). Active-use consumables (lightning_staff/bubble_shield/cloud_mount) are triggered via the in-adventure item tray or Q/R/F (`skyItemUses` counter). Terrain uses procedural CanvasTexture patterns (noiseTexture/TEX cache in js/sky.js; matOf's third arg picks the pattern).
 - **Achievements/quests/items/shop**: edit `js/data/game.js`.
 
 ### Key Systems
 - **Gamification**: XP (dynamic scaling: 80 + level × 20 per level), gems (currency), streaks, achievements (each grants 15 gems + pts), daily quests
-- **Achievement points**: derived from unlocked achievements (10/20/40 pts tiers, 970 total); ACH_POINT_REWARDS thresholds grant exclusive titles/skins/themes (state.pointRewardsClaimed)
+- **Achievement points**: derived from unlocked achievements (10/20/40 pts tiers, 1,030 total); ACH_POINT_REWARDS thresholds grant exclusive titles/skins/themes (state.pointRewardsClaimed)
 - **Level milestones**: LEVEL_MILESTONES every 5 levels to 50 grant gems/items/exclusive unlocks (state.milestonesClaimed; granted in addXP via grantLevelMilestones)
 - **Shop**: Consumables (buffs, some with `uses`/`minLevel`), skins (13), titles (15), themes (6) — `unlock`-flagged items are never purchasable (granted by milestones/points/collection)
 - **Themes**: body[data-theme] overrides :root CSS vars (style.css); applyTheme() on load/equip; owned in state.owned.themes
@@ -153,7 +156,7 @@ python3 -m http.server 8000
 ```
 
 ### Cache busting
-All CSS/JS references in index.html carry a `?v=N` query string. GitHub Pages caches assets for 10 minutes, so a freshly deployed index.html can otherwise pair with stale cached JS/CSS (symptoms: a new game's zone shows but its dynamic UI is empty). **Bump the version number on every release that changes JS or CSS** (single `sed -i 's/?v=32/?v=33/g' index.html`-style edit).
+All CSS/JS references in index.html carry a `?v=N` query string. GitHub Pages caches assets for 10 minutes, so a freshly deployed index.html can otherwise pair with stale cached JS/CSS (symptoms: a new game's zone shows but its dynamic UI is empty). **Bump the version number on every release that changes JS or CSS** (single `sed -i 's/?v=33/?v=34/g' index.html`-style edit).
 
 ### Testing
 There is no automated test suite. Manual testing in a browser is the current workflow. Verify changes by opening `index.html` and exercising the affected game zone.

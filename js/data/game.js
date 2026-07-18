@@ -33,6 +33,8 @@ const ACHIEVEMENTS = [
   { id: 'rpg_first', name: '冒險啟程', desc: '在英語冒險物語通過第一章', icon: '🗺️', pts: 10, condition: s => (s.rpgChapters || 0) >= 1 },
   { id: 'rpg_hero', name: '大陸救世主', desc: '在英語冒險物語通過 6 個章節', icon: '🛡️', pts: 20, condition: s => (s.rpgChapters || 0) >= 6 },
   { id: 'rpg_legend', name: '傳說冒險家', desc: '在英語冒險物語通過 9 個章節', icon: '🌟', pts: 40, condition: s => (s.rpgChapters || 0) >= 9 },
+  { id: 'rpg_master', name: '大陸探險家', desc: '在英語冒險物語通過 18 個章節', icon: '🧭', pts: 20, condition: s => (s.rpgChapters || 0) >= 18 },
+  { id: 'rpg_conqueror', name: '英語大陸征服者', desc: '在英語冒險物語通過 36 個章節', icon: '👑', pts: 40, condition: s => (s.rpgChapters || 0) >= 36 },
   { id: 'sky_first', name: '初探天空之城', desc: '在天空之城完成第一個任務', icon: '🏝️', pts: 10, condition: s => (s.skyQuests || 0) >= 1 },
   { id: 'sky_hero', name: '空島英雄', desc: '在天空之城完成 10 個任務', icon: '🌤️', pts: 20, condition: s => (s.skyQuests || 0) >= 10 },
   { id: 'sky_storm', name: '風暴終結者', desc: '打倒天空之城的暴風巨像', icon: '⛈️', pts: 40, condition: s => !!s.skyBossDown },
