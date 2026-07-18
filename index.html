@@ -95,6 +95,10 @@
   <link rel="stylesheet" href="css/youtube.css?v=33">
   <link rel="stylesheet" href="css/spelling.css?v=33">
   <link rel="stylesheet" href="css/listening.css?v=33">
+  <link rel="stylesheet" href="css/pets.css?v=33">
+  <link rel="stylesheet" href="css/typing.css?v=33">
+  <link rel="stylesheet" href="css/detective.css?v=33">
+  <link rel="stylesheet" href="css/fishing.css?v=33">
   <link rel="stylesheet" href="css/empire.css?v=33">
   <link rel="stylesheet" href="css/candy.css?v=33">
   <link rel="stylesheet" href="css/sling.css?v=33">
@@ -176,6 +180,18 @@
     </button>
     <button class="nav-tab" data-zone="sky">
       <span class="nav-icon">🏝️</span><span class="nav-label">天空之城</span>
+    </button>
+    <button class="nav-tab" data-zone="pets">
+      <span class="nav-icon">🐾</span><span class="nav-label">單字寵物島</span>
+    </button>
+    <button class="nav-tab" data-zone="typing">
+      <span class="nav-icon">⌨️</span><span class="nav-label">打字防衛戰</span>
+    </button>
+    <button class="nav-tab" data-zone="detective">
+      <span class="nav-icon">🕵️</span><span class="nav-label">英語偵探社</span>
+    </button>
+    <button class="nav-tab" data-zone="fishing">
+      <span class="nav-icon">🎣</span><span class="nav-label">悠閒釣魚塘</span>
     </button>
     <button class="nav-tab" data-zone="daily">
       <span class="nav-icon">📋</span><span class="nav-label">每日任務</span>
@@ -265,6 +281,30 @@
           <h3>天空之城</h3>
           <p>開放世界 3D 冒險！在漂浮天空島之間跑酷探索、解謎闖關！</p>
           <span class="card-tag">Open World 3D</span>
+        </div>
+        <div class="hub-card pets-card" data-zone="pets">
+          <div class="card-icon">🐾</div>
+          <h3>單字寵物島</h3>
+          <p>答對題目捕捉單字寵物，養成進化、挑戰道館成為冠軍！</p>
+          <span class="card-tag">Pets</span>
+        </div>
+        <div class="hub-card typing-card" data-zone="typing">
+          <div class="card-icon">⌨️</div>
+          <h3>打字防衛戰</h3>
+          <p>單字怪來襲！打出牠們頂上的單字守護城堡！</p>
+          <span class="card-tag">Typing</span>
+        </div>
+        <div class="hub-card detective-card" data-zone="detective">
+          <div class="card-icon">🕵️</div>
+          <h3>英語偵探社</h3>
+          <p>讀懂英文線索、找出矛盾，解開謎團偵破案件！</p>
+          <span class="card-tag">Reading</span>
+        </div>
+        <div class="hub-card fishing-card" data-zone="fishing">
+          <div class="card-icon">🎣</div>
+          <h3>悠閒釣魚塘</h3>
+          <p>拋竿釣魚聽音辨字，收集 30 種魚打造水族箱！</p>
+          <span class="card-tag">Listening</span>
         </div>
       </div>
     </div>
@@ -970,6 +1010,46 @@
   </main>
 
   <!-- Zone: Daily Quests -->
+  <main id="zone-pets" class="zone">
+    <div class="pt-container">
+      <div class="pt-header">
+        <h2>🐾 單字寵物島</h2>
+        <button class="zone-fs-btn" title="遊戲畫面最大化">⛶</button>
+      </div>
+      <div id="pt-root"><!-- built by js/pets.js --></div>
+    </div>
+  </main>
+
+  <main id="zone-typing" class="zone">
+    <div class="tp-container">
+      <div class="tp-header">
+        <h2>⌨️ 打字防衛戰</h2>
+        <button class="zone-fs-btn" title="遊戲畫面最大化">⛶</button>
+      </div>
+      <div id="tp-root"><!-- built by js/typing.js --></div>
+    </div>
+  </main>
+
+  <main id="zone-detective" class="zone">
+    <div class="dt-container">
+      <div class="dt-header">
+        <h2>🕵️ 英語偵探社</h2>
+        <button class="zone-fs-btn" title="遊戲畫面最大化">⛶</button>
+      </div>
+      <div id="dt-root"><!-- built by js/detective.js --></div>
+    </div>
+  </main>
+
+  <main id="zone-fishing" class="zone">
+    <div class="fh-container">
+      <div class="fh-header">
+        <h2>🎣 悠閒釣魚塘</h2>
+        <button class="zone-fs-btn" title="遊戲畫面最大化">⛶</button>
+      </div>
+      <div id="fh-root"><!-- built by js/fishing.js --></div>
+    </div>
+  </main>
+
   <main id="zone-daily" class="zone">
     <div class="daily-container">
       <h2>📋 每日任務</h2>
@@ -1299,6 +1379,9 @@
   <script src="js/data/rpg3.js?v=33"></script>
   <script src="js/data/rpg4.js?v=33"></script>
   <script src="js/data/sky.js?v=33"></script>
+  <script src="js/data/pets.js?v=33"></script>
+  <script src="js/data/detective.js?v=33"></script>
+  <script src="js/data/fishing.js?v=33"></script>
   <script src="js/engine.js?v=33"></script>
   <script src="js/music.js?v=33"></script>
   <script src="js/minecraft.js?v=33"></script>
@@ -1314,6 +1397,10 @@
   <script src="js/tower.js?v=33"></script>
   <script src="js/rpg.js?v=33"></script>
   <script src="js/sky.js?v=33"></script>
+  <script src="js/pets.js?v=33"></script>
+  <script src="js/typing.js?v=33"></script>
+  <script src="js/detective.js?v=33"></script>
+  <script src="js/fishing.js?v=33"></script>
   <script src="js/cloud.js?v=33"></script>
   <script src="js/daily.js?v=33"></script>
   <script src="js/app.js?v=33"></script>

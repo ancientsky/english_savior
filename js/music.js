@@ -380,6 +380,10 @@ const MusicManager = (() => {
     empire: ['battle', 'battle3', 'battle2'],
     roblox: ['battle2', 'race', 'battle'],
     spelling: ['battle', 'race', 'battle2'],
+    pets: ['adventure', 'carnival', 'playful3'],
+    typing: ['battle2', 'battle3', 'race'],
+    detective: ['mystic', 'story2', 'dream'],
+    fishing: ['lake', 'lullaby', 'dream'],
   };
 
   // ---------- audio plumbing ----------
