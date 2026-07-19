@@ -44,6 +44,10 @@ js/
   speak.js              — Spell academy speaking game (Web Speech Recognition, honor-mode fallback)
   tower.js              — Tower of Saviors-style word boss battle (drag letter orbs to spell words; 12 bosses scale endlessly by floor; 12 elemental realm themes, jewel-tone high-contrast orbs + SVG drag-trail, charged orbs/crit-combo, particle FX)
   rpg.js                — Undertale-style 2D RPG engine for conversation practice (interprets RPG_CHAPTERS data; puzzle tiles K key/D locked door/S switch/G gate/P,Q portal pair/H cracked wall/! chest, chapter-select world grouping every 9 chapters)
+  pets.js               — Word Pets Island: quiz-catch 30 word pets (10 evolution chains — evolving teaches a new word), type-effectiveness turn battles, 5 gyms (PET_SPECIES in data/pets.js)
+  typing.js             — Typing Defense: monsters carry words across 3 lanes, type the word to laser them (first-letter target lock, prefix highlight, boss waves, WPM stats, mobile mini-QWERTY)
+  detective.js          — English Detective Agency: 8 escape-room mystery cases × 4 puzzle types (read/liar/code-lock/witness), clue board, culprit accusation, star rating (DETECTIVE_CASES in data/detective.js)
+  fishing.js            — Cozy Fishing Pond: cast-timing + reel minigame + TTS listening quiz (rare fish = spelling), 30 fish across 4 unlockable ponds, animated aquarium (FISH_SPECIES in data/fishing.js)
   sky.js                — Sky Citadel open-world 3D adventure (Three.js; islands/physics/camera/mobs/84 quests incl. 18 hidden/4 bosses/galaxy+secret+underground regions/world events/puzzle types/active-item tray/title perks/minimap)
   cloud.js              — Save backup: file export/import + optional Google Drive appDataFolder sync (owner fills GOOGLE_CLIENT_ID; see DEPLOYMENT.md)
   daily.js              — Daily quest tracking and rendering
@@ -63,7 +67,10 @@ js/
     rpg3.js             — RPG expansion pack 3 (chapters 19-27 第三世界·探索樂園)
     rpg4.js             — RPG expansion pack 4 (chapters 28-36 第四世界·奇幻次元 incl. world_finale) → 36 chapters total, 360 dialogue questions
     sky.js              — Sky Citadel world data (SKY_CONFIG, SKY_ISLANDS ×41 incl. 12 galaxy + 8 secret + 5 underground isles, SKY_BRIDGES, SKY_PADS, SKY_PORTALS ×12, SKY_SWITCHES ×4, SKY_QUESTS ×84 incl. 18 hidden sqh_ + 8 underground squ_, SKY_MOBS ×12, SKY_SKIN_TINTS)
-    game.js             — Achievements (50, each with pts; `hidden` ones show ??? until unlocked), daily quests (12), inventory items (8, usable as charms), shop items (consumables/skins/titles/themes), ACH_POINT_REWARDS, LEVEL_MILESTONES, CHARM_PERKS, SELL_PRICES
+    pets.js             — Word-pet species (PET_SPECIES ×30: word/type/rarity/evolution chains)
+    detective.js        — Detective cases (DETECTIVE_CASES ×8, 4 rooms each)
+    fishing.js          — Fish species (FISH_SPECIES ×30 across 4 ponds)
+    game.js             — Achievements (58, each with pts; `hidden` ones show ??? until unlocked), daily quests (16), inventory items (8, usable as charms), shop items (consumables/skins/titles/themes), ACH_POINT_REWARDS, LEVEL_MILESTONES, CHARM_PERKS, SELL_PRICES
 reference/
   taiwan_elementary_1000_minecraft_flavor.csv  — Source word list reference
 ```
@@ -87,6 +94,10 @@ All game modules use the IIFE (Immediately Invoked Function Expression) pattern 
 - `TowerGame` — word boss tower orb battle (tower.js)
 - `RpgGame` — English adventure RPG (rpg.js)
 - `SkyGame` — Sky Citadel open-world 3D adventure (sky.js)
+- `PetsGame` — word pets collect-and-battle (pets.js)
+- `TypingGame` — typing defense (typing.js)
+- `DetectiveGame` — reading-mystery escape rooms (detective.js)
+- `FishingGame` — fishing listening collection (fishing.js)
 - `CloudSave` — save export/import + Google Drive sync (cloud.js)
 - `DailyQuests` — daily quest system (daily.js)
 - `TTSManager` — text-to-speech (tts.js)
@@ -105,7 +116,7 @@ Each game module exports `{ init }`. `app.js` calls all `.init()` methods on `DO
 
 ### Key Systems
 - **Gamification**: XP (dynamic scaling: 80 + level × 20 per level), gems (currency), streaks, achievements (each grants 15 gems + pts), daily quests
-- **Achievement points**: derived from unlocked achievements (10/20/40 pts tiers, 1,030 total); ACH_POINT_REWARDS thresholds grant exclusive titles/skins/themes (state.pointRewardsClaimed)
+- **Achievement points**: derived from unlocked achievements (10/20/40 pts tiers, 1,150 total); ACH_POINT_REWARDS thresholds grant exclusive titles/skins/themes (state.pointRewardsClaimed)
 - **Level milestones**: LEVEL_MILESTONES every 5 levels to 50 grant gems/items/exclusive unlocks (state.milestonesClaimed; granted in addXP via grantLevelMilestones)
 - **Shop**: Consumables (buffs, some with `uses`/`minLevel`), skins (13), titles (15), themes (6) — `unlock`-flagged items are never purchasable (granted by milestones/points/collection)
 - **Themes**: body[data-theme] overrides :root CSS vars (style.css); applyTheme() on load/equip; owned in state.owned.themes
@@ -137,7 +148,7 @@ RPG (英語冒險物語) is chapter-based instead of difficulty-based: each firs
 - **Web Speech API** — text-to-speech pronunciation (TTSManager), listening game audio, and speech recognition for the spell academy (with self-graded "honor mode" fallback where unavailable, e.g. iOS Safari)
 - **Canvas 2D API** — spelling runner rendering (800×340 px), word slingshot physics (880×420 px), and the Sky Citadel minimap (140×140 px)
 - **WebGL via Three.js** — empire 3D battlefield and Sky Citadel open world (`js/vendor/three.min.js`, r149)
-- **localStorage** — game state persistence (`english_savior_save` for the engine, `english_savior_empire` for empire campaign progress, `english_savior_candy` for candy level progress, `english_savior_builder` for the landmark collection, `english_savior_tower` for the tower floor, `english_savior_rpg` for RPG chapter progress, `english_savior_sky` for Sky Citadel quests/settings)
+- **localStorage** — game state persistence (`english_savior_save` for the engine, `english_savior_empire` for empire campaign progress, `english_savior_candy` for candy level progress, `english_savior_builder` for the landmark collection, `english_savior_tower` for the tower floor, `english_savior_rpg` for RPG chapter progress, `english_savior_sky` for Sky Citadel quests/settings, `english_savior_pets` for the pet collection, `english_savior_detective` for solved cases, `english_savior_fishing` for the aquarium, `english_savior_typing_best` for best WPM)
 
 ## Naming Conventions
 - **CSS classes**: kebab-case with module prefix (`mc-block`, `rb-platform`, `yt-card`, `sp-canvas`, `ls-card`)
@@ -156,7 +167,7 @@ python3 -m http.server 8000
 ```
 
 ### Cache busting
-All CSS/JS references in index.html carry a `?v=N` query string. GitHub Pages caches assets for 10 minutes, so a freshly deployed index.html can otherwise pair with stale cached JS/CSS (symptoms: a new game's zone shows but its dynamic UI is empty). **Bump the version number on every release that changes JS or CSS** (single `sed -i 's/?v=33/?v=34/g' index.html`-style edit).
+All CSS/JS references in index.html carry a `?v=N` query string. GitHub Pages caches assets for 10 minutes, so a freshly deployed index.html can otherwise pair with stale cached JS/CSS (symptoms: a new game's zone shows but its dynamic UI is empty). **Bump the version number on every release that changes JS or CSS** (single `sed -i 's/?v=34/?v=35/g' index.html`-style edit).
 
 ### Testing
 There is no automated test suite. Manual testing in a browser is the current workflow. Verify changes by opening `index.html` and exercising the affected game zone.
