@@ -86,6 +86,31 @@ document.addEventListener('DOMContentLoaded', () => {
     syncMusicBtn();
   });
   syncMusicBtn();
+  // Aa 字體大小三段切換（標準/大/特大），全站生效並記憶
+  const FONT_SCALES = [
+    { key: 'std', label: 'Aa', title: '字體大小：標準（點擊放大）' },
+    { key: 'lg',  label: 'A+', title: '字體大小：大（點擊再放大）' },
+    { key: 'xl',  label: 'A++', title: '字體大小：特大（點擊回標準）' },
+  ];
+  const fontBtn = document.getElementById('btn-fontsize');
+  const applyFontScale = key => {
+    if (key === 'std') document.body.removeAttribute('data-fontscale');
+    else document.body.setAttribute('data-fontscale', key);
+    const s = FONT_SCALES.find(f => f.key === key) || FONT_SCALES[0];
+    fontBtn.textContent = s.label;
+    fontBtn.title = s.title;
+    // canvas/3D games re-fit to the zoomed layout
+    window.dispatchEvent(new Event('resize'));
+  };
+  let fontScale = localStorage.getItem('font_scale') || 'std';
+  if (!FONT_SCALES.some(f => f.key === fontScale)) fontScale = 'std';
+  applyFontScale(fontScale);
+  fontBtn.addEventListener('click', () => {
+    const idx = FONT_SCALES.findIndex(f => f.key === fontScale);
+    fontScale = FONT_SCALES[(idx + 1) % FONT_SCALES.length].key;
+    localStorage.setItem('font_scale', fontScale);
+    applyFontScale(fontScale);
+  });
   document.getElementById('btn-help').addEventListener('click', () => {
     document.getElementById('modal-help').classList.add('active');
   });

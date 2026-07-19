@@ -1175,3 +1175,11 @@ body[data-theme="galaxy"] {
   line-height: 1.6;
 }
 #cloud-drive-hint { font-size: 13px; color: var(--text-dim); line-height: 1.6; }
+
+/* ===== 全站字體縮放 (Aa 三段切換) =====
+   zoom scales the whole UI uniformly (like browser zoom) so every game's
+   text grows together without per-module overrides. Exempt while a game
+   is maximized (game-max) so the play area keeps its full resolution. */
+body[data-fontscale="lg"]:not(.game-max) { zoom: 1.12; }
+body[data-fontscale="xl"]:not(.game-max) { zoom: 1.25; }
+#btn-fontsize { font-weight: 700; letter-spacing: -1px; }
