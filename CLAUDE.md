@@ -54,8 +54,8 @@ js/
   pets.js               — Word Pets Island: quiz-catch 90 word pets (30 evolution chains — evolving teaches a new word), type-effectiveness turn battles, 15 gyms (PET_SPECIES in data/pets.js)
   typing.js             — Typing Defense: monsters carry words across 3 lanes, type the word to laser them (first-letter target lock, prefix highlight, boss waves, WPM stats, mobile mini-QWERTY)
   tutor.js              — Touch-Typing Camp: 20 sequential lessons — basic camp 1-12 (home row F/J outward + word graduation exam) and advanced camp 13-20 (space/Shift caps/number row/symbols/function-key intro incl. Tab/Caps/Backspace/Delete/Ctrl/Alt/Win/sentence exam), 9-color finger-zone keyboard (extended layout for lessons ≥13), two-hand+thumb indicator, star rating
-  detective.js          — English Detective Agency: 24 escape-room mystery cases × 4 puzzle types (read/liar/code-lock/witness), clue board, culprit accusation, star rating (DETECTIVE_CASES in data/detective.js)
-  fishing.js            — Cozy Fishing Pond: cast-timing + reel minigame + TTS listening quiz (rare fish = spelling), 30 fish across 4 unlockable ponds, animated aquarium (FISH_SPECIES in data/fishing.js)
+  detective.js          — English Detective Agency: 48 escape-room mystery cases — 24 basic (4 rooms) + 24 advanced 特別調查組 (adv: true, 8 rooms, phantom-thief arc with arcZh interstitials, clear pays 60XP+15💎) × 6 puzzle types (read/liar/code-lock/witness/timeline-ordering/alibi cross-check), clue board, culprit accusation, star rating (DETECTIVE_CASES in data/detective.js)
+  fishing.js            — Cozy Fishing Pond: 2.5D parallax scenes with per-pond ambience particles, fish shadows, rod-bend cast + tension-fight reel, TTS listening quiz (rare/legendary = spelling), 70 fish across 9 unlockable ponds (each new pond has a rarity-4 legendary paying 30XP+5💎), per-pond aquarium album (FISH_SPECIES in data/fishing.js)
   sky.js                — Sky Citadel open-world 3D adventure (Three.js; islands/physics/camera/mobs/84 quests incl. 18 hidden/4 bosses/galaxy+secret+underground regions/world events/puzzle types/active-item tray/title perks/minimap)
   cloud.js              — Save backup: file export/import + optional Google Drive appDataFolder sync (owner fills GOOGLE_CLIENT_ID; see DEPLOYMENT.md)
   daily.js              — Daily quest tracking and rendering
@@ -77,9 +77,11 @@ js/
     sky.js              — Sky Citadel world data (SKY_CONFIG, SKY_ISLANDS ×41 incl. 12 galaxy + 8 secret + 5 underground isles, SKY_BRIDGES, SKY_PADS, SKY_PORTALS ×12, SKY_SWITCHES ×4, SKY_QUESTS ×84 incl. 18 hidden sqh_ + 8 underground squ_, SKY_MOBS ×12, SKY_SKIN_TINTS)
     pets.js             — Word-pet species (PET_SPECIES ×90: word/type/rarity/evolution chains, 18 per type)
     detective.js        — Detective cases (DETECTIVE_CASES ×8, 4 rooms each)
-    detective2.js       — Detective expansion pack #2 (+16 cases 9-24, medium/hard tiers → 24 total; loaded after detective.js)
-    fishing.js          — Fish species (FISH_SPECIES ×30 across 4 ponds)
-    game.js             — Achievements (63, each with pts; `hidden` ones show ??? until unlocked), daily quests (16), inventory items (8, usable as charms), shop items (consumables/skins/titles/themes), ACH_POINT_REWARDS, LEVEL_MILESTONES, CHARM_PERKS, SELL_PRICES
+    detective2.js       — Detective expansion pack #2 (+16 cases 9-24, medium/hard tiers; loaded after detective.js)
+    detective3.js       — Advanced cases 25-36 特別調查組前半 (adv 8-room cases, phantom-thief clue arc)
+    detective4.js       — Advanced cases 37-48 特別調查組後半 incl. clocktower finale → 48 total
+    fishing.js          — Fish species (FISH_SPECIES ×70 across 9 ponds; 5 new ponds each with a legendary: true rarity-4 fish)
+    game.js             — Achievements (65, each with pts; `hidden` ones show ??? until unlocked), daily quests (16), inventory items (8, usable as charms), shop items (consumables/skins/titles/themes), ACH_POINT_REWARDS, LEVEL_MILESTONES, CHARM_PERKS, SELL_PRICES
 reference/
   taiwan_elementary_1000_minecraft_flavor.csv  — Source word list reference
 ```
@@ -126,7 +128,7 @@ Each game module exports `{ init }`. `app.js` calls all `.init()` methods on `DO
 
 ### Key Systems
 - **Gamification**: XP (dynamic scaling: 80 + level × 20 per level), gems (currency), streaks, achievements (each grants 15 gems + pts), daily quests
-- **Achievement points**: derived from unlocked achievements (10/20/40 pts tiers, 1,240 total); ACH_POINT_REWARDS thresholds grant exclusive titles/skins/themes (state.pointRewardsClaimed)
+- **Achievement points**: derived from unlocked achievements (10/20/40 pts tiers, 1,280 total); ACH_POINT_REWARDS thresholds grant exclusive titles/skins/themes (state.pointRewardsClaimed)
 - **Level milestones**: LEVEL_MILESTONES every 5 levels to 50 grant gems/items/exclusive unlocks (state.milestonesClaimed; granted in addXP via grantLevelMilestones)
 - **Shop**: Consumables (buffs, some with `uses`/`minLevel`), skins (13), titles (15), themes (6) — `unlock`-flagged items are never purchasable (granted by milestones/points/collection)
 - **Themes**: body[data-theme] overrides :root CSS vars (style.css); applyTheme() on load/equip; owned in state.owned.themes
@@ -177,7 +179,7 @@ python3 -m http.server 8000
 ```
 
 ### Cache busting
-All CSS/JS references in index.html carry a `?v=N` query string. GitHub Pages caches assets for 10 minutes, so a freshly deployed index.html can otherwise pair with stale cached JS/CSS (symptoms: a new game's zone shows but its dynamic UI is empty). **Bump the version number on every release that changes JS or CSS** (single `sed -i 's/?v=38/?v=39/g' index.html`-style edit).
+All CSS/JS references in index.html carry a `?v=N` query string. GitHub Pages caches assets for 10 minutes, so a freshly deployed index.html can otherwise pair with stale cached JS/CSS (symptoms: a new game's zone shows but its dynamic UI is empty). **Bump the version number on every release that changes JS or CSS** (single `sed -i 's/?v=39/?v=40/g' index.html`-style edit).
 
 ### Testing
 There is no automated test suite. Manual testing in a browser is the current workflow. Verify changes by opening `index.html` and exercising the affected game zone.
