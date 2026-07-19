@@ -53,7 +53,7 @@ js/
   rpg.js                — Undertale-style 2D RPG engine for conversation practice (interprets RPG_CHAPTERS data; puzzle tiles K key/D locked door/S switch/G gate/P,Q portal pair/H cracked wall/! chest, chapter-select world grouping every 9 chapters)
   pets.js               — Word Pets Island: quiz-catch 90 word pets (30 evolution chains — evolving teaches a new word), type-effectiveness turn battles, 15 gyms (PET_SPECIES in data/pets.js)
   typing.js             — Typing Defense: monsters carry words across 3 lanes, type the word to laser them (first-letter target lock, prefix highlight, boss waves, WPM stats, mobile mini-QWERTY)
-  tutor.js              — Touch-Typing Camp: 12 sequential finger-placement lessons (home row F/J outward to full keyboard + word graduation exam), 8-color finger-zone on-screen keyboard, two-hand finger indicator, star rating
+  tutor.js              — Touch-Typing Camp: 20 sequential lessons — basic camp 1-12 (home row F/J outward + word graduation exam) and advanced camp 13-20 (space/Shift caps/number row/symbols/function-key intro incl. Tab/Caps/Backspace/Delete/Ctrl/Alt/Win/sentence exam), 9-color finger-zone keyboard (extended layout for lessons ≥13), two-hand+thumb indicator, star rating
   detective.js          — English Detective Agency: 24 escape-room mystery cases × 4 puzzle types (read/liar/code-lock/witness), clue board, culprit accusation, star rating (DETECTIVE_CASES in data/detective.js)
   fishing.js            — Cozy Fishing Pond: cast-timing + reel minigame + TTS listening quiz (rare fish = spelling), 30 fish across 4 unlockable ponds, animated aquarium (FISH_SPECIES in data/fishing.js)
   sky.js                — Sky Citadel open-world 3D adventure (Three.js; islands/physics/camera/mobs/84 quests incl. 18 hidden/4 bosses/galaxy+secret+underground regions/world events/puzzle types/active-item tray/title perks/minimap)
@@ -79,7 +79,7 @@ js/
     detective.js        — Detective cases (DETECTIVE_CASES ×8, 4 rooms each)
     detective2.js       — Detective expansion pack #2 (+16 cases 9-24, medium/hard tiers → 24 total; loaded after detective.js)
     fishing.js          — Fish species (FISH_SPECIES ×30 across 4 ponds)
-    game.js             — Achievements (62, each with pts; `hidden` ones show ??? until unlocked), daily quests (16), inventory items (8, usable as charms), shop items (consumables/skins/titles/themes), ACH_POINT_REWARDS, LEVEL_MILESTONES, CHARM_PERKS, SELL_PRICES
+    game.js             — Achievements (63, each with pts; `hidden` ones show ??? until unlocked), daily quests (16), inventory items (8, usable as charms), shop items (consumables/skins/titles/themes), ACH_POINT_REWARDS, LEVEL_MILESTONES, CHARM_PERKS, SELL_PRICES
 reference/
   taiwan_elementary_1000_minecraft_flavor.csv  — Source word list reference
 ```
@@ -126,7 +126,7 @@ Each game module exports `{ init }`. `app.js` calls all `.init()` methods on `DO
 
 ### Key Systems
 - **Gamification**: XP (dynamic scaling: 80 + level × 20 per level), gems (currency), streaks, achievements (each grants 15 gems + pts), daily quests
-- **Achievement points**: derived from unlocked achievements (10/20/40 pts tiers, 1,220 total); ACH_POINT_REWARDS thresholds grant exclusive titles/skins/themes (state.pointRewardsClaimed)
+- **Achievement points**: derived from unlocked achievements (10/20/40 pts tiers, 1,240 total); ACH_POINT_REWARDS thresholds grant exclusive titles/skins/themes (state.pointRewardsClaimed)
 - **Level milestones**: LEVEL_MILESTONES every 5 levels to 50 grant gems/items/exclusive unlocks (state.milestonesClaimed; granted in addXP via grantLevelMilestones)
 - **Shop**: Consumables (buffs, some with `uses`/`minLevel`), skins (13), titles (15), themes (6) — `unlock`-flagged items are never purchasable (granted by milestones/points/collection)
 - **Themes**: body[data-theme] overrides :root CSS vars (style.css); applyTheme() on load/equip; owned in state.owned.themes
@@ -177,7 +177,7 @@ python3 -m http.server 8000
 ```
 
 ### Cache busting
-All CSS/JS references in index.html carry a `?v=N` query string. GitHub Pages caches assets for 10 minutes, so a freshly deployed index.html can otherwise pair with stale cached JS/CSS (symptoms: a new game's zone shows but its dynamic UI is empty). **Bump the version number on every release that changes JS or CSS** (single `sed -i 's/?v=37/?v=38/g' index.html`-style edit).
+All CSS/JS references in index.html carry a `?v=N` query string. GitHub Pages caches assets for 10 minutes, so a freshly deployed index.html can otherwise pair with stale cached JS/CSS (symptoms: a new game's zone shows but its dynamic UI is empty). **Bump the version number on every release that changes JS or CSS** (single `sed -i 's/?v=38/?v=39/g' index.html`-style edit).
 
 ### Testing
 There is no automated test suite. Manual testing in a browser is the current workflow. Verify changes by opening `index.html` and exercising the affected game zone.
