@@ -70,7 +70,8 @@ const HubView = (() => {
     try {
       const pets = readJSON('english_savior_pets');
       const n = pets && pets.collection ? Object.keys(pets.collection).length : 0;
-      setBadge('pets', n > 0 ? `🐾 ${n}/30` : '');
+      const petsTotal = (typeof PET_SPECIES !== 'undefined' && Array.isArray(PET_SPECIES)) ? PET_SPECIES.length : 30;
+      setBadge('pets', n > 0 ? `🐾 ${n}/${petsTotal}` : '');
     } catch { setBadge('pets', ''); }
 
     // ---- empire: english_savior_empire → { wave, kills, correct, wrong, bestWave } ----

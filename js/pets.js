@@ -7,10 +7,12 @@
      "practice battle" and by the 5 gyms. Each round is a vocab question;
      correct -> player attacks (type-advantage multiplier), wrong -> the
      enemy attacks. Fainted pets auto-switch; team wipe = gentle defeat.
-   - 道館 x5: sequential gyms with ascending levels; beating all five
-     unlocks the champion banner.
-   - 圖鑑: 30-slot collection grid (caught pets show word/zh/level, TTS
-     on tap; uncaught show a ??? silhouette).
+   - 道館 x15: sequential gyms with ascending levels (gym 1 ~lv4 up to
+     gym 15 ~lv60); beating all fifteen unlocks the champion banner.
+     Gyms 1-5 use easy/medium/hard tiers as before; 6-10 are medium,
+     11-15 are hard.
+   - 圖鑑: PET_SPECIES.length-slot collection grid (caught pets show
+     word/zh/level, TTS on tap; uncaught show a ??? silhouette).
    Save: localStorage `english_savior_pets` = { collection, team, gymsBeaten }.
 */
 
@@ -39,6 +41,47 @@ const PetsGame = (() => {
     {
       id: 'gym_champion', name: '冠軍殿堂', icon: '👑', leader: '寵物大師', leaderEmoji: '👑',
       team: [{ species: 'thunder', lv: 20 }, { species: 'tree', lv: 20 }, { species: 'rooster', lv: 20 }, { species: 'storm', lv: 20 }],
+    },
+    // ===== Expansion pack: gyms 6-15 (medium tier 6-10, hard tier 11-15) =====
+    {
+      id: 'gym_forest', name: '森林道館', icon: '🌲', leader: '森林精靈 艾莉', leaderEmoji: '🧚‍♀️',
+      team: [{ species: 'bush', lv: 22 }, { species: 'squirrel', lv: 23 }, { species: 'jungle', lv: 24 }],
+    },
+    {
+      id: 'gym_desert', name: '沙漠道館', icon: '🏜️', leader: '沙漠遊俠 卡登', leaderEmoji: '🤠',
+      team: [{ species: 'fox', lv: 26 }, { species: 'bull', lv: 27 }, { species: 'elephant', lv: 28 }],
+    },
+    {
+      id: 'gym_ice', name: '冰原道館', icon: '❄️', leader: '冰霜女王 賽琳', leaderEmoji: '👸',
+      team: [{ species: 'snowman', lv: 30 }, { species: 'lobster', lv: 31 }, { species: 'penguin', lv: 32 }],
+    },
+    {
+      id: 'gym_ocean', name: '海洋道館', icon: '🌊', leader: '海洋公爵 崔頓', leaderEmoji: '🔱',
+      team: [{ species: 'frog', lv: 33 }, { species: 'crocodile', lv: 35 }, { species: 'octopus', lv: 36 }],
+    },
+    {
+      id: 'gym_starry', name: '星空道館', icon: '🌌', leader: '星際使者 諾娃', leaderEmoji: '🌠',
+      team: [{ species: 'moon', lv: 37 }, { species: 'comet', lv: 39 }, { species: 'galaxy', lv: 40 }],
+    },
+    {
+      id: 'gym_machine', name: '機械道館', icon: '⚙️', leader: '機械公爵 泰坦', leaderEmoji: '🤖',
+      team: [{ species: 'gem', lv: 42 }, { species: 'crystal', lv: 43 }, { species: 'diamond', lv: 44 }, { species: 'machine', lv: 44 }],
+    },
+    {
+      id: 'gym_valley', name: '幽谷道館', icon: '🌫️', leader: '幽谷智者 賽奇', leaderEmoji: '🧙‍♀️',
+      team: [{ species: 'ant', lv: 45 }, { species: 'spider', lv: 47 }, { species: 'scorpion', lv: 48 }],
+    },
+    {
+      id: 'gym_dragonlair', name: '龍巢道館', icon: '🐲', leader: '燄龍武士 炎', leaderEmoji: '🥷',
+      team: [{ species: 'rocket', lv: 49 }, { species: 'satellite', lv: 51 }, { species: 'alien', lv: 52 }, { species: 'tiger', lv: 52 }],
+    },
+    {
+      id: 'gym_sky', name: '天空道館', icon: '🕊️', leader: '天空騎士 溫蒂', leaderEmoji: '🦸‍♀️',
+      team: [{ species: 'duck', lv: 53 }, { species: 'swan', lv: 55 }, { species: 'owl', lv: 56 }, { species: 'wolf', lv: 56 }],
+    },
+    {
+      id: 'gym_legend', name: '傳說殿堂', icon: '🌟', leader: '傳說訓練大師 凱旋', leaderEmoji: '👑',
+      team: [{ species: 'rhino', lv: 58 }, { species: 'rainbow', lv: 59 }, { species: 'treasure', lv: 60 }, { species: 'galaxy', lv: 60 }],
     },
   ];
 
@@ -90,6 +133,7 @@ const PetsGame = (() => {
       startGym: (i) => startGymBattle(i),
       teamSet: (ids) => { setTeam(ids); },
       screen: () => currentScreen,
+      gymsCount: () => GYMS.length,
     };
   }
 
@@ -122,7 +166,15 @@ const PetsGame = (() => {
   }
 
   function tierForRarity(rarity) { return rarity >= 3 ? 'hard' : rarity === 2 ? 'medium' : 'easy'; }
-  function tierForGym(gymIdx) { return gymIdx >= 4 ? 'hard' : gymIdx >= 2 ? 'medium' : 'easy'; }
+  // gymIdx is 1-based. Gyms 1-5 keep their original easy/medium/hard split;
+  // the expansion pack adds 6-10 (medium) and 11-15 (hard).
+  function tierForGym(gymIdx) {
+    if (gymIdx <= 1) return 'easy';
+    if (gymIdx <= 3) return 'medium';
+    if (gymIdx <= 5) return 'hard';
+    if (gymIdx <= 10) return 'medium';
+    return 'hard';
+  }
 
   function typeMult(atkType, defType) {
     if (BEATS[atkType] === defType) return 1.5;
