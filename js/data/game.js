@@ -41,6 +41,8 @@ const ACHIEVEMENTS = [
   { id: 'pets_dex', name: '圖鑑收藏家', desc: '在單字寵物島捕獲 45 種寵物', icon: '📔', pts: 20, condition: s => (s.petCatches || 0) >= 45 },
   { id: 'typing_first', name: '鍵盤新兵', desc: '在打字防衛戰打倒 10 個單字怪', icon: '⌨️', pts: 10, condition: s => (s.typingWords || 0) >= 10 },
   { id: 'typing_master', name: '鍵盤指揮官', desc: '在打字防衛戰累積打倒 200 個單字怪', icon: '🏯', pts: 20, condition: s => (s.typingWords || 0) >= 200 },
+  { id: 'tutor_first', name: '指法學徒', desc: '在打字訓練營完成第一課', icon: '🖐️', pts: 10, condition: s => (s.tutorLessons || 0) >= 1 },
+  { id: 'tutor_grad', name: '盲打畢業生', desc: '完成打字訓練營全部 12 課', icon: '🎓', pts: 20, condition: s => (s.tutorLessons || 0) >= 12 },
   { id: 'detective_first', name: '見習偵探', desc: '在英語偵探社偵破第一件案件', icon: '🕵️', pts: 10, condition: s => (s.detectiveCases || 0) >= 1 },
   { id: 'detective_master', name: '名偵探', desc: '在英語偵探社偵破 8 件案件', icon: '🎩', pts: 20, condition: s => (s.detectiveCases || 0) >= 8 },
   { id: 'fishing_first', name: '初次上鉤', desc: '在悠閒釣魚塘釣到第一條魚', icon: '🎣', pts: 10, condition: s => (s.fishCatches || 0) >= 1 },

@@ -12,7 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
   [
     MinecraftGame, RobloxGame, YoutubeGame, SpellingGame, ListeningGame,
     EmpireGame, CandyGame, SlingGame, BuilderGame, SpeakGame, TowerGame,
-    RpgGame, SkyGame, PetsGame, TypingGame, DetectiveGame, FishingGame,
+    RpgGame, SkyGame, PetsGame, TypingGame, TutorGame, DetectiveGame, FishingGame,
     DailyQuests, CloudSave, HubView,
   ].forEach(mod => {
     try {

@@ -217,6 +217,7 @@ const GameEngine = (() => {
       petCatches: 0,
       petGyms: 0,
       typingWords: 0,
+      tutorLessons: 0,
       detectiveCases: 0,
       fishCatches: 0,
       builderSentences: 0,
@@ -643,6 +644,12 @@ const GameEngine = (() => {
     save();
     checkAchievements();
     checkDailyQuests();
+  }
+
+  function recordTutorLesson() {
+    state.tutorLessons = (state.tutorLessons || 0) + 1;
+    save();
+    checkAchievements();
   }
 
   function recordDetectiveCase() {
@@ -1372,7 +1379,7 @@ const GameEngine = (() => {
     recordWord, recordGrammar, recordVideo,
     recordSpelling, recordListening,
     recordEmpire, recordEmpireAge, recordCandy, recordSling,
-    recordPetCatch, recordPetGym, recordTypingWord, recordDetectiveCase, recordFishCatch,
+    recordPetCatch, recordPetGym, recordTypingWord, recordTutorLesson, recordDetectiveCase, recordFishCatch,
     recordBuilder, recordBuilderLandmark, recordSpeak,
     recordTowerWord, recordTowerBoss,
     recordRpgTalk, recordRpgChapter,

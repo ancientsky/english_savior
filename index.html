@@ -98,6 +98,7 @@
   <link rel="stylesheet" href="css/listening.css?v=36">
   <link rel="stylesheet" href="css/pets.css?v=36">
   <link rel="stylesheet" href="css/typing.css?v=36">
+  <link rel="stylesheet" href="css/tutor.css?v=36">
   <link rel="stylesheet" href="css/detective.css?v=36">
   <link rel="stylesheet" href="css/fishing.css?v=36">
   <link rel="stylesheet" href="css/empire.css?v=36">
@@ -188,6 +189,9 @@
     </button>
     <button class="nav-tab" data-zone="typing">
       <span class="nav-icon">⌨️</span><span class="nav-label">打字防衛戰</span>
+    </button>
+    <button class="nav-tab" data-zone="tutor">
+      <span class="nav-icon">🖐️</span><span class="nav-label">打字訓練營</span>
     </button>
     <button class="nav-tab" data-zone="detective">
       <span class="nav-icon">🕵️</span><span class="nav-label">英語偵探社</span>
@@ -334,6 +338,13 @@
               <p class="hb-card-desc">單字怪來襲，打出牠們頂上的單字！</p>
               <span class="hb-skill-tag">打字</span>
               <span class="hb-badge" data-badge="typing"></span>
+            </div>
+            <div class="hb-card" data-zone="tutor" data-region="green">
+              <div class="hb-medallion"><span>🖐️</span></div>
+              <h3 class="hb-card-name">打字訓練營</h3>
+              <p class="hb-card-desc">彩色指法鍵盤，學會雙手正確打字！</p>
+              <span class="hb-skill-tag">打字</span>
+              <span class="hb-badge" data-badge="tutor"></span>
             </div>
           </div>
         </section>
@@ -1116,6 +1127,16 @@
     </div>
   </main>
 
+  <main id="zone-tutor" class="zone">
+    <div class="tu-container">
+      <div class="tu-header">
+        <h2>🖐️ 打字訓練營</h2>
+        <button class="zone-fs-btn" title="遊戲畫面最大化">⛶</button>
+      </div>
+      <div id="tu-root"><!-- built by js/tutor.js --></div>
+    </div>
+  </main>
+
   <main id="zone-detective" class="zone">
     <div class="dt-container">
       <div class="dt-header">
@@ -1485,6 +1506,7 @@
   <script src="js/sky.js?v=36"></script>
   <script src="js/pets.js?v=36"></script>
   <script src="js/typing.js?v=36"></script>
+  <script src="js/tutor.js?v=36"></script>
   <script src="js/detective.js?v=36"></script>
   <script src="js/fishing.js?v=36"></script>
   <script src="js/cloud.js?v=36"></script>

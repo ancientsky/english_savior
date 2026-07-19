@@ -114,6 +114,9 @@ const HubView = (() => {
       if (bestWPM > 0) typingText = typingText ? `${typingText}　WPM ${bestWPM}` : `WPM ${bestWPM}`;
       setBadge('typing', typingText);
 
+      const tutorLessons = Number(save.tutorLessons) || 0;
+      setBadge('tutor', tutorLessons > 0 ? `🖐️ ${Math.min(tutorLessons, 12)}/12 課` : '');
+
       const videos = Number(save.videosCompleted) || 0;
       setBadge('youtube', videos > 0 ? `📺 ${videos}` : '');
     } catch { /* leave defaults (hidden) */ }

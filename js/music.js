@@ -382,6 +382,7 @@ const MusicManager = (() => {
     spelling: ['battle', 'race', 'battle2'],
     pets: ['adventure', 'carnival', 'playful3'],
     typing: ['battle2', 'battle3', 'race'],
+    tutor: ['story', 'playful', 'story2'],
     detective: ['mystic', 'story2', 'dream'],
     fishing: ['lake', 'lullaby', 'dream'],
   };
