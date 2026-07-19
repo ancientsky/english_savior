@@ -46,7 +46,7 @@ js/
   speak.js              — Spell academy speaking game (Web Speech Recognition, honor-mode fallback)
   tower.js              — Tower of Saviors-style word boss battle (drag letter orbs to spell words; 12 bosses scale endlessly by floor; 12 elemental realm themes, jewel-tone high-contrast orbs + SVG drag-trail, charged orbs/crit-combo, particle FX)
   rpg.js                — Undertale-style 2D RPG engine for conversation practice (interprets RPG_CHAPTERS data; puzzle tiles K key/D locked door/S switch/G gate/P,Q portal pair/H cracked wall/! chest, chapter-select world grouping every 9 chapters)
-  pets.js               — Word Pets Island: quiz-catch 30 word pets (10 evolution chains — evolving teaches a new word), type-effectiveness turn battles, 5 gyms (PET_SPECIES in data/pets.js)
+  pets.js               — Word Pets Island: quiz-catch 90 word pets (30 evolution chains — evolving teaches a new word), type-effectiveness turn battles, 15 gyms (PET_SPECIES in data/pets.js)
   typing.js             — Typing Defense: monsters carry words across 3 lanes, type the word to laser them (first-letter target lock, prefix highlight, boss waves, WPM stats, mobile mini-QWERTY)
   detective.js          — English Detective Agency: 8 escape-room mystery cases × 4 puzzle types (read/liar/code-lock/witness), clue board, culprit accusation, star rating (DETECTIVE_CASES in data/detective.js)
   fishing.js            — Cozy Fishing Pond: cast-timing + reel minigame + TTS listening quiz (rare fish = spelling), 30 fish across 4 unlockable ponds, animated aquarium (FISH_SPECIES in data/fishing.js)
@@ -69,10 +69,10 @@ js/
     rpg3.js             — RPG expansion pack 3 (chapters 19-27 第三世界·探索樂園)
     rpg4.js             — RPG expansion pack 4 (chapters 28-36 第四世界·奇幻次元 incl. world_finale) → 36 chapters total, 360 dialogue questions
     sky.js              — Sky Citadel world data (SKY_CONFIG, SKY_ISLANDS ×41 incl. 12 galaxy + 8 secret + 5 underground isles, SKY_BRIDGES, SKY_PADS, SKY_PORTALS ×12, SKY_SWITCHES ×4, SKY_QUESTS ×84 incl. 18 hidden sqh_ + 8 underground squ_, SKY_MOBS ×12, SKY_SKIN_TINTS)
-    pets.js             — Word-pet species (PET_SPECIES ×30: word/type/rarity/evolution chains)
+    pets.js             — Word-pet species (PET_SPECIES ×90: word/type/rarity/evolution chains, 18 per type)
     detective.js        — Detective cases (DETECTIVE_CASES ×8, 4 rooms each)
     fishing.js          — Fish species (FISH_SPECIES ×30 across 4 ponds)
-    game.js             — Achievements (58, each with pts; `hidden` ones show ??? until unlocked), daily quests (16), inventory items (8, usable as charms), shop items (consumables/skins/titles/themes), ACH_POINT_REWARDS, LEVEL_MILESTONES, CHARM_PERKS, SELL_PRICES
+    game.js             — Achievements (60, each with pts; `hidden` ones show ??? until unlocked), daily quests (16), inventory items (8, usable as charms), shop items (consumables/skins/titles/themes), ACH_POINT_REWARDS, LEVEL_MILESTONES, CHARM_PERKS, SELL_PRICES
 reference/
   taiwan_elementary_1000_minecraft_flavor.csv  — Source word list reference
 ```
@@ -118,7 +118,7 @@ Each game module exports `{ init }`. `app.js` calls all `.init()` methods on `DO
 
 ### Key Systems
 - **Gamification**: XP (dynamic scaling: 80 + level × 20 per level), gems (currency), streaks, achievements (each grants 15 gems + pts), daily quests
-- **Achievement points**: derived from unlocked achievements (10/20/40 pts tiers, 1,150 total); ACH_POINT_REWARDS thresholds grant exclusive titles/skins/themes (state.pointRewardsClaimed)
+- **Achievement points**: derived from unlocked achievements (10/20/40 pts tiers, 1,190 total); ACH_POINT_REWARDS thresholds grant exclusive titles/skins/themes (state.pointRewardsClaimed)
 - **Level milestones**: LEVEL_MILESTONES every 5 levels to 50 grant gems/items/exclusive unlocks (state.milestonesClaimed; granted in addXP via grantLevelMilestones)
 - **Shop**: Consumables (buffs, some with `uses`/`minLevel`), skins (13), titles (15), themes (6) — `unlock`-flagged items are never purchasable (granted by milestones/points/collection)
 - **Themes**: body[data-theme] overrides :root CSS vars (style.css); applyTheme() on load/equip; owned in state.owned.themes
@@ -169,7 +169,7 @@ python3 -m http.server 8000
 ```
 
 ### Cache busting
-All CSS/JS references in index.html carry a `?v=N` query string. GitHub Pages caches assets for 10 minutes, so a freshly deployed index.html can otherwise pair with stale cached JS/CSS (symptoms: a new game's zone shows but its dynamic UI is empty). **Bump the version number on every release that changes JS or CSS** (single `sed -i 's/?v=35/?v=36/g' index.html`-style edit).
+All CSS/JS references in index.html carry a `?v=N` query string. GitHub Pages caches assets for 10 minutes, so a freshly deployed index.html can otherwise pair with stale cached JS/CSS (symptoms: a new game's zone shows but its dynamic UI is empty). **Bump the version number on every release that changes JS or CSS** (single `sed -i 's/?v=36/?v=37/g' index.html`-style edit).
 
 ### Testing
 There is no automated test suite. Manual testing in a browser is the current workflow. Verify changes by opening `index.html` and exercising the affected game zone.
