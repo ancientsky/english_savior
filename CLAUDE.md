@@ -15,6 +15,7 @@ Pure frontend (HTML/CSS/JS), no build tools, bundlers, or backend required. Open
 index.html              — Single-page app shell (all zones, modals, HUD)
 css/
   style.css             — Global styles, HUD, modals, navigation
+  hub.css               — Adventure-guild hub landing page (hb- prefix: starfield/mist/compass, 5 region sections, medallion cards, progress badges)
   minecraft.css         — Minecraft vocabulary theme
   roblox.css            — Roblox grammar theme
   youtube.css           — YouTube video theme
@@ -30,6 +31,7 @@ css/
   sky.css               — Sky Citadel open-world 3D theme (prefix aw-)
 js/
   app.js                — Navigation and initialization (DOMContentLoaded entry point)
+  hub.js                — HubView: fills hub passport chips + per-game progress badges from localStorage (read-only)
   engine.js             — Core game engine (XP, levels, gems, inventory, achievements, shop, buff system, daily quest rewards, sound effects, localStorage save)
   music.js              — Background music (MusicManager: 24 synthesized Web Audio tracks, per-zone rotation playlists, crossfades, 🎵 toggle persisted as music_enabled)
   minecraft.js          — Minecraft-themed vocabulary crafting game
@@ -167,7 +169,7 @@ python3 -m http.server 8000
 ```
 
 ### Cache busting
-All CSS/JS references in index.html carry a `?v=N` query string. GitHub Pages caches assets for 10 minutes, so a freshly deployed index.html can otherwise pair with stale cached JS/CSS (symptoms: a new game's zone shows but its dynamic UI is empty). **Bump the version number on every release that changes JS or CSS** (single `sed -i 's/?v=34/?v=35/g' index.html`-style edit).
+All CSS/JS references in index.html carry a `?v=N` query string. GitHub Pages caches assets for 10 minutes, so a freshly deployed index.html can otherwise pair with stale cached JS/CSS (symptoms: a new game's zone shows but its dynamic UI is empty). **Bump the version number on every release that changes JS or CSS** (single `sed -i 's/?v=35/?v=36/g' index.html`-style edit).
 
 ### Testing
 There is no automated test suite. Manual testing in a browser is the current workflow. Verify changes by opening `index.html` and exercising the affected game zone.
