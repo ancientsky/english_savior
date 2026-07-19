@@ -1,0 +1,384 @@
+/* ===== 打字訓練營 (Touch-Typing Camp) theme (tu- prefix) =====
+   Bright, cheerful summer-camp classroom look: warm cream panels, wood
+   borders, a chalkboard-green accent, and 8 pastel finger-zone colors on
+   a full on-screen keyboard + a pair of glowing "hands".
+*/
+
+.tu-container {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.tu-header h2 {
+  color: #ffe9b3;
+  text-shadow: 2px 2px 0 #5a3a1a;
+}
+
+.tu-select-screen,
+.tu-lesson-screen,
+.tu-end-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* ===== Shared "camp panel" look ===== */
+.tu-intro-card,
+.tu-lesson-header,
+.tu-target-zone,
+.tu-keyboard,
+.tu-hands,
+.tu-end-stats,
+.tu-banner-typing {
+  width: 100%;
+  box-sizing: border-box;
+  background: linear-gradient(180deg, #fff8ea, #fdeecb);
+  border: 3px solid #c98a3f;
+  border-radius: 14px;
+  color: #4a3418;
+}
+
+.tu-intro-card {
+  padding: 14px 18px;
+  text-align: center;
+}
+.tu-intro-card h3 {
+  margin: 0 0 6px;
+  color: #2f6d4f;
+  font-family: var(--pixel-font, inherit);
+  font-size: 0.95rem;
+}
+.tu-intro-card p {
+  line-height: 1.7;
+  font-size: 0.92rem;
+}
+.tu-intro-card b { color: #b5501f; }
+
+/* ===== Lesson select grid ===== */
+.tu-lesson-grid {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.tu-lesson-card {
+  position: relative;
+  background: linear-gradient(180deg, #fff8ea, #fdeecb);
+  border: 3px solid #c98a3f;
+  border-radius: 12px;
+  padding: 10px 8px 12px;
+  text-align: center;
+  color: #4a3418;
+  cursor: pointer;
+  transition: transform 0.12s, box-shadow 0.12s;
+  overflow: hidden;
+}
+.tu-lesson-card.tu-unlocked:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 0 #a86a2a;
+}
+.tu-lesson-card.tu-locked {
+  cursor: not-allowed;
+  opacity: 0.62;
+  filter: grayscale(0.5);
+}
+.tu-lesson-card.tu-done {
+  border-color: var(--gold, #f5c518);
+  box-shadow: 0 0 0 2px rgba(245, 197, 24, 0.35) inset;
+}
+
+.tu-card-num {
+  font-size: 0.7rem;
+  font-weight: bold;
+  color: #b5501f;
+  letter-spacing: 0.5px;
+}
+.tu-card-name {
+  font-size: 0.92rem;
+  font-weight: bold;
+  margin: 4px 0 6px;
+  min-height: 2.4em;
+  line-height: 1.2;
+}
+.tu-card-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  justify-content: center;
+  margin-bottom: 6px;
+  min-height: 22px;
+}
+.tu-key-badge {
+  background: var(--fc, #eee);
+  border: 1px solid rgba(0,0,0,0.25);
+  border-radius: 5px;
+  padding: 1px 6px;
+  font-size: 0.72rem;
+  font-weight: bold;
+  color: #3a2a12;
+}
+.tu-badge-words, .tu-badge-mix { padding: 1px 8px; }
+.tu-card-stars { font-size: 0.85rem; letter-spacing: 1px; }
+.tu-lock-icon {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  font-size: 1.1rem;
+}
+
+.tu-banner-typing {
+  padding: 10px 14px;
+  text-align: center;
+  font-size: 0.85rem;
+  font-weight: bold;
+  color: #2f6d4f;
+  background: linear-gradient(180deg, #eafff0, #d7f7e0);
+  border-color: #4ecca3;
+}
+
+/* ===== Lesson screen ===== */
+.tu-lesson-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  flex-wrap: wrap;
+}
+.tu-lesson-title {
+  font-weight: bold;
+  font-size: 0.95rem;
+  flex: 1 1 auto;
+  text-align: center;
+  color: #b5501f;
+}
+.tu-progress-wrap {
+  flex-basis: 100%;
+  height: 8px;
+  background: rgba(0,0,0,0.12);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.tu-progress-bar {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #4ecca3, #2f6d4f);
+  transition: width 0.15s ease-out;
+}
+
+.tu-btn {
+  font-family: inherit;
+  font-weight: bold;
+  padding: 7px 14px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: transform 0.1s;
+}
+.tu-btn:active { transform: translateY(1px); }
+.tu-btn-quit {
+  background: #fff;
+  border: 2px solid #c98a3f;
+  color: #b5501f;
+}
+.tu-btn-primary {
+  background: linear-gradient(135deg, #4ecca3, #2f6d4f);
+  color: #fff;
+  box-shadow: 0 3px 0 #1f4a35;
+}
+.tu-btn-secondary {
+  background: linear-gradient(135deg, var(--accent, #e94560), #ff7a90);
+  color: #fff;
+  box-shadow: 0 3px 0 #a12e40;
+}
+
+.tu-target-zone {
+  padding: 22px 12px;
+  text-align: center;
+  min-height: 100px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.tu-target-display {
+  font-family: var(--pixel-font, inherit);
+  font-size: clamp(2.4rem, 12vw, 4rem);
+  font-weight: bold;
+  color: #2f6d4f;
+  letter-spacing: 4px;
+}
+.tu-target-display .tu-done { color: #b7c6bd; }
+.tu-word-hint { font-size: 1.6rem; margin-right: 6px; vertical-align: middle; }
+.tu-target-zh { font-size: 0.85rem; color: #8a6a3a; min-height: 1.2em; }
+
+.tu-target-display.tu-pop { animation: tu-pop 0.28s ease-out; }
+@keyframes tu-pop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.25); }
+  100% { transform: scale(1); }
+}
+.tu-target-display.tu-shake { animation: tu-shake 0.32s; color: #d13a3a; }
+@keyframes tu-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-8px); }
+  40% { transform: translateX(7px); }
+  60% { transform: translateX(-6px); }
+  80% { transform: translateX(5px); }
+}
+
+/* ===== On-screen colored keyboard ===== */
+.tu-keyboard {
+  padding: 14px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.tu-key-row { display: flex; gap: 4px; justify-content: center; }
+.tu-key-row-1 { margin-left: 14px; }
+.tu-key-row-2 { margin-left: 30px; }
+
+.tu-key {
+  position: relative;
+  min-width: 30px;
+  min-height: 34px;
+  flex: 1 1 auto;
+  max-width: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--fc, #eee);
+  border: 2px solid rgba(0,0,0,0.2);
+  border-radius: 7px;
+  font-weight: bold;
+  font-size: clamp(0.7rem, 2.6vw, 0.95rem);
+  color: #3a2a12;
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+  transition: transform 0.08s, box-shadow 0.12s;
+}
+.tu-key:active { transform: translateY(2px); }
+.tu-key-target {
+  box-shadow: 0 0 0 3px #2f6d4f, 0 0 14px 3px rgba(78, 204, 163, 0.8);
+  transform: translateY(-2px) scale(1.08);
+  z-index: 2;
+}
+.tu-key-wrong {
+  background: #ff6b6b !important;
+  box-shadow: 0 0 0 3px #d13a3a;
+}
+.tu-bump {
+  position: absolute;
+  bottom: 4px;
+  width: 10px;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(0,0,0,0.45);
+}
+
+/* ===== Legend ===== */
+.tu-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+  font-size: 0.68rem;
+}
+.tu-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: var(--fc, #eee);
+  color: #3a2a12;
+  border: 1px solid rgba(0,0,0,0.2);
+}
+
+/* ===== Hands ===== */
+.tu-hands {
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+.tu-hand { display: flex; gap: 6px; padding: 6px 8px; border-radius: 10px; background: rgba(0,0,0,0.04); }
+.tu-hand-gap { font-size: 1.4rem; opacity: 0.7; }
+.tu-finger {
+  width: 26px;
+  height: 34px;
+  border-radius: 8px 8px 10px 10px;
+  background: var(--fc, #eee);
+  border: 2px solid rgba(0,0,0,0.15);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 4px;
+  transition: transform 0.12s, box-shadow 0.12s;
+}
+.tu-finger-dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(0,0,0,0.25); }
+.tu-finger-active {
+  transform: translateY(-6px) scale(1.12);
+  box-shadow: 0 0 10px 3px rgba(47, 109, 79, 0.7);
+  border-color: #2f6d4f;
+}
+
+.tu-hint {
+  font-weight: bold;
+  font-size: 0.9rem;
+  color: #2f6d4f;
+  text-align: center;
+  min-height: 1.4em;
+}
+.tu-hint.tu-hint-wrong { color: #d13a3a; animation: tu-hint-pulse 0.4s; }
+@keyframes tu-hint-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+}
+
+/* ===== End screen ===== */
+.tu-end-screen h3 {
+  font-family: var(--pixel-font, inherit);
+  font-size: 1.05rem;
+  color: #b5501f;
+  text-align: center;
+}
+.tu-end-stars { font-size: 1.8rem; letter-spacing: 4px; }
+.tu-end-stats {
+  padding: 14px 18px;
+  text-align: center;
+}
+.tu-end-stats p { margin: 4px 0; font-size: 0.9rem; }
+.tu-end-stats b { color: #2f6d4f; }
+.tu-end-stats .tu-reward { color: var(--gold, #b5501f); font-weight: bold; }
+.tu-end-buttons {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 480px) {
+  .tu-container { padding: 10px; }
+  .tu-key { min-width: 26px; min-height: 30px; max-width: 34px; }
+  .tu-key-row-1 { margin-left: 10px; }
+  .tu-key-row-2 { margin-left: 22px; }
+  .tu-finger { width: 20px; height: 28px; }
+  .tu-target-display { letter-spacing: 2px; }
+  .tu-lesson-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+}
+
+/* ===== Fullscreen (game-max) ===== */
+body.game-max .tu-container { max-width: min(94vw, 700px); }
