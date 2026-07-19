@@ -147,14 +147,16 @@ const HubView = (() => {
       const fishing = readJSON('english_savior_fishing');
       const n = fishing && fishing.caught && typeof fishing.caught === 'object'
         ? Object.keys(fishing.caught).length : 0;
-      setBadge('fishing', n > 0 ? `🐠 ${n}/30` : '');
+      const fishTotal = (typeof FISH_SPECIES !== 'undefined' && Array.isArray(FISH_SPECIES)) ? FISH_SPECIES.length : 30;
+      setBadge('fishing', n > 0 ? `🐠 ${n}/${fishTotal}` : '');
     } catch { setBadge('fishing', ''); }
 
     // ---- detective: english_savior_detective → done count ----
     try {
       const detective = readJSON('english_savior_detective');
       const n = detective && detective.done ? Object.keys(detective.done).length : 0;
-      setBadge('detective', n > 0 ? `🔍 ${n}/8 案` : '');
+      const caseTotal = (typeof DETECTIVE_CASES !== 'undefined' && Array.isArray(DETECTIVE_CASES)) ? DETECTIVE_CASES.length : 24;
+      setBadge('detective', n > 0 ? `🔍 ${n}/${caseTotal} 案` : '');
     } catch { setBadge('detective', ''); }
   }
 
