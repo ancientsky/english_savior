@@ -142,6 +142,41 @@
   border-color: #4ecca3;
 }
 
+/* ===== Basic / Advanced camp sections ===== */
+.tu-section-header {
+  width: 100%;
+  text-align: center;
+  font-family: var(--pixel-font, inherit);
+  font-size: 0.85rem;
+  color: #2f6d4f;
+  margin-top: 4px;
+}
+.tu-section-header-adv { color: var(--gold, #b5860f); }
+.tu-section-sub {
+  width: 100%;
+  text-align: center;
+  font-size: 0.72rem;
+  color: #8a6a3a;
+  margin-top: -8px;
+}
+.tu-lesson-card.tu-adv-card {
+  border-color: var(--gold, #f5c518);
+  background: linear-gradient(180deg, #fffbe8, #fdf0c8);
+}
+.tu-lesson-card.tu-adv-card.tu-locked { border-color: #c98a3f; }
+.tu-ribbon {
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  background: linear-gradient(135deg, #f5c518, #c98a3f);
+  color: #4a3418;
+  font-size: 0.85rem;
+  padding: 2px 8px 2px 6px;
+  border-radius: 0 0 10px 0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+  z-index: 1;
+}
+
 /* ===== Lesson screen ===== */
 .tu-lesson-header {
   display: flex;
@@ -286,6 +321,33 @@
   background: rgba(0,0,0,0.45);
 }
 
+/* ===== Extended keyboard (lessons 13+) ===== */
+.tu-keyboard-ext .tu-key {
+  min-width: 22px;
+  min-height: 30px;
+  max-width: 34px;
+  font-size: clamp(0.55rem, 2vw, 0.78rem);
+  padding: 0 1px;
+}
+.tu-keyboard-ext .tu-key-row { gap: 3px; }
+.tu-keyboard-ext .tu-key-special {
+  background: #dcdcdc;
+  color: #444;
+  font-size: 0.62rem;
+}
+.tu-keyboard-ext .tu-key-shift { background: var(--fc, #dcdcdc); color: #3a2a12; }
+.tu-keyboard-ext .tu-key-wide { flex: 1.6 1 auto; max-width: 56px; }
+.tu-keyboard-ext .tu-key-space {
+  flex: 4 1 auto;
+  max-width: none;
+  font-size: 0.62rem;
+  background: var(--fc, #f5deb3);
+}
+.tu-key-pressed {
+  box-shadow: inset 0 0 0 3px #2f6d4f, 0 0 10px 2px rgba(47, 109, 79, 0.6) !important;
+  transform: translateY(1px);
+}
+
 /* ===== Legend ===== */
 .tu-legend {
   display: flex;
@@ -333,6 +395,51 @@
   box-shadow: 0 0 10px 3px rgba(47, 109, 79, 0.7);
   border-color: #2f6d4f;
 }
+.tu-thumb-badge {
+  width: 44px;
+  border-radius: 10px 10px 14px 14px;
+}
+.tu-hand-gap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ===== Lesson 19: function-key flash cards + quiz ===== */
+.tu-funkey-card { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.tu-funkey-icon { font-size: 2.6rem; }
+.tu-funkey-label {
+  font-family: var(--pixel-font, inherit);
+  font-size: 1.05rem;
+  color: #2f6d4f;
+}
+.tu-quiz-q {
+  font-size: 0.9rem;
+  color: #4a3418;
+  margin-bottom: 8px;
+  max-width: 320px;
+  line-height: 1.5;
+}
+.tu-quiz-opts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  max-width: 320px;
+}
+.tu-quiz-opt {
+  font-family: inherit;
+  font-weight: bold;
+  padding: 8px 12px;
+  border: 2px solid #c98a3f;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: #4a3418;
+}
+.tu-quiz-opt:active { transform: translateY(1px); }
 
 .tu-hint {
   font-weight: bold;
@@ -378,6 +485,16 @@
   .tu-finger { width: 20px; height: 28px; }
   .tu-target-display { letter-spacing: 2px; }
   .tu-lesson-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+
+  /* Extended keyboard (lessons 13+) has up to 12 keys per row — shrink hard
+     and fall back to an internal scroller so the page itself never grows
+     wider than the viewport. */
+  .tu-keyboard-ext { overflow-x: auto; -webkit-overflow-scrolling: touch; padding: 10px 4px; }
+  .tu-keyboard-ext .tu-key-row { justify-content: flex-start; padding: 0 4px; gap: 2px; }
+  .tu-keyboard-ext .tu-key { min-width: 19px; min-height: 26px; max-width: 26px; font-size: 0.5rem; }
+  .tu-keyboard-ext .tu-key-wide { min-width: 30px; max-width: 40px; }
+  .tu-keyboard-ext .tu-key-space { min-width: 60px; }
+  .tu-thumb-badge { width: 34px; }
 }
 
 /* ===== Fullscreen (game-max) ===== */
