@@ -9,13 +9,13 @@
 
 ## 📖 專案簡介 | Project Overview
 
-**English Savior** 將英語學習融入孩子們最喜愛的遊戲世界中！15 款不同玩法的學習遊戲——從挖礦拼字、3D 城堡防禦、開放世界冒險到 Undertale 式對話 RPG——讓學習英語變得有趣且充滿動力。內容對齊台灣十二年國教課綱（2,000 字表與國中基礎文法句構）。
+**English Savior** 將英語學習融入孩子們最喜愛的遊戲世界中！19 款不同玩法的學習遊戲——從挖礦拼字、3D 城堡防禦、開放世界冒險到 Undertale 式對話 RPG——讓學習英語變得有趣且充滿動力。內容對齊台灣十二年國教課綱（2,000 字表與國中基礎文法句構）。
 
-**English Savior** transforms English learning into an engaging adventure! Fifteen game modes — mining, match-3, tower-defense, open-world 3D, conversation RPG and more — make English fun and motivating, aligned with Taiwan's national curriculum.
+**English Savior** transforms English learning into an engaging adventure! Nineteen game modes — mining, match-3, tower-defense, open-world 3D, conversation RPG, pet battles, typing defense and more — make English fun and motivating, aligned with Taiwan's national curriculum.
 
 ## ✨ 特色功能 | Features
 
-### 🎮 15 款學習遊戲 | Fifteen Game Modes
+### 🎮 19 款學習遊戲 | Nineteen Game Modes
 
 | 遊戲 | 玩法 | 學習重點 |
 |------|------|----------|
@@ -32,6 +32,10 @@
 | 🧿 單字魔王塔 | 神魔之塔式轉珠拼字打魔王，12 元素場景 | 單字拼寫 |
 | 🗺️ 英語冒險物語 | Undertale 式 2D RPG，36 章對話冒險＋解謎機關（鑰匙門/機關閘/傳送門/脆牆/寶箱） | 生活對話 |
 | 🏝️ 天空之城 | 開放世界 3D 冒險：41 座空島、84 個任務、4 大魔王、地心世界、流星雨拼字 | 綜合 |
+| 🐾 單字寵物島 | 答題捕捉 30 種單字寵物、進化學新單字、道館對戰 | 單字 |
+| ⌨️ 打字防衛戰 | 打出單字怪頂上的單字守護城堡（WPM 統計） | 打字/拼寫 |
+| 🕵️ 英語偵探社 | 8 件案件讀線索、找說謊者、解密碼、指認兇手 | 閱讀推理 |
+| 🎣 悠閒釣魚塘 | 拋竿收線＋聽音辨字，30 種魚收進水族箱 | 聽力 |
 | 📋 每日任務 | 每天 3 個任務保持動力 | 習慣養成 |
 | 🏠 基地 | 商店/背包/成就/雲端存檔 | — |
 
@@ -39,9 +43,9 @@
 
 - **XP 與等級**：動態升級曲線，每 5 級里程碑獎勵（至 50 級）
 - **寶石商店**：消耗道具、13 款造型、15 個稱號（天空之城中化為實際能力）、6 種介面主題
-- **成就系統**：50 個成就（含隱藏成就）共 1,030 點，點數門檻解鎖專屬獎勵
+- **成就系統**：58 個成就（含隱藏成就）共 1,150 點，點數門檻解鎖專屬獎勵
 - **幸運吊飾**：裝備收藏品獲得被動加成，集滿 8 種有收藏獎勵
-- **每日任務與連續天數**：12 種每日任務輪替
+- **每日任務與連續天數**：16 種每日任務輪替
 - **背景音樂**：24 首 Web Audio 即時合成循環曲，依遊戲分區輪播
 - **音效**：全部 Web Audio 合成，零音檔
 
@@ -118,7 +122,7 @@ english_savior/
 ## 📊 遊戲數據 | Game Data
 
 - 存檔：等級/XP/寶石/連續天數/已學單字/成就/道具/每日任務/各遊戲進度
-- 成就：50 個（10/20/40 點三檔，共 1,030 點；點數門檻贈專屬稱號/造型/主題）
+- 成就：58 個（10/20/40 點三檔，共 1,150 點；點數門檻贈專屬稱號/造型/主題）
 - 雲端備份：一鍵匯出/匯入 JSON；設定 GOOGLE_CLIENT_ID 後可用 Google Drive 同步
 
 ## 🤝 貢獻指南 | Contributing
