@@ -20,6 +20,13 @@ const TTSManager = (() => {
     // Cancel any ongoing speech
     stop();
 
+    // ALL-CAPS input ("AT", "HEN", "ICE CREAM") gets spelled out
+    // letter-by-letter by most speech engines — lowercase it so it's read
+    // as words. Mixed-case text (real sentences) passes through untouched.
+    if (lang.startsWith('en') && /^[A-Z][A-Z .'-]*$/.test(text.trim())) {
+      text = text.trim().toLowerCase();
+    }
+
     currentUtterance = new SpeechSynthesisUtterance(text);
     currentUtterance.lang = lang;
     currentUtterance.rate = rate;
