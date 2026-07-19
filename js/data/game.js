@@ -37,6 +37,8 @@ const ACHIEVEMENTS = [
   { id: 'rpg_conqueror', name: '英語大陸征服者', desc: '在英語冒險物語通過 36 個章節', icon: '👑', pts: 40, condition: s => (s.rpgChapters || 0) >= 36 },
   { id: 'pets_first', name: '初次捕獲', desc: '在單字寵物島捕獲第一隻寵物', icon: '🐾', pts: 10, condition: s => (s.petCatches || 0) >= 1 },
   { id: 'pets_champion', name: '寵物大師', desc: '在單字寵物島打贏 5 座道館', icon: '🏅', pts: 20, condition: s => (s.petGyms || 0) >= 5 },
+  { id: 'pets_master', name: '道館全制霸', desc: '在單字寵物島打贏全部 15 座道館', icon: '🏆', pts: 20, condition: s => (s.petGyms || 0) >= 15 },
+  { id: 'pets_dex', name: '圖鑑收藏家', desc: '在單字寵物島捕獲 45 種寵物', icon: '📔', pts: 20, condition: s => (s.petCatches || 0) >= 45 },
   { id: 'typing_first', name: '鍵盤新兵', desc: '在打字防衛戰打倒 10 個單字怪', icon: '⌨️', pts: 10, condition: s => (s.typingWords || 0) >= 10 },
   { id: 'typing_master', name: '鍵盤指揮官', desc: '在打字防衛戰累積打倒 200 個單字怪', icon: '🏯', pts: 20, condition: s => (s.typingWords || 0) >= 200 },
   { id: 'detective_first', name: '見習偵探', desc: '在英語偵探社偵破第一件案件', icon: '🕵️', pts: 10, condition: s => (s.detectiveCases || 0) >= 1 },
