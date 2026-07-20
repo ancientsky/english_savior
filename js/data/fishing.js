@@ -67,12 +67,12 @@ const FISH_SPECIES = [
   // ===== Pond 6: 極地冰洞 (Polar Ice Cave) — ice-themed, rarity 1-2 + legendary =====
   { id: 'penguin',    emoji: '🐧',  word: 'PENGUIN',    zh: '企鵝',   rarity: 1, pond: 6 },
   { id: 'walrus',     emoji: '🦭',  word: 'WALRUS',     zh: '海象',   rarity: 1, pond: 6 },
-  { id: 'polarbear',  emoji: '🐻‍❄️', word: 'POLARBEAR', zh: '北極熊', rarity: 1, pond: 6 },
+  { id: 'polarbear',  emoji: '🐻‍❄️', word: 'POLARBEAR', say: 'polar bear', zh: '北極熊', rarity: 1, pond: 6 },
   { id: 'icicle',     emoji: '🧊',  word: 'ICICLE',     zh: '冰柱',   rarity: 1, pond: 6 },
   { id: 'snowman',    emoji: '⛄',  word: 'SNOWMAN',    zh: '雪人',   rarity: 1, pond: 6 },
   { id: 'reindeer',   emoji: '🦌',  word: 'REINDEER',   zh: '馴鹿',   rarity: 2, pond: 6 },
   { id: 'husky',      emoji: '🐕',  word: 'HUSKY',      zh: '哈士奇', rarity: 2, pond: 6 },
-  { id: 'icedragon',  emoji: '🐲',  word: 'ICEDRAGON',  zh: '冰龍',   rarity: 4, pond: 6, legendary: true },
+  { id: 'icedragon',  emoji: '🐲',  word: 'ICEDRAGON',  say: 'ice dragon',  zh: '冰龍',   rarity: 4, pond: 6, legendary: true },
 
   // ===== Pond 7: 雲霧瀑布潭 (Misty Waterfall Pond) — mist/forest, rarity 1-2 + legendary =====
   { id: 'owl',          emoji: '🦉', word: 'OWL',          zh: '貓頭鷹', rarity: 1, pond: 7 },
@@ -82,7 +82,7 @@ const FISH_SPECIES = [
   { id: 'butterfly',    emoji: '🦋', word: 'BUTTERFLY',    zh: '蝴蝶',   rarity: 2, pond: 7 },
   { id: 'trout',        emoji: '🐟', word: 'TROUT',        zh: '鱒魚',   rarity: 2, pond: 7 },
   { id: 'deer',         emoji: '🦌', word: 'DEER',         zh: '鹿',     rarity: 2, pond: 7 },
-  { id: 'rainbowfish',  emoji: '🐠', word: 'RAINBOWFISH',  zh: '彩虹魚', rarity: 4, pond: 7, legendary: true },
+  { id: 'rainbowfish',  emoji: '🐠', word: 'RAINBOWFISH',  say: 'rainbow fish',  zh: '彩虹魚', rarity: 4, pond: 7, legendary: true },
 
   // ===== Pond 8: 深海海溝 (Abyssal Trench) — deep-sea, rarity 1-2 + legendary =====
   { id: 'anglerfish', emoji: '🏮', word: 'ANGLERFISH', zh: '鮟鱇魚', rarity: 2, pond: 8 },
@@ -102,5 +102,5 @@ const FISH_SPECIES = [
   { id: 'comet',      emoji: '🌠', word: 'COMET',      zh: '彗星',   rarity: 2, pond: 9 },
   { id: 'cloud',      emoji: '☁️', word: 'CLOUD',      zh: '雲朵',   rarity: 2, pond: 9 },
   { id: 'wizard',     emoji: '🧙', word: 'WIZARD',     zh: '巫師',   rarity: 2, pond: 9 },
-  { id: 'starwhale',  emoji: '🐳', word: 'STARWHALE',  zh: '星空鯨', rarity: 4, pond: 9, legendary: true },
+  { id: 'starwhale',  emoji: '🐳', word: 'STARWHALE',  say: 'star whale',  zh: '星空鯨', rarity: 4, pond: 9, legendary: true },
 ];
