@@ -20,11 +20,12 @@ const TTSManager = (() => {
     // Cancel any ongoing speech
     stop();
 
-    // ALL-CAPS input ("AT", "HEN", "ICE CREAM") gets spelled out
-    // letter-by-letter by most speech engines — lowercase it so it's read
-    // as words. Mixed-case text (real sentences) passes through untouched.
-    if (lang.startsWith('en') && /^[A-Z][A-Z .'-]*$/.test(text.trim())) {
-      text = text.trim().toLowerCase();
+    // ALL-CAPS words ("AT", "ICE CREAM", or "ICEDRAGON" inside a sentence
+    // like "Legendary catch! ICEDRAGON") get spelled out letter-by-letter
+    // by most speech engines — lowercase them so they're read as words.
+    // Mixed-case words (real sentence text) pass through untouched.
+    if (lang.startsWith('en')) {
+      text = text.replace(/\b[A-Z][A-Z'-]+\b/g, m => m.toLowerCase());
     }
 
     currentUtterance = new SpeechSynthesisUtterance(text);

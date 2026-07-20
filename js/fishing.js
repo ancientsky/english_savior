@@ -128,6 +128,9 @@ const FishingGame = (() => {
     }
     return a;
   }
+  // 自創複合字（ICEDRAGON 等）用 say 欄位唸出自然的兩個單字
+  function sayWord(fish) { return (fish && (fish.say || fish.word)) || ''; }
+
   function isLegendary(fish) { return !!fish && (fish.legendary || fish.rarity >= 4); }
   function ambienceFor(pondId) {
     const p = PONDS.find(x => x.id === pondId);
@@ -262,7 +265,7 @@ const FishingGame = (() => {
     els.aqClose.addEventListener('click', closeAquarium);
 
     els.quizReplayBtn.addEventListener('click', () => {
-      if (activeQuiz && activeQuiz.fish) TTSManager.speak(activeQuiz.fish.word, 'en-US', 0.85);
+      if (activeQuiz && activeQuiz.fish) TTSManager.speak(sayWord(activeQuiz.fish), 'en-US', 0.85);
     });
 
     // Cast: click anywhere on the cast screen to stop the timing bar
@@ -619,7 +622,7 @@ const FishingGame = (() => {
     if (supported) {
       els.quizWordFallback.style.display = 'none';
       els.quizReplayBtn.style.display = 'inline-flex';
-      TTSManager.speak(fish.word, 'en-US', 0.85);
+      TTSManager.speak(sayWord(fish), 'en-US', 0.85);
     } else {
       // No-TTS fallback (mirrors js/listening.js's audio-optional design):
       // show the word text so the game stays playable without speech.
@@ -803,10 +806,10 @@ const FishingGame = (() => {
       SoundManager.playAchievement();
       SoundManager.playQuestComplete();
       playLegendaryShine();
-      TTSManager.speak(`Wow! Legendary catch! ${fish.word}`, 'en-US', 0.9);
+      TTSManager.speak(`Wow! Legendary catch! ${sayWord(fish)}`, 'en-US', 0.9);
     } else {
       SoundManager.playQuestComplete();
-      TTSManager.speak(fish.word, 'en-US', 0.85);
+      TTSManager.speak(sayWord(fish), 'en-US', 0.85);
     }
 
     showScreen('result');
@@ -856,7 +859,7 @@ const FishingGame = (() => {
         <button type="button" class="fh-btn-secondary" id="fh-result-back">🏠 返回池塘</button>
       </div>`;
     bindResultButtons();
-    setTimeout(() => TTSManager.speak(fish.word, 'en-US', 0.8), 400);
+    setTimeout(() => TTSManager.speak(sayWord(fish), 'en-US', 0.8), 400);
   }
 
   function bindResultButtons() {
@@ -946,7 +949,7 @@ const FishingGame = (() => {
   }
 
   function showAqDetail(f) {
-    TTSManager.speak(f.word, 'en-US', 0.85);
+    TTSManager.speak(sayWord(f), 'en-US', 0.85);
     els.aqDetail.style.display = 'flex';
     els.aqDetail.innerHTML = `<span class="fh-dex-emoji">${f.emoji}</span><b>${f.word}</b> — ${f.zh}（已捕獲 ${save.caught[f.id] || 0} 次）${isLegendary(f) ? ' 🌟傳說級' : ''}`;
   }
