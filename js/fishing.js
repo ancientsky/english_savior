@@ -1,33 +1,62 @@
 /* ===== 悠閒釣魚塘 (Cozy Fishing Pond) =====
-   A listening + collection game across 4 ponds (30 species total):
-     1. 陽光池塘 拋竿: click/space to stop an oscillating timing bar —
-        stopping near the center biases the catch toward a rarer species.
-     2. 收線小遊戲: hold (pointer/space) to raise a marker on a vertical
-        gauge, keep it inside the moving target zone to fill a progress
-        bar over ~3s (draining while outside) until the fish surfaces.
-     3. 聽力題: TTSManager speaks the caught fish's word (🔊 replay).
-        Rarity 1-2 -> 4 zh-meaning multiple choice. Rarity 3 -> spell it
-        from a shuffled letter bank (word letters + 4 decoys).
+   A listening + collection game across 9 ponds (70 species total):
+     1. 拋竿: a power meter oscillates; click/space stops it — a rod-bend +
+        line-arc animation casts the bobber out with a splash + ripples.
+        Stopping near the center biases the catch toward a rarer species.
+     2. 等待上鉤: the bobber floats while silhouette fish drift beneath the
+        surface; one shadow gradually approaches the bobber as the bite
+        nears, then a bite flash fires.
+     3. 拉竿大戰 (tension fight): the fish tugs the line in pulses (stronger
+        & faster for rarer fish). Hold (pointer/space) to reel in and raise
+        tension, release to ease off. Keep the tension marker inside the
+        safe band to fill a progress bar; drifting too low (line goes slack)
+        lets the fish escape, spiking too high snaps the line.
+     4. 聽力題: TTSManager speaks the caught fish's word (🔊 replay).
+        Rarity 1-2 -> 4 zh-meaning multiple choice. Rarity 3-4 -> spell it
+        from a shuffled letter bank (word letters + 4 decoys). Legendary
+        (rarity 4) catches get a full-screen shine + fanfare.
         Correct -> catch (rewards + fish card). Wrong -> fish escapes.
-     4. 水族箱: full-screen overlay — caught fish swim per pond tab,
-        uncaught species show as a ??? dex strip below.
-   Save: localStorage `english_savior_fishing` = { caught, pond, pondsCompleted }.
+     5. 水族箱: full-screen overlay — a themed mini-tank + dex strip per
+        pond tab, with a per-pond collected counter and a legendary badge.
+        Caught fish swim in the tank; uncaught species show as ??? cards.
+   Save: localStorage `english_savior_fishing` = { caught, pond, pondsCompleted }
+   (shape unchanged from the 30-species/4-pond version — old saves load as-is).
 */
 
 const FishingGame = (() => {
   const SAVE_KEY = 'english_savior_fishing';
 
+  // ambience: which ambient-particle layer to render in the scene/tank
+  //   default = gentle bubbles, leaf = forest, coral = coral bay,
+  //   abyss = deep glints, ember = volcano, snow = ice cave,
+  //   mist = waterfall, bubble = trench, stars = dream lake
   const PONDS = [
-    { id: 1, name: '陽光池塘', icon: '☀️', unlockAt: 0 },
-    { id: 2, name: '森林小溪', icon: '🌲', unlockAt: 6 },
-    { id: 3, name: '珊瑚海灣', icon: '🪸', unlockAt: 14 },
-    { id: 4, name: '傳說深海', icon: '🌌', unlockAt: 22 },
+    { id: 1, name: '陽光池塘',   icon: '☀️', unlockAt: 0,  ambience: 'default' },
+    { id: 2, name: '森林小溪',   icon: '🌲', unlockAt: 6,  ambience: 'leaf' },
+    { id: 3, name: '珊瑚海灣',   icon: '🪸', unlockAt: 14, ambience: 'coral' },
+    { id: 4, name: '傳說深海',   icon: '🌌', unlockAt: 22, ambience: 'abyss' },
+    { id: 5, name: '火山溫泉湖', icon: '🌋', unlockAt: 30, ambience: 'ember' },
+    { id: 6, name: '極地冰洞',   icon: '🧊', unlockAt: 37, ambience: 'snow' },
+    { id: 7, name: '雲霧瀑布潭', icon: '🏞️', unlockAt: 44, ambience: 'mist' },
+    { id: 8, name: '深海海溝',   icon: '🕳️', unlockAt: 50, ambience: 'bubble' },
+    { id: 9, name: '星空夢境湖', icon: '🌌', unlockAt: 55, ambience: 'stars' },
   ];
 
   const RARITY_REWARD = {
     1: { xp: 10, gems: 1 },
     2: { xp: 14, gems: 2 },
     3: { xp: 20, gems: 3 },
+    4: { xp: 30, gems: 5 },
+  };
+
+  // Tension-fight tuning per rarity: wider safe band + gentler/slower
+  // pulses for common fish (winnable by a 7-year-old), narrow band + sharp
+  // frequent pulses for legendaries (a real fight).
+  const FIGHT_TUNING = {
+    1: { half: 26, pulseEvery: 2.6, pulseStrength: 14, holdRate: 46, drainRate: 34, fillRate: 40, drainOut: 26 },
+    2: { half: 21, pulseEvery: 2.1, pulseStrength: 18, holdRate: 50, drainRate: 38, fillRate: 36, drainOut: 28 },
+    3: { half: 17, pulseEvery: 1.7, pulseStrength: 24, holdRate: 56, drainRate: 42, fillRate: 33, drainOut: 30 },
+    4: { half: 13, pulseEvery: 1.3, pulseStrength: 30, holdRate: 62, drainRate: 46, fillRate: 30, drainOut: 34 },
   };
 
   let save = { caught: {}, pond: 1, pondsCompleted: [] };
@@ -38,7 +67,7 @@ const FishingGame = (() => {
 
   let forcedFishId = null;   // set by the test hook forceFish()
   let castState = null;      // { pos, dir, speed, lastTs, raf }
-  let reelState = null;      // { fish, markerY, vel, progress, holding, time, targetHalfWidth, targetCenter, lastTs, raf }
+  let reelState = null;      // { fish, tension, vel, progress, holding, time, tuning, nextPulse, lastTs, raf }
   let activeQuiz = null;     // { type: 'options'|'spell', fish, ... }
 
   function init() {
@@ -54,6 +83,7 @@ const FishingGame = (() => {
       cast: () => { skipToBite(); },
       forceFish: (id) => { forcedFishId = id; },
       reel: () => forceReelSuccess(),
+      reelSnap: () => forceReelSnap(),
       answer: (correct) => testAnswer(correct),
       pond: (n) => selectPond(n),
       screen: () => (aquariumOpen ? 'aquarium' : currentScreen),
@@ -98,18 +128,53 @@ const FishingGame = (() => {
     }
     return a;
   }
+  function isLegendary(fish) { return !!fish && (fish.legendary || fish.rarity >= 4); }
+  function ambienceFor(pondId) {
+    const p = PONDS.find(x => x.id === pondId);
+    return p ? p.ambience : 'default';
+  }
+  function ambienceParticleHtml(ambience, n) {
+    const glyphByAmbience = {
+      default: '💧', leaf: '🍃', coral: '🫧', abyss: '✨',
+      ember: '🔥', snow: '❄️', mist: '🌫️', bubble: '🫧', stars: '⭐',
+    };
+    const glyph = glyphByAmbience[ambience] || '💧';
+    let html = '';
+    for (let i = 0; i < n; i++) {
+      const left = (Math.random() * 96).toFixed(1);
+      const dur = (4 + Math.random() * 6).toFixed(2);
+      const delay = (-(Math.random() * 8)).toFixed(2);
+      const size = (10 + Math.random() * 10).toFixed(0);
+      html += `<span class="fh-particle" style="left:${left}%;animation-duration:${dur}s;animation-delay:${delay}s;font-size:${size}px;">${glyph}</span>`;
+    }
+    return html;
+  }
+  function fishShadowHtml(n) {
+    let html = '';
+    for (let i = 0; i < n; i++) {
+      const top = (10 + Math.random() * 70).toFixed(1);
+      const dur = (7 + Math.random() * 7).toFixed(2);
+      const delay = (-(Math.random() * 10)).toFixed(2);
+      const dir = Math.random() < 0.5 ? 'fh-shadow-ltr' : 'fh-shadow-rtl';
+      html += `<div class="fh-fish-shadow ${dir}" style="top:${top}%;animation-duration:${dur}s;animation-delay:${delay}s;">🐟</div>`;
+    }
+    return html;
+  }
 
   // ===== DOM scaffold =====
   function buildDom(root) {
     root.innerHTML = `
       <div class="fh-screen" id="fh-screen-pond">
         <div class="fh-topbar">
-          <div class="fh-dex-counter" id="fh-dex-counter">📖 圖鑑 0/30</div>
+          <div class="fh-dex-counter" id="fh-dex-counter">📖 圖鑑 0/70</div>
           <div class="fh-pond-tabs" id="fh-pond-tabs"></div>
         </div>
         <div class="fh-scene fh-pond-1" id="fh-scene">
-          <div class="fh-sky"></div>
+          <div class="fh-scene-sky"></div>
+          <div class="fh-scene-far"></div>
+          <div class="fh-scene-particles" id="fh-scene-particles"></div>
           <div class="fh-water">
+            <div class="fh-fish-shadows" id="fh-scene-shadows"></div>
             <div class="fh-wave fh-wave-1"></div>
             <div class="fh-wave fh-wave-2"></div>
           </div>
@@ -121,8 +186,8 @@ const FishingGame = (() => {
         </div>
       </div>
 
-      <div class="fh-screen" id="fh-screen-cast" style="display:none"></div>
-      <div class="fh-screen" id="fh-screen-reel" style="display:none"></div>
+      <div class="fh-screen fh-cast-screen" id="fh-screen-cast" style="display:none"></div>
+      <div class="fh-screen fh-reel-screen" id="fh-screen-reel" style="display:none"></div>
 
       <div class="fh-screen" id="fh-screen-quiz" style="display:none">
         <div class="fh-quiz-fish-emoji" id="fh-quiz-emoji">🐟</div>
@@ -133,24 +198,30 @@ const FishingGame = (() => {
         <div class="fh-quiz-feedback" id="fh-quiz-feedback"></div>
       </div>
 
-      <div class="fh-screen" id="fh-screen-result" style="display:none">
+      <div class="fh-screen" id="fh-screen-result">
         <div id="fh-result-body"></div>
       </div>
+
+      <div class="fh-legendary-shine" id="fh-legendary-shine"></div>
 
       <div class="fh-aquarium-overlay" id="fh-aquarium-overlay">
         <div class="fh-aq-panel">
           <div class="fh-aq-header">
             <div class="fh-aq-title">🐠 水族箱</div>
-            <div class="fh-aq-counter" id="fh-aq-counter">0/30</div>
+            <div class="fh-aq-counter" id="fh-aq-counter">0/70</div>
             <button type="button" class="fh-aq-close" id="fh-aq-close">✕</button>
           </div>
           <div class="fh-aq-tabs" id="fh-aq-tabs"></div>
+          <div class="fh-aq-pond-stats" id="fh-aq-pond-stats"></div>
           <div class="fh-aq-tank" id="fh-aq-tank"></div>
           <div class="fh-aq-detail" id="fh-aq-detail" style="display:none"></div>
           <div class="fh-aq-dex-strip" id="fh-aq-dex-strip"></div>
         </div>
       </div>
     `;
+    // Set initial screen(result) hidden — it starts empty and is only shown
+    // via showScreen(), but give it display:none up front like the others.
+    document.getElementById('fh-screen-result').style.display = 'none';
 
     els = {
       screens: {
@@ -163,6 +234,8 @@ const FishingGame = (() => {
       dexCounter: document.getElementById('fh-dex-counter'),
       pondTabs: document.getElementById('fh-pond-tabs'),
       sceneWrap: document.getElementById('fh-scene'),
+      sceneParticles: document.getElementById('fh-scene-particles'),
+      sceneShadows: document.getElementById('fh-scene-shadows'),
       btnCast: document.getElementById('fh-btn-cast'),
       btnAquarium: document.getElementById('fh-btn-aquarium'),
       castScreen: document.getElementById('fh-screen-cast'),
@@ -173,9 +246,11 @@ const FishingGame = (() => {
       quizBody: document.getElementById('fh-quiz-body'),
       quizFeedback: document.getElementById('fh-quiz-feedback'),
       resultBody: document.getElementById('fh-result-body'),
+      legendaryShine: document.getElementById('fh-legendary-shine'),
       aqOverlay: document.getElementById('fh-aquarium-overlay'),
       aqCounter: document.getElementById('fh-aq-counter'),
       aqTabs: document.getElementById('fh-aq-tabs'),
+      aqPondStats: document.getElementById('fh-aq-pond-stats'),
       aqTank: document.getElementById('fh-aq-tank'),
       aqDetail: document.getElementById('fh-aq-detail'),
       aqDexStrip: document.getElementById('fh-aq-dex-strip'),
@@ -210,6 +285,8 @@ const FishingGame = (() => {
       if (e.code !== 'Space' || !isZoneActive()) return;
       if (currentScreen === 'reel' && reelState) reelState.holding = false;
     });
+
+    renderSceneAmbience(save.pond);
   }
 
   function showScreen(name) {
@@ -218,9 +295,16 @@ const FishingGame = (() => {
   }
 
   // ===== Pond scene =====
+  function renderSceneAmbience(pondId) {
+    const ambience = ambienceFor(pondId);
+    els.sceneParticles.innerHTML = ambienceParticleHtml(ambience, 10);
+    els.sceneShadows.innerHTML = fishShadowHtml(4);
+  }
+
   function renderPondScreen() {
     els.dexCounter.textContent = `📖 圖鑑 ${distinctCaughtCount()}/${FISH_SPECIES.length}`;
     els.sceneWrap.className = 'fh-scene fh-pond-' + save.pond;
+    renderSceneAmbience(save.pond);
     els.pondTabs.innerHTML = '';
     PONDS.forEach(p => {
       const unlocked = isPondUnlocked(p.id);
@@ -246,7 +330,7 @@ const FishingGame = (() => {
     renderPondScreen();
   }
 
-  // ===== Cast (timing bar) =====
+  // ===== Cast (timing bar + rod/line animation) =====
   function beginCast() {
     showScreen('cast');
     renderCastTimingDom();
@@ -257,13 +341,17 @@ const FishingGame = (() => {
   function renderCastTimingDom() {
     els.castScreen.innerHTML = `
       <div class="fh-cast-title">🎣 抓準時機，讓浮標甩到中間！</div>
+      <div class="fh-rod-rig">
+        <div class="fh-rod" id="fh-rod">🎣</div>
+      </div>
       <div class="fh-cast-track" id="fh-cast-track">
         <div class="fh-cast-center-zone"></div>
         <div class="fh-cast-marker" id="fh-cast-marker">🎯</div>
       </div>
       <div class="fh-cast-hint">點擊畫面或按空白鍵停止！</div>
     `;
-    els.castMarker = document.getElementById('fh-cast-track').querySelector('#fh-cast-marker');
+    els.castMarker = document.getElementById('fh-cast-marker');
+    els.rod = document.getElementById('fh-rod');
   }
 
   function castLoop(ts) {
@@ -275,6 +363,7 @@ const FishingGame = (() => {
     if (castState.pos > 100) { castState.pos = 100; castState.dir = -1; }
     if (castState.pos < 0) { castState.pos = 0; castState.dir = 1; }
     if (els.castMarker) els.castMarker.style.left = castState.pos + '%';
+    if (els.rod) els.rod.style.transform = `rotate(${(castState.pos - 50) / 6}deg)`;
     castState.raf = requestAnimationFrame(castLoop);
   }
 
@@ -283,24 +372,72 @@ const FishingGame = (() => {
     if (castState.raf) cancelAnimationFrame(castState.raf);
     const score = 1 - Math.abs(castState.pos - 50) / 50; // 0..1, 1 = perfect center
     castState = null;
-    renderCastWaitingDom();
-    const waitMs = 1500 + Math.random() * 2500;
+    renderCastFlyDom();
     setTimeout(() => {
       if (currentScreen !== 'cast') return;
-      renderCastBiteDom();
+      renderCastWaitingDom();
+      const waitMs = 1500 + Math.random() * 2500;
+      animateApproachingShadow(waitMs);
       setTimeout(() => {
         if (currentScreen !== 'cast') return;
-        enterReel(pickFishForCast(score));
-      }, 550);
-    }, waitMs);
+        renderCastBiteDom();
+        setTimeout(() => {
+          if (currentScreen !== 'cast') return;
+          enterReel(pickFishForCast(score));
+        }, 550);
+      }, waitMs);
+    }, 480);
+  }
+
+  // Rod bends back, the line arcs the bobber out, it lands with a splash
+  // and expanding ripples.
+  function renderCastFlyDom() {
+    els.castScreen.innerHTML = `
+      <div class="fh-cast-title">🌊 拋出去！</div>
+      <div class="fh-cast-fly-wrap">
+        <div class="fh-cast-line"></div>
+        <div class="fh-cast-flying-bobber">🔴</div>
+      </div>
+    `;
+    setTimeout(() => {
+      if (currentScreen !== 'cast') return;
+      const wrap = document.querySelector('.fh-cast-fly-wrap');
+      if (wrap) wrap.insertAdjacentHTML('beforeend', `
+        <div class="fh-splash-fx">💦</div>
+        <div class="fh-ripple fh-ripple-1"></div>
+        <div class="fh-ripple fh-ripple-2"></div>
+      `);
+    }, 320);
   }
 
   function renderCastWaitingDom() {
     els.castScreen.innerHTML = `
       <div class="fh-cast-title">🌊 拋竿中...</div>
-      <div class="fh-bobber-wrap"><div class="fh-bobber">🔴</div></div>
+      <div class="fh-bobber-wrap">
+        <div class="fh-wait-shadows" id="fh-wait-shadows">${fishShadowHtml(3)}</div>
+        <div class="fh-approach-shadow" id="fh-approach-shadow">🐟</div>
+        <div class="fh-bobber">🔴</div>
+        <div class="fh-ripple fh-ripple-idle"></div>
+      </div>
       <div class="fh-cast-hint">耐心等待魚兒上鉤...</div>
     `;
+  }
+
+  // Animate a shadow drifting toward the bobber over the wait duration to
+  // build anticipation before the bite.
+  function animateApproachingShadow(waitMs) {
+    const shadow = document.getElementById('fh-approach-shadow');
+    if (!shadow) return;
+    shadow.style.left = '-20%';
+    shadow.style.opacity = '0.35';
+    // Force layout so the transition below actually animates from the start.
+    void shadow.offsetWidth;
+    shadow.style.transition = `left ${Math.max(300, waitMs - 300)}ms linear, opacity ${Math.max(300, waitMs - 300)}ms linear`;
+    requestAnimationFrame(() => {
+      if (currentScreen !== 'cast') return;
+      shadow.style.left = '48%';
+      shadow.style.opacity = '0.9';
+    });
   }
 
   function renderCastBiteDom() {
@@ -325,8 +462,8 @@ const FishingGame = (() => {
     const pool = FISH_SPECIES.filter(f => f.pond === save.pond);
     const source = pool.length ? pool : FISH_SPECIES;
     const weights = source.map(f => {
-      const base = f.rarity === 1 ? 70 : f.rarity === 2 ? 25 : 10;
-      const bonus = f.rarity === 1 ? (1 - score) * 40 : f.rarity === 3 ? score * 60 : score * 20;
+      const base = f.rarity === 1 ? 70 : f.rarity === 2 ? 25 : f.rarity === 3 ? 10 : 4;
+      const bonus = f.rarity === 1 ? (1 - score) * 40 : (f.rarity === 3 || f.rarity === 4) ? score * 60 : score * 20;
       return base + bonus;
     });
     const total = weights.reduce((a, b) => a + b, 0);
@@ -338,31 +475,42 @@ const FishingGame = (() => {
     return source[source.length - 1];
   }
 
-  // ===== Reel-in minigame =====
+  // ===== Reel-in tension fight =====
   function enterReel(fish) {
     GameEngine.setDeferLevelUp(true);
     showScreen('reel');
-    renderReelDom();
+    const tuning = FIGHT_TUNING[fish.rarity] || FIGHT_TUNING[1];
+    renderReelDom(tuning);
     reelState = {
-      fish, markerY: 15, vel: 0, progress: 0, holding: false,
-      time: 0, targetCenter: 50, targetHalfWidth: 14, lastTs: null, raf: null,
+      fish, tuning, tension: 50, progress: 0, holding: false,
+      time: 0, nextPulse: tuning.pulseEvery * (0.6 + Math.random() * 0.6),
+      lastTs: null, raf: null,
     };
     reelState.raf = requestAnimationFrame(reelLoop);
   }
 
-  function renderReelDom() {
+  function renderReelDom(tuning) {
     els.reelScreen.innerHTML = `
-      <div class="fh-reel-title">🎣 拉竿中！按住畫面或空白鍵，把魚拉近岸邊！</div>
+      <div class="fh-reel-title">🎣 拉竿大戰！按住畫面或空白鍵拉緊魚線，讓張力停在安全區！</div>
+      <div class="fh-rod-rig fh-rod-rig-reel">
+        <div class="fh-rod fh-rod-fight" id="fh-rod-fight">🎣</div>
+      </div>
       <div class="fh-reel-gauge" id="fh-reel-gauge">
+        <div class="fh-reel-zone-hi"></div>
         <div class="fh-reel-target" id="fh-reel-target"></div>
+        <div class="fh-reel-zone-lo"></div>
         <div class="fh-reel-marker" id="fh-reel-marker">🐟</div>
       </div>
       <div class="fh-reel-progress-wrap"><div class="fh-reel-progress-fill" id="fh-reel-progress-fill"></div></div>
-      <div class="fh-reel-hint">讓魚停在色框內集滿進度條！</div>
+      <div class="fh-reel-hint">魚兒用力拉扯魚線，讓標記停在黃色安全區！</div>
     `;
     els.reelTarget = document.getElementById('fh-reel-target');
     els.reelMarker = document.getElementById('fh-reel-marker');
     els.reelProgressFill = document.getElementById('fh-reel-progress-fill');
+    els.reelGauge = document.getElementById('fh-reel-gauge');
+    els.rodFight = document.getElementById('fh-rod-fight');
+    els.reelTarget.style.bottom = (50 - tuning.half) + '%';
+    els.reelTarget.style.height = (tuning.half * 2) + '%';
   }
 
   function reelLoop(ts) {
@@ -372,17 +520,33 @@ const FishingGame = (() => {
     reelState.lastTs = ts;
     reelState.time += dt;
 
-    reelState.targetCenter = 50 + Math.sin(reelState.time * 1.3) * 30; // oscillates 20..80
+    const t = reelState.tuning;
 
-    const holdAccel = 150, gravity = 115;
-    reelState.vel += (reelState.holding ? -holdAccel : gravity) * dt;
-    reelState.vel = Math.max(-95, Math.min(95, reelState.vel));
-    reelState.markerY += reelState.vel * dt;
-    if (reelState.markerY <= 0) { reelState.markerY = 0; reelState.vel = 0; }
-    if (reelState.markerY >= 100) { reelState.markerY = 100; reelState.vel = 0; }
+    // Baseline: holding tightens the line (tension rises), releasing eases
+    // it (tension falls back toward slack).
+    reelState.tension += (reelState.holding ? t.holdRate : -t.drainRate) * dt;
 
-    const inZone = Math.abs(reelState.markerY - reelState.targetCenter) <= reelState.targetHalfWidth;
-    reelState.progress += (inZone ? 34 : -20) * dt;
+    // Fish pulls a pulse periodically — a sudden yank that loosens the
+    // line hard, independent of whether the player is holding.
+    reelState.nextPulse -= dt;
+    if (reelState.nextPulse <= 0) {
+      reelState.tension -= t.pulseStrength;
+      reelState.nextPulse = t.pulseEvery * (0.7 + Math.random() * 0.6);
+      if (els.rodFight) {
+        els.rodFight.classList.remove('fh-rod-pulse');
+        void els.rodFight.offsetWidth;
+        els.rodFight.classList.add('fh-rod-pulse');
+      }
+      flashSplash();
+    }
+
+    reelState.tension = Math.max(0, Math.min(100, reelState.tension));
+
+    if (reelState.tension <= 0) { resolveReelFail('loose'); return; }
+    if (reelState.tension >= 100) { resolveReelFail('snap'); return; }
+
+    const inZone = Math.abs(reelState.tension - 50) <= t.half;
+    reelState.progress += (inZone ? t.fillRate : -t.drainOut) * dt;
     reelState.progress = Math.max(0, Math.min(100, reelState.progress));
 
     updateReelDom();
@@ -391,12 +555,23 @@ const FishingGame = (() => {
     reelState.raf = requestAnimationFrame(reelLoop);
   }
 
+  function flashSplash() {
+    if (!els.reelGauge) return;
+    const fx = document.createElement('div');
+    fx.className = 'fh-reel-splash-fx';
+    fx.textContent = '💦';
+    els.reelGauge.appendChild(fx);
+    setTimeout(() => fx.remove(), 500);
+  }
+
   function updateReelDom() {
-    if (!reelState || !els.reelTarget) return;
-    els.reelTarget.style.bottom = (reelState.targetCenter - reelState.targetHalfWidth) + '%';
-    els.reelTarget.style.height = (reelState.targetHalfWidth * 2) + '%';
-    els.reelMarker.style.bottom = reelState.markerY + '%';
+    if (!reelState || !els.reelMarker) return;
+    els.reelMarker.style.bottom = reelState.tension + '%';
     els.reelProgressFill.style.height = reelState.progress + '%';
+    if (els.reelGauge) {
+      els.reelGauge.classList.toggle('fh-danger-low', reelState.tension < 12);
+      els.reelGauge.classList.toggle('fh-danger-high', reelState.tension > 88);
+    }
   }
 
   function reelSuccess() {
@@ -407,6 +582,15 @@ const FishingGame = (() => {
     startQuiz(fish);
   }
 
+  function resolveReelFail(reason) {
+    if (!reelState) return;
+    if (reelState.raf) cancelAnimationFrame(reelState.raf);
+    const fish = reelState.fish;
+    reelState = null;
+    SoundManager.playWrong();
+    doEscape(fish, reason);
+  }
+
   // Test hook: instantly complete the reel-in regardless of gauge state.
   function forceReelSuccess() {
     if (!reelState) return false;
@@ -415,10 +599,19 @@ const FishingGame = (() => {
     return true;
   }
 
+  // Test hook: force a line-snap failure regardless of gauge state.
+  function forceReelSnap() {
+    if (!reelState) return false;
+    reelState.tension = 100;
+    resolveReelFail('snap');
+    return true;
+  }
+
   // ===== Listening quiz =====
   function startQuiz(fish) {
     showScreen('quiz');
     els.quizEmoji.textContent = fish.emoji;
+    els.quizEmoji.className = 'fh-quiz-fish-emoji' + (isLegendary(fish) ? ' fh-legendary-emoji' : fish.rarity >= 2 ? ' fh-rare-emoji' : '');
     els.quizFeedback.textContent = '';
     els.quizFeedback.className = 'fh-quiz-feedback';
 
@@ -574,7 +767,7 @@ const FishingGame = (() => {
   function handleQuizAnswer(isCorrect, fish) {
     activeQuiz = null;
     if (isCorrect) { SoundManager.playCorrect(); doCatch(fish); }
-    else { SoundManager.playWrong(); doEscape(fish); }
+    else { SoundManager.playWrong(); doEscape(fish, 'quiz'); }
   }
 
   function doCatch(fish) {
@@ -604,16 +797,28 @@ const FishingGame = (() => {
     GameEngine.flushPendingLevelUps();
 
     checkPondCompletion(fish.pond);
-    SoundManager.playQuestComplete();
-    TTSManager.speak(fish.word, 'en-US', 0.85);
+
+    const legendary = isLegendary(fish);
+    if (legendary) {
+      SoundManager.playAchievement();
+      SoundManager.playQuestComplete();
+      playLegendaryShine();
+      TTSManager.speak(`Wow! Legendary catch! ${fish.word}`, 'en-US', 0.9);
+    } else {
+      SoundManager.playQuestComplete();
+      TTSManager.speak(fish.word, 'en-US', 0.85);
+    }
 
     showScreen('result');
+    const rareClass = legendary ? 'fh-catch-card fh-legendary-card' : fish.rarity >= 2 ? 'fh-catch-card fh-rare-card' : 'fh-catch-card';
     els.resultBody.innerHTML = `
       <div class="fh-splash">💦</div>
-      <div class="fh-catch-card">
+      <div class="${rareClass}">
+        ${fish.rarity >= 2 ? '<div class="fh-sparkle-burst">✨✨✨</div>' : ''}
         <div class="fh-catch-emoji">${fish.emoji}</div>
         <div class="fh-catch-word">${fish.word}</div>
         <div class="fh-catch-zh">${fish.zh}</div>
+        ${legendary ? '<div class="fh-legendary-badge">🌟 傳說級魚種！</div>' : ''}
         <div class="fh-catch-rewards">${isNew ? '🆕 新魚種加入圖鑑！' : '再次釣起！'} +${xp} XP・+${gems} 💎</div>
         <div class="fh-catch-count">已收集 ${save.caught[fish.id]} 次</div>
       </div>
@@ -624,13 +829,28 @@ const FishingGame = (() => {
     bindResultButtons();
   }
 
-  function doEscape(fish) {
+  function playLegendaryShine() {
+    if (!els.legendaryShine) return;
+    els.legendaryShine.classList.remove('active');
+    void els.legendaryShine.offsetWidth;
+    els.legendaryShine.classList.add('active');
+    setTimeout(() => els.legendaryShine.classList.remove('active'), 1400);
+  }
+
+  const ESCAPE_MSG = {
+    quiz: (fish) => `💨 ${fish.emoji} ${fish.word}（${fish.zh}）溜走了……下次再試試看！`,
+    loose: (fish) => `🌊 魚線太鬆了，${fish.emoji} ${fish.word}（${fish.zh}）掙脫溜走了！`,
+    snap: (fish) => `💥 魚線繃太緊斷掉了！${fish.emoji} ${fish.word}（${fish.zh}）跑掉了！`,
+  };
+
+  function doEscape(fish, reason) {
     GameEngine.setDeferLevelUp(false);
     GameEngine.flushPendingLevelUps();
 
     showScreen('result');
+    const msg = (ESCAPE_MSG[reason] || ESCAPE_MSG.quiz)(fish);
     els.resultBody.innerHTML = `
-      <div class="fh-escape-msg">💨 ${fish.emoji} ${fish.word}（${fish.zh}）溜走了……下次再試試看！</div>
+      <div class="fh-escape-msg">${msg}</div>
       <div class="fh-result-btns">
         <button type="button" class="fh-btn-primary" id="fh-result-cast-again">🎣 再釣一次</button>
         <button type="button" class="fh-btn-secondary" id="fh-result-back">🏠 返回池塘</button>
@@ -685,11 +905,20 @@ const FishingGame = (() => {
     });
 
     const speciesInPond = FISH_SPECIES.filter(f => f.pond === aquariumPond);
+    const caughtInPond = speciesInPond.filter(f => save.caught[f.id]).length;
+    const legendaryFish = speciesInPond.find(f => isLegendary(f));
+    const legendaryCaught = legendaryFish && save.caught[legendaryFish.id];
 
-    els.aqTank.innerHTML = '';
+    els.aqPondStats.innerHTML = `
+      <span class="fh-aq-pond-count">🐟 本池收集 ${caughtInPond}/${speciesInPond.length}</span>
+      ${legendaryFish ? `<span class="fh-aq-legend-badge${legendaryCaught ? ' caught' : ''}">${legendaryCaught ? '🌟 傳說已收服' : '🔒 傳說未收服'}</span>` : ''}
+    `;
+
+    els.aqTank.className = 'fh-aq-tank fh-aq-tank-' + ambienceFor(aquariumPond);
+    els.aqTank.innerHTML = ambienceParticleHtml(ambienceFor(aquariumPond), 6);
     speciesInPond.filter(f => save.caught[f.id]).forEach(f => {
       const el = document.createElement('div');
-      el.className = 'fh-swim-fish ' + (Math.random() < 0.5 ? 'fh-swim-ltr' : 'fh-swim-rtl');
+      el.className = 'fh-swim-fish ' + (Math.random() < 0.5 ? 'fh-swim-ltr' : 'fh-swim-rtl') + (isLegendary(f) ? ' fh-swim-legendary' : '');
       el.textContent = f.emoji;
       el.style.top = (8 + Math.random() * 72) + '%';
       el.style.animationDuration = (6 + Math.random() * 8).toFixed(2) + 's';
@@ -703,12 +932,12 @@ const FishingGame = (() => {
       const count = save.caught[f.id];
       const cell = document.createElement('button');
       cell.type = 'button';
-      cell.className = 'fh-dex-cell' + (count ? '' : ' unknown');
+      cell.className = 'fh-dex-cell' + (count ? '' : ' unknown') + (isLegendary(f) ? ' fh-dex-legendary' : '');
       if (count) {
-        cell.innerHTML = `<span class="fh-dex-emoji">${f.emoji}</span><span class="fh-dex-word">${f.word}</span><span class="fh-dex-count">×${count}</span>`;
+        cell.innerHTML = `<span class="fh-dex-emoji">${f.emoji}</span><span class="fh-dex-word">${f.word}</span><span class="fh-dex-count">×${count}</span>${isLegendary(f) ? '<span class="fh-dex-legend-tag">🌟</span>' : ''}`;
         cell.addEventListener('click', () => showAqDetail(f));
       } else {
-        cell.innerHTML = `<span class="fh-dex-emoji">❓</span><span class="fh-dex-word">???</span>`;
+        cell.innerHTML = `<span class="fh-dex-emoji">${isLegendary(f) ? '🌟' : '❓'}</span><span class="fh-dex-word">???</span>`;
       }
       els.aqDexStrip.appendChild(cell);
     });
@@ -719,7 +948,7 @@ const FishingGame = (() => {
   function showAqDetail(f) {
     TTSManager.speak(f.word, 'en-US', 0.85);
     els.aqDetail.style.display = 'flex';
-    els.aqDetail.innerHTML = `<span class="fh-dex-emoji">${f.emoji}</span><b>${f.word}</b> — ${f.zh}（已捕獲 ${save.caught[f.id] || 0} 次）`;
+    els.aqDetail.innerHTML = `<span class="fh-dex-emoji">${f.emoji}</span><b>${f.word}</b> — ${f.zh}（已捕獲 ${save.caught[f.id] || 0} 次）${isLegendary(f) ? ' 🌟傳說級' : ''}`;
   }
 
   return { init };

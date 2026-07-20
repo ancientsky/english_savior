@@ -1,10 +1,15 @@
 /* ===== English Detective Agency Module (英語偵探社) =====
    Escape-room-style reading-comprehension mystery game. Cases are declared
    in js/data/detective.js (DETECTIVE_CASES) and interpreted here: a case
-   select screen (rpg.js chapter-select conventions), a scene intro, four
-   "rooms" — one of each puzzle type (read/liar/code/witness) — that build
-   fragments onto a cork-board 線索板 (clue board), and a final suspect
-   line-up. Adding a case only requires appending to DETECTIVE_CASES.
+   select screen (rpg.js chapter-select conventions), a scene intro, several
+   "rooms" — one of six puzzle types (read/liar/code/witness plus the
+   advanced timeline/alibi types) — that build fragments onto a cork-board
+   線索板 (clue board), and a final suspect line-up. Adding a basic case only
+   requires appending to DETECTIVE_CASES; the same array also holds the
+   optional "特別調查組" advanced cases (case.adv === true), which get their
+   own case-select section, a bumped case-clear reward, and — when
+   case.arcZh is set — a 怪盜主線 interstitial card shown after a correct
+   accusation and before the case-clear screen.
 */
 
 const DetectiveGame = (() => {
@@ -16,7 +21,7 @@ const DetectiveGame = (() => {
   let clues = [];                 // clueZh fragments collected this case
   let firstTryCount = 0;          // rooms solved without a wrong attempt
   let wrongAccuseCount = 0;       // wrong culprit guesses this case
-  let screen = 'select';          // 'select' | 'scene' | 'room' | 'accuse' | 'clear'
+  let screen = 'select';          // 'select' | 'scene' | 'room' | 'accuse' | 'arc' | 'clear'
   let roomRT = null;              // per-room runtime state (firstTry/hintUsed/bank/built)
   let els = {};
 
@@ -39,6 +44,11 @@ const DetectiveGame = (() => {
       answer: correctBool => testAnswer(correctBool),
       accuse: idx => testAccuse(idx),
       screen: () => screen,
+      // Room-runtime peek (useful for the new timeline picks array, etc.)
+      roomState: () => (screen === 'room' && roomRT
+        ? { firstTry: roomRT.firstTry, picks: roomRT.picks ? roomRT.picks.slice() : undefined }
+        : null),
+      dismissArc: () => { if (screen === 'arc') els.arcGo.click(); },
     };
   }
 
@@ -90,6 +100,15 @@ const DetectiveGame = (() => {
           <p class="dt-accuse-hint">根據你收集到的所有線索，誰才是真正的兇手？</p>
           <div class="dt-suspect-grid" id="dt-suspect-grid"></div>
         </div>
+
+        <div class="dt-arc-overlay" id="dt-arc-overlay" style="display:none">
+          <div class="dt-arc-card">
+            <div class="dt-arc-icon">🐾</div>
+            <h4 class="dt-arc-title">🐾 午夜貓影的線索</h4>
+            <p class="dt-arc-text" id="dt-arc-text"></p>
+            <button class="dt-arc-go" id="dt-arc-go">繼續 →</button>
+          </div>
+        </div>
       </div>
 
       <div class="dt-clear" id="dt-clear" style="display:none">
@@ -120,6 +139,9 @@ const DetectiveGame = (() => {
       clear: root.querySelector('#dt-clear'),
       clearInfo: root.querySelector('#dt-clear-info'),
       clearBtn: root.querySelector('#dt-clear-btn'),
+      arcOverlay: root.querySelector('#dt-arc-overlay'),
+      arcText: root.querySelector('#dt-arc-text'),
+      arcGo: root.querySelector('#dt-arc-go'),
     };
   }
 
@@ -131,33 +153,61 @@ const DetectiveGame = (() => {
       els.clueboard.style.display = showing ? 'none' : 'block';
     });
     els.sceneGo.addEventListener('click', startInvestigation);
+    els.arcGo.addEventListener('click', closeCase);
   }
 
   function showScreen(name) {
     screen = name;
     els.select.style.display = name === 'select' ? 'block' : 'none';
-    els.caseScreen.style.display = (name === 'scene' || name === 'room' || name === 'accuse') ? 'block' : 'none';
+    els.caseScreen.style.display = (name === 'scene' || name === 'room' || name === 'accuse' || name === 'arc') ? 'block' : 'none';
     els.clear.style.display = name === 'clear' ? 'flex' : 'none';
     els.sceneOverlay.style.display = name === 'scene' ? 'flex' : 'none';
     els.stage.style.display = name === 'room' ? 'block' : 'none';
     els.accuse.style.display = name === 'accuse' ? 'block' : 'none';
+    els.arcOverlay.style.display = name === 'arc' ? 'flex' : 'none';
   }
 
   // ===== Case select =====
   function renderSelect() {
     els.cases.innerHTML = '';
-    DETECTIVE_CASES.forEach((c, i) => {
-      const unlocked = isUnlocked(i);
-      const stars = save.done[c.id] || 0;
-      const card = document.createElement('button');
-      card.className = 'dt-case-card' + (unlocked ? '' : ' locked') + (stars ? ' cleared' : '');
-      card.innerHTML =
-        `<span class="dt-case-icon">${unlocked ? c.icon : '🔒'}</span>` +
-        `<span class="dt-case-name">案件 ${i + 1}：${c.title}</span>` +
-        `<span class="dt-case-stars">${stars ? '⭐'.repeat(stars) : (unlocked ? '尚未偵破' : '完成上一案解鎖')}</span>`;
-      if (unlocked) card.addEventListener('click', () => enterCase(c));
-      els.cases.appendChild(card);
-    });
+    const basics = [];
+    const advs = [];
+    DETECTIVE_CASES.forEach((c, i) => (c.adv ? advs : basics).push({ c, i }));
+
+    const basicHeader = document.createElement('div');
+    basicHeader.className = 'dt-section-header';
+    basicHeader.innerHTML = '<h3>📁 事務所檔案</h3>';
+    els.cases.appendChild(basicHeader);
+
+    const basicGrid = document.createElement('div');
+    basicGrid.className = 'dt-cases-grid';
+    basics.forEach(({ c, i }) => basicGrid.appendChild(buildCaseCard(c, i)));
+    els.cases.appendChild(basicGrid);
+
+    if (advs.length) {
+      const advHeader = document.createElement('div');
+      advHeader.className = 'dt-section-header dt-section-header-adv';
+      advHeader.innerHTML = '<h3>🌙 特別調查組</h3><p class="dt-section-sub">偵破全部事務所檔案後開放</p>';
+      els.cases.appendChild(advHeader);
+
+      const advGrid = document.createElement('div');
+      advGrid.className = 'dt-cases-grid dt-cases-grid-adv';
+      advs.forEach(({ c, i }) => advGrid.appendChild(buildCaseCard(c, i)));
+      els.cases.appendChild(advGrid);
+    }
+  }
+
+  function buildCaseCard(c, i) {
+    const unlocked = isUnlocked(i);
+    const stars = save.done[c.id] || 0;
+    const card = document.createElement('button');
+    card.className = 'dt-case-card' + (c.adv ? ' dt-case-card-adv' : '') + (unlocked ? '' : ' locked') + (stars ? ' cleared' : '');
+    card.innerHTML =
+      `<span class="dt-case-icon">${unlocked ? c.icon : '🔒'}</span>` +
+      `<span class="dt-case-name">案件 ${i + 1}：${c.title}</span>` +
+      `<span class="dt-case-stars">${stars ? '⭐'.repeat(stars) : (unlocked ? '尚未偵破' : '完成上一案解鎖')}</span>`;
+    if (unlocked) card.addEventListener('click', () => enterCase(c));
+    return card;
   }
 
   function exitToSelect() {
@@ -300,8 +350,111 @@ const DetectiveGame = (() => {
         grid.appendChild(btn);
       });
       maybeAddHintOption(wrap, room);
+    } else if (room.type === 'timeline') {
+      wrap.innerHTML = `
+        <div class="dt-puzzle-label">🕰️ 事件時間線</div>
+        <p class="dt-timeline-intro">${room.introZh}</p>
+        <div class="dt-timeline-events" id="dt-timeline-events"></div>
+        <div class="dt-timeline-strip" id="dt-timeline-strip"></div>
+        <div class="dt-timeline-actions">
+          <button class="dt-timeline-undo" id="dt-timeline-undo">🔄 重排</button>
+        </div>
+        <div class="dt-feedback" id="dt-feedback"></div>
+      `;
+      setupTimelineRoom(wrap, room);
+    } else if (room.type === 'alibi') {
+      wrap.innerHTML = `
+        <div class="dt-puzzle-label">🗂️ 案件檔案：找出矛盾的不在場證明</div>
+        <div class="dt-alibi-fact">📋 <b>已知事實：</b>${room.factZh}</div>
+        <div class="dt-alibi-grid" id="dt-alibi-grid"></div>
+        <div class="dt-feedback" id="dt-feedback"></div>
+      `;
+      const grid = wrap.querySelector('#dt-alibi-grid');
+      room.suspects.forEach((s, j) => {
+        const file = document.createElement('div');
+        file.className = 'dt-alibi-file';
+        const btn = document.createElement('button');
+        btn.className = 'dt-opt dt-alibi-suspect';
+        btn.dataset.idx = j;
+        btn.innerHTML =
+          `<span class="dt-alibi-tab">案 ${j + 1} 號檔案</span>` +
+          `<span class="dt-suspect-emoji">${s.emoji}</span>` +
+          `<span class="dt-suspect-label">${s.name}</span>` +
+          `<span class="dt-alibi-text">"${s.alibiEn}"</span>`;
+        btn.addEventListener('click', () => {
+          if (btn.disabled) return;
+          if (j !== room.a) {
+            wrap.classList.add('dt-shake');
+            setTimeout(() => wrap.classList.remove('dt-shake'), 500);
+          }
+          onAnswer(room, j, btn, wrap);
+        });
+        file.appendChild(btn);
+        grid.appendChild(file);
+      });
     }
     return wrap;
+  }
+
+  // ===== Timeline puzzle =====
+  function setupTimelineRoom(wrap, room) {
+    roomRT.picks = [];
+    const evWrap = wrap.querySelector('#dt-timeline-events');
+    room.events.forEach((ev, j) => {
+      const card = document.createElement('button');
+      card.className = 'dt-timeline-card';
+      card.dataset.idx = j;
+      card.innerHTML = `<span class="dt-timeline-text">${ev}</span>`;
+      card.addEventListener('click', () => pickTimelineEvent(wrap, room, j));
+      evWrap.appendChild(card);
+    });
+    wrap.querySelector('#dt-timeline-undo').addEventListener('click', () => resetTimelinePicks(wrap, room));
+    renderTimelineStrip(wrap, room);
+  }
+
+  function pickTimelineEvent(wrap, room, j) {
+    if (roomRT.picks.includes(j) || roomRT.picks.length >= room.events.length) return;
+    roomRT.picks.push(j);
+    const card = wrap.querySelector(`.dt-timeline-card[data-idx="${j}"]`);
+    if (card) card.classList.add('picked');
+    renderTimelineStrip(wrap, room);
+    if (roomRT.picks.length === room.events.length) checkTimeline(wrap, room);
+  }
+
+  function renderTimelineStrip(wrap, room) {
+    const strip = wrap.querySelector('#dt-timeline-strip');
+    strip.innerHTML = '';
+    for (let i = 0; i < room.events.length; i++) {
+      const slot = document.createElement('div');
+      const filled = i < roomRT.picks.length;
+      slot.className = 'dt-timeline-slot' + (filled ? ' filled' : '');
+      slot.innerHTML =
+        `<span class="dt-timeline-stamp">${i + 1}</span>` +
+        `<span class="dt-timeline-slot-text">${filled ? room.events[roomRT.picks[i]] : '？'}</span>`;
+      strip.appendChild(slot);
+    }
+  }
+
+  function resetTimelinePicks(wrap, room) {
+    roomRT.picks = [];
+    wrap.querySelectorAll('.dt-timeline-card').forEach(c => c.classList.remove('picked'));
+    renderTimelineStrip(wrap, room);
+  }
+
+  function checkTimeline(wrap, room) {
+    const correct = roomRT.picks.every((v, i) => v === room.order[i]);
+    if (correct) {
+      finishRoomCorrect(room, wrap);
+    } else {
+      roomRT.firstTry = false;
+      SoundManager.playWrong();
+      wrap.classList.add('dt-shake');
+      setTimeout(() => wrap.classList.remove('dt-shake'), 500);
+      const fb = wrap.querySelector('#dt-feedback');
+      fb.textContent = `💡 ${room.explainZh} 再試一次！`;
+      fb.classList.add('show');
+      setTimeout(() => resetTimelinePicks(wrap, room), 700);
+    }
   }
 
   function ttsAfter(text) {
@@ -494,7 +647,12 @@ const DetectiveGame = (() => {
     if (idx === cs.culprit.answer) {
       btn.classList.add('correct');
       SoundManager.playQuestComplete();
-      closeCase();
+      if (cs.arcZh) {
+        els.arcText.textContent = cs.arcZh;
+        showScreen('arc');
+      } else {
+        closeCase();
+      }
     } else {
       btn.classList.add('wrong');
       wrongAccuseCount++;
@@ -509,7 +667,8 @@ const DetectiveGame = (() => {
     let stars = ratio >= 0.9 ? 3 : ratio >= 0.7 ? 2 : 1;
     if (wrongAccuseCount > 0) stars = Math.max(1, stars - 1);
 
-    let xp = 40, gems = 10;
+    let xp = cs.adv ? 60 : 40;
+    let gems = cs.adv ? 15 : 10;
     if (GameEngine.hasBuff('double_xp')) {
       xp *= 2;
       GameEngine.consumeBuff('double_xp');
@@ -563,12 +722,34 @@ const DetectiveGame = (() => {
         const bi = roomRT.bank.findIndex(e => !e.used && e.ch === ch);
         if (bi !== -1) pickLetter(wrap, room, bi);
       });
+    } else if (room.type === 'timeline') {
+      const wrap = els.stage.firstElementChild;
+      resetTimelinePicks(wrap, room);
+      const seq = correctBool ? room.order.slice() : wrongTimelineGuess(room);
+      seq.forEach(j => {
+        const btn = wrap.querySelector(`.dt-timeline-card[data-idx="${j}"]`);
+        if (btn) btn.click();
+      });
+    } else if (room.type === 'alibi') {
+      const idx = correctBool ? room.a : (room.a === 0 ? 1 : 0);
+      const wrap = els.stage.firstElementChild;
+      const btn = wrap && wrap.querySelector(`.dt-alibi-suspect[data-idx="${idx}"]`);
+      if (btn) btn.click();
     } else {
       const idx = correctBool ? room.a : (room.a === 0 ? 1 : 0);
       const wrap = els.stage.firstElementChild;
       const btn = wrap && wrap.querySelector(`.dt-opt[data-idx="${idx}"]`);
       if (btn) btn.click();
     }
+  }
+
+  // Build a wrong tap order for a timeline room, guaranteed to differ from
+  // room.order (swapping the first two picks always differs since order
+  // holds distinct indexes).
+  function wrongTimelineGuess(room) {
+    const g = room.order.slice();
+    [g[0], g[1]] = [g[1], g[0]];
+    return g;
   }
 
   // Build a wrong-length-matching guess for a code room's answer, guaranteed
