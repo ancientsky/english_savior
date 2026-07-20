@@ -972,8 +972,19 @@ body.game-max .zone.active .emp-container,
 body.game-max .zone.active .bd-container,
 body.game-max .zone.active .sk-container,
 body.game-max .zone.active .tw-container,
-body.game-max .zone.active .rpg-container {
+body.game-max .zone.active .rpg-container,
+body.game-max .zone.active .pt-container,
+body.game-max .zone.active .tp-container,
+body.game-max .zone.active .tu-container,
+body.game-max .zone.active .dt-container,
+body.game-max .zone.active .fh-container {
   max-width: none;
+}
+
+/* 釣魚塘：最大化時水面場景以視窗高度反推填滿，不留大片空白 */
+body.game-max #zone-fishing.active .fh-scene {
+  height: calc(100vh - 330px);
+  min-height: 300px;
 }
 
 /* 畫布比例遊戲：以視窗高度反推寬度上限，避免畫布高度爆出視窗 */

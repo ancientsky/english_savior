@@ -57,7 +57,7 @@
 /* ===== Pond scene (layered 2.5D) ===== */
 .fh-scene {
   position: relative;
-  height: 260px;
+  height: clamp(260px, 38vh, 420px);
   border-radius: 12px;
   overflow: hidden;
   margin-bottom: 16px;
