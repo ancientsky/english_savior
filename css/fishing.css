@@ -163,6 +163,32 @@
 .fh-pond-9 .fh-scene-far { background-color: rgba(60, 30, 110, 0.5); }
 .fh-pond-9 .fh-water { background: linear-gradient(180deg, #2c1a5e 0%, #100a2e 100%); }
 
+/* Ponds 10-14 (second expansion pack) */
+.fh-pond-10 .fh-scene-sky { background: linear-gradient(180deg, #ffd6e8 0%, #fff0f6 100%); }
+.fh-pond-10 .fh-scene-far { background-color: rgba(255, 190, 210, 0.45); }
+.fh-pond-10 .fh-water { background: linear-gradient(180deg, #a8e6cf 0%, #4a9c86 100%); }
+
+.fh-pond-11 .fh-scene-sky { background: linear-gradient(180deg, #d9c08a 0%, #f2e4c0 100%); }
+.fh-pond-11 .fh-scene-far { background-color: rgba(120, 90, 40, 0.5); }
+.fh-pond-11 .fh-water { background: linear-gradient(180deg, #b98a4a 0%, #6b4a1e 100%); }
+
+.fh-pond-12 .fh-scene-sky { background: linear-gradient(180deg, #4a3a6b 0%, #7a6a9c 100%); }
+.fh-pond-12 .fh-scene-far { background-color: rgba(60, 40, 80, 0.5); }
+.fh-pond-12 .fh-water { background: linear-gradient(180deg, #3a5a4a 0%, #16241c 100%); }
+
+.fh-pond-13 .fh-scene-sky { background: linear-gradient(180deg, #ff9ecf 0%, #ffe0f0 100%); }
+.fh-pond-13 .fh-scene-far { background-color: rgba(255, 120, 190, 0.4); }
+.fh-pond-13 .fh-water { background: linear-gradient(180deg, #a06fff 0%, #6a2fa8 100%); }
+
+.fh-pond-14 .fh-scene-sky { background: linear-gradient(180deg, #0a0e2a 0%, #1a1050 100%); }
+.fh-pond-14 .fh-scene-far { background-color: rgba(20, 200, 220, 0.35); }
+.fh-pond-14 .fh-water {
+  background:
+    repeating-linear-gradient(90deg, rgba(0,255,220,0.15) 0 2px, transparent 2px 40px),
+    repeating-linear-gradient(0deg, rgba(0,255,220,0.1) 0 2px, transparent 2px 40px),
+    linear-gradient(180deg, #0a2a40 0%, #001018 100%);
+}
+
 /* ===== Action buttons ===== */
 .fh-actions { display: flex; justify-content: center; gap: 14px; flex-wrap: wrap; }
 .fh-btn-primary, .fh-btn-secondary {
@@ -181,25 +207,85 @@
 .fh-btn-primary:hover, .fh-btn-secondary:hover { transform: translateY(-3px); }
 .fh-btn-primary:active, .fh-btn-secondary:active { transform: translateY(1px); box-shadow: 0 1px 0 rgba(0,0,0,0.2); }
 
-/* ===== Cast (timing bar + rod/line) ===== */
-#fh-screen-cast, #fh-screen-reel, #fh-screen-quiz, #fh-screen-result {
+/* ===== Cast / reel-fight: immersive in-scene overlays =====
+   The power meter, tension gauge, rod+line and camera-zoom all live INSIDE
+   .fh-scene as absolutely-positioned overlays (instead of separate panel
+   screens below it), so the whole interaction scales with the scene — see
+   the body.game-max rules further down for the maximized-view sizing. */
+#fh-screen-quiz, #fh-screen-result {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   text-align: center; gap: 14px;
 }
-.fh-cast-title, .fh-reel-title { font-weight: 700; font-size: 16px; color: #205a78; }
-.fh-rod-rig { height: 46px; display: flex; align-items: center; justify-content: center; }
-.fh-rod { font-size: 34px; display: inline-block; transition: transform 0.05s linear; transform-origin: 70% 90%; }
-.fh-rod-rig-reel { height: 40px; }
-.fh-rod-fight { transition: transform 0.15s ease-out; }
-.fh-rod-fight.fh-rod-pulse { animation: fh-rod-jerk 0.3s ease-out; }
+
+/* Camera: the zoom-wrap holds all scenery (sky/far/particles/water/dock) so
+   only the "world" zooms toward the bobber on a bite — rod, line and the UI
+   overlays sit outside it and stay a fixed size. */
+.fh-scene-zoomwrap {
+  position: absolute; inset: 0;
+  transform-origin: 50% 60%;
+  transition: transform 0.6s ease;
+  will-change: transform;
+}
+.fh-scene-zoomwrap.fh-zoomed { transform: scale(1.32); }
+.fh-vignette {
+  position: absolute; inset: 0; z-index: 5; pointer-events: none;
+  background: radial-gradient(ellipse at 50% 60%, rgba(0,0,0,0) 48%, rgba(0,0,0,0.4) 100%);
+  opacity: 0; transition: opacity 0.6s ease;
+}
+.fh-vignette.active { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .fh-scene-zoomwrap { transition: none; }
+  .fh-scene-zoomwrap.fh-zoomed { transform: none; }
+  .fh-vignette { transition: none; }
+}
+
+/* Hand-held rod, anchored bottom-right of the scene; bends with cast power
+   and jerks on each tension pulse during the fight. */
+.fh-rod-anchor {
+  position: absolute; right: 3%; bottom: 4%; z-index: 7;
+  display: flex; align-items: flex-end; gap: 1px; pointer-events: none;
+}
+.fh-hand-emoji { font-size: clamp(18px, 2.6vw, 32px); transform: translateY(6px); filter: drop-shadow(0 2px 3px rgba(0,0,0,0.3)); }
+.fh-rod {
+  font-size: clamp(28px, 4.2vw, 52px); display: inline-block;
+  transform-origin: 75% 90%; transition: transform 0.12s ease-out;
+  filter: drop-shadow(0 2px 3px rgba(0,0,0,0.3));
+}
+.fh-rod.fh-rod-pulse { animation: fh-rod-jerk 0.3s ease-out; }
 @keyframes fh-rod-jerk {
   0% { transform: rotate(0deg); }
   30% { transform: rotate(-18deg) translateX(-4px); }
   70% { transform: rotate(6deg); }
   100% { transform: rotate(0deg); }
 }
+
+/* Fishing line: a single SVG line from the rod tip to the bobber/hook point,
+   updated every frame during the cast-fly arc and re-synced to the rod's
+   bend the rest of the time — cheap trig only, no layout thrashing. */
+.fh-line-svg { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 6; pointer-events: none; overflow: visible; }
+.fh-line-svg line { stroke: #08344a; stroke-width: 1.4; vector-effect: non-scaling-stroke; opacity: 0.85; transition: opacity 0.15s; }
+.fh-line-svg.fh-line-snap line { animation: fh-line-whip 0.42s ease-out; }
+@keyframes fh-line-whip {
+  0% { opacity: 0.85; }
+  25% { opacity: 1; transform: translateX(-2%); }
+  55% { transform: translateX(3%); }
+  100% { opacity: 0; transform: translateX(0); }
+}
+
+/* Cast power meter: overlaid near the waterline, scales with the scene. */
+.fh-cast-meter-overlay {
+  position: absolute; left: 50%; bottom: 6%; transform: translateX(-50%);
+  width: min(80%, 920px);
+  display: none; flex-direction: column; align-items: center; gap: 6px; z-index: 8;
+}
+.fh-cast-meter-overlay.active { display: flex; }
+.fh-cast-title, .fh-reel-title {
+  font-weight: 700; font-size: clamp(13px, 1.6vw, 18px); color: #08344a;
+  background: rgba(255,255,255,0.6); padding: 3px 12px; border-radius: 999px;
+  text-shadow: 0 1px 1px rgba(255,255,255,0.5);
+}
 .fh-cast-track {
-  position: relative; width: 90%; max-width: 480px; height: 34px;
+  position: relative; width: 100%; height: clamp(28px, 4vh, 46px);
   background: linear-gradient(180deg, #9fdcff, #4fb3e0);
   border-radius: 999px; border: 3px solid #1c74a8; overflow: hidden;
 }
@@ -210,81 +296,127 @@
 }
 .fh-cast-marker {
   position: absolute; top: 50%; transform: translate(-50%, -50%);
-  font-size: 26px; transition: left 0.02s linear;
+  font-size: clamp(20px, 3vw, 30px); transition: left 0.02s linear;
 }
-.fh-cast-hint { font-size: 13px; color: #3a6a82; }
+.fh-cast-hint { font-size: 13px; color: #3a6a82; background: rgba(255,255,255,0.55); padding: 2px 10px; border-radius: 999px; }
 
-/* Cast-fly animation: rod bends, line arcs the bobber out, splash + ripples */
-.fh-cast-fly-wrap { position: relative; width: 100%; max-width: 420px; height: 140px; }
-.fh-cast-line {
-  position: absolute; left: 50%; top: 0; width: 2px; height: 40%;
-  background: #08344a; transform-origin: top center;
-  animation: fh-line-arc 0.55s ease-out forwards;
+/* Flying bobber during the cast — position driven by JS every frame so the
+   SVG line above can follow it precisely along the arc. */
+.fh-flying-bobber {
+  position: absolute; left: 82%; top: 40%; font-size: clamp(20px, 2.6vw, 32px);
+  transform: translate(-50%, -50%); z-index: 4; display: none;
 }
-@keyframes fh-line-arc {
-  0% { transform: rotate(-40deg) scaleY(0.3); opacity: 0.4; }
-  60% { transform: rotate(20deg) scaleY(1.1); opacity: 1; }
-  100% { transform: rotate(0deg) scaleY(1); opacity: 1; }
+
+/* The fixed "hook point" anchor where the bobber floats / the fight happens —
+   every child is centered on this single point. */
+.fh-hook-point { position: absolute; left: 50%; top: 60%; z-index: 2; }
+.fh-hook-point > * { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+.fh-bobber { font-size: clamp(22px, 3.2vw, 38px); animation: fh-bobber-float 1.1s ease-in-out infinite; display: none; }
+@keyframes fh-bobber-float {
+  0%, 100% { transform: translate(-50%, -50%); }
+  50% { transform: translate(-50%, calc(-50% - 12px)); }
 }
-.fh-cast-flying-bobber {
-  position: absolute; left: 50%; top: 8%; font-size: 26px; transform: translateX(-50%);
-  animation: fh-bobber-fly 0.55s ease-out forwards;
+.fh-ripple-idle {
+  width: clamp(30px, 4vw, 48px); height: 14px; border-radius: 50%; top: 62%;
+  border: 2px solid rgba(255,255,255,0.55);
+  animation: fh-ripple-idle-pulse 2.4s ease-in-out infinite; display: none;
 }
-@keyframes fh-bobber-fly {
-  0% { top: 8%; left: 20%; opacity: 0.5; }
-  60% { top: 55%; left: 60%; opacity: 1; }
-  100% { top: 68%; left: 50%; opacity: 1; }
+@keyframes fh-ripple-idle-pulse {
+  0%, 100% { transform: translate(-50%, -50%) scale(0.8); opacity: 0.3; }
+  50% { transform: translate(-50%, -50%) scale(1.5); opacity: 0.7; }
 }
-.fh-splash-fx {
-  position: absolute; left: 50%; top: 68%; transform: translate(-50%, -50%);
-  font-size: 36px; animation: fh-splash-pop 0.5s ease-out;
+.fh-fx-layer { width: 0; height: 0; }
+.fh-splash-fx { font-size: clamp(28px, 4vw, 42px); animation: fh-splash-pop 0.5s ease-out; pointer-events: none; }
+.fh-splash-fx-fight { font-size: clamp(22px, 3vw, 32px); }
+@keyframes fh-splash-pop {
+  0% { transform: translate(-50%, -50%) scale(0.2); opacity: 0; }
+  60% { transform: translate(-50%, -50%) scale(1.3); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1); }
 }
 .fh-ripple {
-  position: absolute; left: 50%; top: 70%; transform: translate(-50%, -50%);
   width: 20px; height: 20px; border-radius: 50%;
   border: 2px solid rgba(255,255,255,0.7);
-  animation: fh-ripple-grow 0.9s ease-out forwards;
+  animation: fh-ripple-grow 0.9s ease-out forwards; pointer-events: none;
 }
 .fh-ripple-2 { animation-delay: 0.18s; }
 @keyframes fh-ripple-grow {
   0% { width: 10px; height: 10px; opacity: 0.8; }
-  100% { width: 110px; height: 44px; opacity: 0; }
-}
-.fh-ripple-idle {
-  position: absolute; left: 50%; bottom: -6px; transform: translateX(-50%);
-  width: 40px; height: 12px; border-radius: 50%;
-  border: 2px solid rgba(255,255,255,0.55);
-  animation: fh-ripple-idle-pulse 2.4s ease-in-out infinite;
-}
-@keyframes fh-ripple-idle-pulse {
-  0%, 100% { transform: translateX(-50%) scale(0.8); opacity: 0.3; }
-  50% { transform: translateX(-50%) scale(1.5); opacity: 0.7; }
+  100% { width: 120px; height: 48px; opacity: 0; }
 }
 
-.fh-bobber-wrap { position: relative; height: 90px; width: 100%; max-width: 300px; display: flex; align-items: flex-end; justify-content: center; }
-.fh-bobber { font-size: 36px; animation: fh-bobber-float 1.1s ease-in-out infinite; z-index: 2; }
-@keyframes fh-bobber-float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-14px); }
-}
-.fh-wait-shadows { position: absolute; inset: 0; z-index: 0; overflow: hidden; }
+/* Approaching-shadow + wait shadows now roam the full water width (not a
+   narrow inline box) since they live inside the real scene. */
+.fh-wait-shadows { position: absolute; inset: 0; z-index: 1; overflow: hidden; pointer-events: none; display: none; }
 .fh-approach-shadow {
-  position: absolute; bottom: 6px; font-size: 22px; opacity: 0;
-  filter: brightness(0) blur(0.5px); z-index: 1;
-}
-.fh-bite-flash {
-  font-family: var(--pixel-font);
-  font-size: 20px; color: #e94560;
-  animation: fh-bite-pulse 0.35s ease-in-out infinite;
-}
-@keyframes fh-bite-pulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.15); }
+  position: absolute; left: -15%; top: 58%; font-size: clamp(18px, 2.4vw, 28px); opacity: 0;
+  filter: brightness(0) blur(0.5px); z-index: 1; display: none;
 }
 
-/* ===== Reel tension-fight gauge ===== */
+.fh-bite-flash {
+  position: absolute; left: 50%; top: 34%; transform: translate(-50%, -50%); z-index: 9;
+  font-family: var(--pixel-font); font-size: clamp(16px, 2.4vw, 24px); color: #e94560;
+  pointer-events: none; display: none;
+  text-shadow: 0 0 8px rgba(255,255,255,0.8);
+}
+.fh-bite-flash.active { display: block; animation: fh-bite-pulse 0.35s ease-in-out infinite; }
+@keyframes fh-bite-pulse {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); }
+  50% { transform: translate(-50%, -50%) scale(1.15); }
+}
+
+/* Fish silhouette thrashing at the line point during the fight */
+.fh-fight-fish {
+  font-size: clamp(28px, 4vw, 48px); filter: brightness(0) opacity(0.55);
+  animation: fh-fight-thrash 0.35s ease-in-out infinite;
+}
+@keyframes fh-fight-thrash {
+  0%, 100% { transform: translate(-50%, -50%) rotate(-9deg) scale(1); }
+  50% { transform: translate(-50%, -50%) rotate(10deg) scale(1.08); }
+}
+.fh-fight-fish.fh-shadow-dart { animation: fh-fight-thrash 0.35s ease-in-out infinite, fh-shadow-dart-away 0.4s ease-in forwards; }
+@keyframes fh-shadow-dart-away {
+  0% { opacity: 0.55; }
+  100% { transform: translate(120px, 40px) scale(0.6); opacity: 0; }
+}
+
+/* Catch-moment: fish leaps out of the water with droplets, then hands off
+   to the quiz screen. */
+.fh-fish-leap { display: none; z-index: 10; }
+.fh-fish-leap.fh-leap-play .fh-leap-fish {
+  display: inline-block; font-size: clamp(30px, 5vw, 58px);
+  animation: fh-leap-arc 0.65s cubic-bezier(.25,.8,.4,1) forwards;
+}
+@keyframes fh-leap-arc {
+  0% { transform: translateY(0) scale(0.9) rotate(0deg); }
+  45% { transform: translateY(-70px) scale(1.15) rotate(-12deg); }
+  100% { transform: translateY(10px) scale(1) rotate(4deg); opacity: 0.9; }
+}
+.fh-leap-drop {
+  position: absolute; left: 0; top: 0; font-size: 14px; opacity: 0;
+}
+.fh-fish-leap.fh-leap-play .fh-leap-drop {
+  animation: fh-leap-drop-fall 0.6s ease-out forwards;
+}
+@keyframes fh-leap-drop-fall {
+  0% { transform: translate(0, 0); opacity: 0; }
+  20% { opacity: 0.9; }
+  100% { transform: translate(var(--dx, 0px), 50px); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fh-fish-leap.fh-leap-play .fh-leap-fish,
+  .fh-fish-leap.fh-leap-play .fh-leap-drop,
+  .fh-fight-fish.fh-shadow-dart { animation: none; }
+}
+
+/* ===== Reel tension-fight gauge (floats over the bobber's splash point) ===== */
+.fh-tension-overlay {
+  position: absolute; left: 50%; bottom: 8%; transform: translateX(-50%);
+  display: none; flex-direction: column; align-items: center; gap: 8px; z-index: 8;
+}
+.fh-tension-overlay.active { display: flex; }
+.fh-reel-gauges-row { display: flex; flex-direction: row; align-items: center; gap: clamp(10px, 1.6vw, 18px); }
 .fh-reel-gauge {
-  position: relative; width: 74px; height: 220px;
+  position: relative; width: clamp(56px, 7vw, 96px); height: clamp(150px, 32vh, 320px);
   background: linear-gradient(180deg, #eaf9ff, #bfe8ff);
   border: 3px solid #1c74a8; border-radius: 16px; overflow: hidden;
   transition: box-shadow 0.2s;
@@ -301,19 +433,14 @@
 }
 .fh-reel-marker {
   position: absolute; left: 50%; transform: translate(-50%, 50%);
-  font-size: 24px; transition: bottom 0.05s linear;
-}
-.fh-reel-splash-fx {
-  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-  font-size: 22px; animation: fh-splash-pop 0.5s ease-out forwards; pointer-events: none;
+  font-size: clamp(20px, 2.6vw, 28px); transition: bottom 0.05s linear;
 }
 .fh-reel-progress-wrap {
-  width: 26px; height: 220px; background: rgba(0,0,0,0.1);
+  width: clamp(20px, 2.6vw, 30px); height: clamp(150px, 32vh, 320px); background: rgba(0,0,0,0.1);
   border: 2px solid #999; border-radius: 12px; overflow: hidden;
   display: flex; align-items: flex-end;
 }
 .fh-reel-progress-fill { width: 100%; background: linear-gradient(180deg, #4ecca3, #1c9c74); transition: height 0.05s linear; }
-.fh-reel-hint { font-size: 13px; color: #3a6a82; max-width: 280px; }
 
 /* ===== Listening quiz ===== */
 .fh-quiz-fish-emoji { font-size: 56px; animation: fh-quiz-bob 2s ease-in-out infinite; }
@@ -481,6 +608,11 @@
 .fh-aq-tank-mist { background: linear-gradient(180deg, #6fb3ac 0%, #1c4642 100%); }
 .fh-aq-tank-bubble { background: linear-gradient(180deg, #0a1c3a 0%, #01050d 100%); }
 .fh-aq-tank-stars { background: linear-gradient(180deg, #2c1a5e 0%, #0a061c 100%); }
+.fh-aq-tank-petal { background: linear-gradient(180deg, #a8e6cf 0%, #1f4a3d 100%); }
+.fh-aq-tank-fossil { background: linear-gradient(180deg, #b98a4a 0%, #2e1f0d 100%); }
+.fh-aq-tank-ghost { background: linear-gradient(180deg, #3a5a4a 0%, #0a120d 100%); }
+.fh-aq-tank-soda { background: linear-gradient(180deg, #a06fff 0%, #341654 100%); }
+.fh-aq-tank-tech { background: linear-gradient(180deg, #0a2a40 0%, #000508 100%); }
 .fh-swim-fish {
   position: absolute; font-size: 28px; cursor: pointer; z-index: 2;
   filter: drop-shadow(0 2px 3px rgba(0,0,0,0.3));
@@ -526,6 +658,8 @@
   .fh-btn-primary, .fh-btn-secondary { padding: 12px 16px; font-size: 11px; }
   .fh-reel-gauge, .fh-reel-progress-wrap { height: 170px; }
   .fh-aq-tank { height: 160px; }
+  .fh-cast-meter-overlay, .fh-tension-overlay { bottom: 4%; }
+  .fh-rod-anchor { right: 2%; bottom: 2%; }
 }
 
 @media (max-width: 420px) {
@@ -537,4 +671,16 @@
   .fh-reel-progress-wrap { width: 20px; }
   .fh-aq-panel { padding: 10px; }
   .fh-aq-dex-strip { grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); }
+  .fh-cast-meter-overlay { width: min(88%, 920px); }
+  .fh-reel-gauges-row { gap: 8px; }
+  .fh-cast-title, .fh-reel-title { font-size: 11px; padding: 2px 8px; }
 }
+
+/* Maximized (body.game-max): the scene fills the viewport height (see
+   style.css), so let the overlays grow with it for a genuinely bigger,
+   more immersive fight — not just a scaled-up copy of the small view. */
+body.game-max #zone-fishing.active .fh-cast-meter-overlay { width: min(85%, 1100px); }
+body.game-max #zone-fishing.active .fh-reel-gauge,
+body.game-max #zone-fishing.active .fh-reel-progress-wrap { height: clamp(180px, 42vh, 480px); }
+body.game-max #zone-fishing.active .fh-rod { font-size: clamp(36px, 5vw, 64px); }
+body.game-max #zone-fishing.active .fh-hand-emoji { font-size: clamp(22px, 3.2vw, 40px); }
