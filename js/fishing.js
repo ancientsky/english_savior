@@ -1,22 +1,33 @@
 /* ===== 悠閒釣魚塘 (Cozy Fishing Pond) =====
-   A listening + collection game across 9 ponds (70 species total):
-     1. 拋竿: a power meter oscillates; click/space stops it — a rod-bend +
-        line-arc animation casts the bobber out with a splash + ripples.
-        Stopping near the center biases the catch toward a rarer species.
+   A listening + collection game across 14 ponds (110 species total):
+     1. 拋竿: the interaction lives INSIDE the scene as overlays anchored to a
+        hand-held rod (bottom-right) with an SVG line running to the bobber.
+        A power-meter arc oscillates near the waterline; click/space stops it
+        — the rod bends, the line follows the bobber as it arcs out (JS-driven,
+        per-frame) and lands with a splash + ripples. Stopping near the
+        center biases the catch toward a rarer species.
      2. 等待上鉤: the bobber floats while silhouette fish drift beneath the
         surface; one shadow gradually approaches the bobber as the bite
-        nears, then a bite flash fires.
-     3. 拉竿大戰 (tension fight): the fish tugs the line in pulses (stronger
-        & faster for rarer fish). Hold (pointer/space) to reel in and raise
-        tension, release to ease off. Keep the tension marker inside the
-        safe band to fill a progress bar; drifting too low (line goes slack)
-        lets the fish escape, spiking too high snaps the line.
-     4. 聽力題: TTSManager speaks the caught fish's word (🔊 replay).
+        nears, then a bite flash fires and the camera zooms in toward the
+        bobber (transform-origin zoom + soft vignette; skipped under
+        prefers-reduced-motion).
+     3. 拉竿大戰 (tension fight): still zoomed in, a fish silhouette thrashes
+        at the line point with splash bursts while the tension bar (now
+        floating over the bobber's splash point) tugs in pulses (stronger &
+        faster for rarer fish) and the rod jerks. Hold (pointer/space) to
+        reel in and raise tension, release to ease off. Keep the tension
+        marker inside the safe band to fill a progress bar; drifting too low
+        (line goes slack) lets the fish escape, spiking too high snaps the
+        line (line whips back + the shadow darts away).
+     4. 上鉤瞬間: on a successful reel, a short catch-moment plays — the fish
+        leaps out of the water in an arc with water droplets — then the
+        camera zooms back out and the game transitions to the listening quiz.
+     5. 聽力題: TTSManager speaks the caught fish's word (🔊 replay).
         Rarity 1-2 -> 4 zh-meaning multiple choice. Rarity 3-4 -> spell it
         from a shuffled letter bank (word letters + 4 decoys). Legendary
         (rarity 4) catches get a full-screen shine + fanfare.
         Correct -> catch (rewards + fish card). Wrong -> fish escapes.
-     5. 水族箱: full-screen overlay — a themed mini-tank + dex strip per
+     6. 水族箱: full-screen overlay — a themed mini-tank + dex strip per
         pond tab, with a per-pond collected counter and a legendary badge.
         Caught fish swim in the tank; uncaught species show as ??? cards.
    Save: localStorage `english_savior_fishing` = { caught, pond, pondsCompleted }
@@ -29,17 +40,24 @@ const FishingGame = (() => {
   // ambience: which ambient-particle layer to render in the scene/tank
   //   default = gentle bubbles, leaf = forest, coral = coral bay,
   //   abyss = deep glints, ember = volcano, snow = ice cave,
-  //   mist = waterfall, bubble = trench, stars = dream lake
+  //   mist = waterfall, bubble = trench, stars = dream lake,
+  //   petal = blossom stream, fossil = dino lake, ghost = swamp wisps,
+  //   soda = candy lake bubbles, tech = neon grid glow
   const PONDS = [
-    { id: 1, name: '陽光池塘',   icon: '☀️', unlockAt: 0,  ambience: 'default' },
-    { id: 2, name: '森林小溪',   icon: '🌲', unlockAt: 6,  ambience: 'leaf' },
-    { id: 3, name: '珊瑚海灣',   icon: '🪸', unlockAt: 14, ambience: 'coral' },
-    { id: 4, name: '傳說深海',   icon: '🌌', unlockAt: 22, ambience: 'abyss' },
-    { id: 5, name: '火山溫泉湖', icon: '🌋', unlockAt: 30, ambience: 'ember' },
-    { id: 6, name: '極地冰洞',   icon: '🧊', unlockAt: 37, ambience: 'snow' },
-    { id: 7, name: '雲霧瀑布潭', icon: '🏞️', unlockAt: 44, ambience: 'mist' },
-    { id: 8, name: '深海海溝',   icon: '🕳️', unlockAt: 50, ambience: 'bubble' },
-    { id: 9, name: '星空夢境湖', icon: '🌌', unlockAt: 55, ambience: 'stars' },
+    { id: 1, name: '陽光池塘',     icon: '☀️', unlockAt: 0,  ambience: 'default' },
+    { id: 2, name: '森林小溪',     icon: '🌲', unlockAt: 6,  ambience: 'leaf' },
+    { id: 3, name: '珊瑚海灣',     icon: '🪸', unlockAt: 14, ambience: 'coral' },
+    { id: 4, name: '傳說深海',     icon: '🌌', unlockAt: 22, ambience: 'abyss' },
+    { id: 5, name: '火山溫泉湖',   icon: '🌋', unlockAt: 30, ambience: 'ember' },
+    { id: 6, name: '極地冰洞',     icon: '🧊', unlockAt: 37, ambience: 'snow' },
+    { id: 7, name: '雲霧瀑布潭',   icon: '🏞️', unlockAt: 44, ambience: 'mist' },
+    { id: 8, name: '深海海溝',     icon: '🕳️', unlockAt: 50, ambience: 'bubble' },
+    { id: 9, name: '星空夢境湖',   icon: '🌌', unlockAt: 55, ambience: 'stars' },
+    { id: 10, name: '櫻花花瓣溪',  icon: '🌸', unlockAt: 60, ambience: 'petal' },
+    { id: 11, name: '恐龍化石湖',  icon: '🦴', unlockAt: 66, ambience: 'fossil' },
+    { id: 12, name: '幽靈沼澤',    icon: '👻', unlockAt: 72, ambience: 'ghost' },
+    { id: 13, name: '糖果汽水湖',  icon: '🍬', unlockAt: 78, ambience: 'soda' },
+    { id: 14, name: '未來科技水道', icon: '🤖', unlockAt: 84, ambience: 'tech' },
   ];
 
   const RARITY_REWARD = {
@@ -87,6 +105,7 @@ const FishingGame = (() => {
       answer: (correct) => testAnswer(correct),
       pond: (n) => selectPond(n),
       screen: () => (aquariumOpen ? 'aquarium' : currentScreen),
+      cancelCast: () => cancelCast(),
     };
   }
 
@@ -132,6 +151,10 @@ const FishingGame = (() => {
   function sayWord(fish) { return (fish && (fish.say || fish.word)) || ''; }
 
   function isLegendary(fish) { return !!fish && (fish.legendary || fish.rarity >= 4); }
+  function reducedMotion() {
+    try { return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); }
+    catch { return false; }
+  }
   function ambienceFor(pondId) {
     const p = PONDS.find(x => x.id === pondId);
     return p ? p.ambience : 'default';
@@ -140,6 +163,7 @@ const FishingGame = (() => {
     const glyphByAmbience = {
       default: '💧', leaf: '🍃', coral: '🫧', abyss: '✨',
       ember: '🔥', snow: '❄️', mist: '🌫️', bubble: '🫧', stars: '⭐',
+      petal: '🌸', fossil: '🦴', ghost: '👻', soda: '🫧', tech: '💠',
     };
     const glyph = glyphByAmbience[ambience] || '💧';
     let html = '';
@@ -164,33 +188,77 @@ const FishingGame = (() => {
     return html;
   }
 
+  // Coordinates (0-100 scene-relative space, matching the SVG line viewBox)
+  // that the rod's resting tip and the hooked-fish point live at. Used both
+  // to draw the line and to place the fly-cast animation's start/end.
+  const ROD_TIP_BASE = { x: 82, y: 40 };
+  const HOOK_POINT = { x: 50, y: 60 };
+
   // ===== DOM scaffold =====
   function buildDom(root) {
     root.innerHTML = `
       <div class="fh-screen" id="fh-screen-pond">
         <div class="fh-topbar">
-          <div class="fh-dex-counter" id="fh-dex-counter">📖 圖鑑 0/70</div>
+          <div class="fh-dex-counter" id="fh-dex-counter">📖 圖鑑 0/110</div>
           <div class="fh-pond-tabs" id="fh-pond-tabs"></div>
         </div>
         <div class="fh-scene fh-pond-1" id="fh-scene">
-          <div class="fh-scene-sky"></div>
-          <div class="fh-scene-far"></div>
-          <div class="fh-scene-particles" id="fh-scene-particles"></div>
-          <div class="fh-water">
-            <div class="fh-fish-shadows" id="fh-scene-shadows"></div>
-            <div class="fh-wave fh-wave-1"></div>
-            <div class="fh-wave fh-wave-2"></div>
+          <div class="fh-scene-zoomwrap" id="fh-scene-zoomwrap">
+            <div class="fh-scene-sky"></div>
+            <div class="fh-scene-far"></div>
+            <div class="fh-scene-particles" id="fh-scene-particles"></div>
+            <div class="fh-water">
+              <div class="fh-fish-shadows" id="fh-scene-shadows"></div>
+              <div class="fh-wave fh-wave-1"></div>
+              <div class="fh-wave fh-wave-2"></div>
+              <div class="fh-wait-shadows" id="fh-wait-shadows"></div>
+              <div class="fh-approach-shadow" id="fh-approach-shadow">🐟</div>
+            </div>
+            <div class="fh-hook-point" id="fh-hook-point">
+              <div class="fh-ripple-idle" id="fh-ripple-idle"></div>
+              <div class="fh-bobber" id="fh-bobber">🔴</div>
+              <div class="fh-fight-fish" id="fh-fight-fish">🐟</div>
+              <div class="fh-fx-layer" id="fh-fx-layer"></div>
+              <div class="fh-fish-leap" id="fh-fish-leap"></div>
+            </div>
+            <div class="fh-flying-bobber" id="fh-flying-bobber">🔴</div>
+            <div class="fh-dock"><div class="fh-boat">🚣</div></div>
           </div>
-          <div class="fh-dock"><div class="fh-boat">🚣</div></div>
+          <div class="fh-vignette" id="fh-vignette"></div>
+          <svg class="fh-line-svg" id="fh-line-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+            <line id="fh-line-el" x1="${ROD_TIP_BASE.x}" y1="${ROD_TIP_BASE.y}" x2="${HOOK_POINT.x}" y2="${HOOK_POINT.y}" />
+          </svg>
+          <div class="fh-rod-anchor" id="fh-rod-anchor">
+            <div class="fh-hand-emoji">🤚</div>
+            <div class="fh-rod" id="fh-rod">🎣</div>
+          </div>
+          <div class="fh-bite-flash" id="fh-bite-flash">🎣 上鉤了！！</div>
+          <div class="fh-cast-meter-overlay" id="fh-cast-meter-overlay">
+            <div class="fh-cast-title">🎣 抓準時機，讓浮標甩到中間！</div>
+            <div class="fh-cast-track" id="fh-cast-track">
+              <div class="fh-cast-center-zone"></div>
+              <div class="fh-cast-marker" id="fh-cast-marker">🎯</div>
+            </div>
+            <div class="fh-cast-hint">點擊畫面或按空白鍵停止！</div>
+          </div>
+          <div class="fh-tension-overlay" id="fh-tension-overlay">
+            <div class="fh-reel-title">按住畫面或空白鍵拉緊魚線，讓張力停在安全區！</div>
+            <div class="fh-reel-gauges-row">
+              <div class="fh-reel-gauge" id="fh-reel-gauge">
+                <div class="fh-reel-zone-hi"></div>
+                <div class="fh-reel-target" id="fh-reel-target"></div>
+                <div class="fh-reel-zone-lo"></div>
+                <div class="fh-reel-marker" id="fh-reel-marker">🐟</div>
+              </div>
+              <div class="fh-reel-progress-wrap"><div class="fh-reel-progress-fill" id="fh-reel-progress-fill"></div></div>
+            </div>
+          </div>
         </div>
         <div class="fh-actions">
           <button type="button" class="fh-btn-primary fh-btn-cast" id="fh-btn-cast">🎣 拋竿</button>
           <button type="button" class="fh-btn-secondary fh-btn-aquarium" id="fh-btn-aquarium">🐠 水族箱</button>
         </div>
       </div>
-
-      <div class="fh-screen fh-cast-screen" id="fh-screen-cast" style="display:none"></div>
-      <div class="fh-screen fh-reel-screen" id="fh-screen-reel" style="display:none"></div>
 
       <div class="fh-screen" id="fh-screen-quiz" style="display:none">
         <div class="fh-quiz-fish-emoji" id="fh-quiz-emoji">🐟</div>
@@ -211,7 +279,7 @@ const FishingGame = (() => {
         <div class="fh-aq-panel">
           <div class="fh-aq-header">
             <div class="fh-aq-title">🐠 水族箱</div>
-            <div class="fh-aq-counter" id="fh-aq-counter">0/70</div>
+            <div class="fh-aq-counter" id="fh-aq-counter">0/110</div>
             <button type="button" class="fh-aq-close" id="fh-aq-close">✕</button>
           </div>
           <div class="fh-aq-tabs" id="fh-aq-tabs"></div>
@@ -229,20 +297,40 @@ const FishingGame = (() => {
     els = {
       screens: {
         pond: document.getElementById('fh-screen-pond'),
-        cast: document.getElementById('fh-screen-cast'),
-        reel: document.getElementById('fh-screen-reel'),
         quiz: document.getElementById('fh-screen-quiz'),
         result: document.getElementById('fh-screen-result'),
       },
       dexCounter: document.getElementById('fh-dex-counter'),
       pondTabs: document.getElementById('fh-pond-tabs'),
       sceneWrap: document.getElementById('fh-scene'),
+      zoomwrap: document.getElementById('fh-scene-zoomwrap'),
+      vignette: document.getElementById('fh-vignette'),
       sceneParticles: document.getElementById('fh-scene-particles'),
       sceneShadows: document.getElementById('fh-scene-shadows'),
       btnCast: document.getElementById('fh-btn-cast'),
       btnAquarium: document.getElementById('fh-btn-aquarium'),
-      castScreen: document.getElementById('fh-screen-cast'),
-      reelScreen: document.getElementById('fh-screen-reel'),
+      lineSvg: document.getElementById('fh-line-svg'),
+      lineEl: document.getElementById('fh-line-el'),
+      rodAnchor: document.getElementById('fh-rod-anchor'),
+      rodEl: document.getElementById('fh-rod'),
+      biteFlash: document.getElementById('fh-bite-flash'),
+      castOverlay: document.getElementById('fh-cast-meter-overlay'),
+      castTrack: document.getElementById('fh-cast-track'),
+      castMarker: document.getElementById('fh-cast-marker'),
+      tensionOverlay: document.getElementById('fh-tension-overlay'),
+      reelTarget: document.getElementById('fh-reel-target'),
+      reelMarker: document.getElementById('fh-reel-marker'),
+      reelProgressFill: document.getElementById('fh-reel-progress-fill'),
+      reelGauge: document.getElementById('fh-reel-gauge'),
+      hookPoint: document.getElementById('fh-hook-point'),
+      bobberEl: document.getElementById('fh-bobber'),
+      rippleIdle: document.getElementById('fh-ripple-idle'),
+      fightFish: document.getElementById('fh-fight-fish'),
+      fxLayer: document.getElementById('fh-fx-layer'),
+      fishLeap: document.getElementById('fh-fish-leap'),
+      flyingBobber: document.getElementById('fh-flying-bobber'),
+      waitShadows: document.getElementById('fh-wait-shadows'),
+      approachShadow: document.getElementById('fh-approach-shadow'),
       quizEmoji: document.getElementById('fh-quiz-emoji'),
       quizWordFallback: document.getElementById('fh-quiz-word-fallback'),
       quizReplayBtn: document.getElementById('fh-quiz-replay'),
@@ -260,6 +348,8 @@ const FishingGame = (() => {
       aqClose: document.getElementById('fh-aq-close'),
     };
 
+    resetSceneOverlays();
+
     els.btnCast.addEventListener('click', beginCast);
     els.btnAquarium.addEventListener('click', openAquarium);
     els.aqClose.addEventListener('click', closeAquarium);
@@ -268,15 +358,15 @@ const FishingGame = (() => {
       if (activeQuiz && activeQuiz.fish) TTSManager.speak(sayWord(activeQuiz.fish), 'en-US', 0.85);
     });
 
-    // Cast: click anywhere on the cast screen to stop the timing bar
-    els.castScreen.addEventListener('click', () => {
+    // Cast: click anywhere on the scene to stop the timing bar
+    els.sceneWrap.addEventListener('click', () => {
       if (currentScreen === 'cast' && castState) stopCast();
     });
 
-    // Reel: hold via pointer on the reel screen
-    els.reelScreen.addEventListener('pointerdown', () => { if (reelState) reelState.holding = true; });
-    els.reelScreen.addEventListener('pointerup', () => { if (reelState) reelState.holding = false; });
-    els.reelScreen.addEventListener('pointerleave', () => { if (reelState) reelState.holding = false; });
+    // Reel: hold via pointer anywhere on the scene
+    els.sceneWrap.addEventListener('pointerdown', () => { if (reelState) reelState.holding = true; });
+    els.sceneWrap.addEventListener('pointerup', () => { if (reelState) reelState.holding = false; });
+    els.sceneWrap.addEventListener('pointerleave', () => { if (reelState) reelState.holding = false; });
 
     // Space bar: stop cast / hold reel (only while the fishing zone is visible)
     document.addEventListener('keydown', (e) => {
@@ -294,7 +384,13 @@ const FishingGame = (() => {
 
   function showScreen(name) {
     currentScreen = name;
-    Object.entries(els.screens).forEach(([k, el]) => { el.style.display = k === name ? 'block' : 'none'; });
+    // The 'pond' / 'cast' / 'reel' phases all share the same persistent
+    // scene screen — only overlay layers toggle between them so the water,
+    // rod and line never disappear mid-interaction. 'quiz' / 'result' still
+    // fully replace the view.
+    els.screens.pond.style.display = (name === 'pond' || name === 'cast' || name === 'reel') ? 'block' : 'none';
+    els.screens.quiz.style.display = name === 'quiz' ? 'block' : 'none';
+    els.screens.result.style.display = name === 'result' ? 'block' : 'none';
   }
 
   // ===== Pond scene =====
@@ -333,28 +429,84 @@ const FishingGame = (() => {
     renderPondScreen();
   }
 
-  // ===== Cast (timing bar + rod/line animation) =====
-  function beginCast() {
-    showScreen('cast');
-    renderCastTimingDom();
-    castState = { pos: 0, dir: 1, speed: 65, lastTs: null, raf: null };
-    castState.raf = requestAnimationFrame(castLoop);
+  // ===== Scene overlay helpers (cast meter / tension bar / rod+line / zoom) =====
+  function resetSceneOverlays() {
+    showCastMeter(false);
+    showTensionOverlay(false);
+    showBiteFlash(false);
+    showFightVisuals(false);
+    showBobber(false);
+    showFishLeap(false);
+    els.waitShadows.style.display = 'none';
+    els.approachShadow.style.display = 'none';
+    els.flyingBobber.style.display = 'none';
+    triggerZoom(false);
+    positionRod(0);
   }
 
-  function renderCastTimingDom() {
-    els.castScreen.innerHTML = `
-      <div class="fh-cast-title">🎣 抓準時機，讓浮標甩到中間！</div>
-      <div class="fh-rod-rig">
-        <div class="fh-rod" id="fh-rod">🎣</div>
-      </div>
-      <div class="fh-cast-track" id="fh-cast-track">
-        <div class="fh-cast-center-zone"></div>
-        <div class="fh-cast-marker" id="fh-cast-marker">🎯</div>
-      </div>
-      <div class="fh-cast-hint">點擊畫面或按空白鍵停止！</div>
-    `;
-    els.castMarker = document.getElementById('fh-cast-marker');
-    els.rod = document.getElementById('fh-rod');
+  function showCastMeter(show) { els.castOverlay.classList.toggle('active', show); }
+  function showTensionOverlay(show) { els.tensionOverlay.classList.toggle('active', show); }
+  function showBiteFlash(show) { els.biteFlash.classList.toggle('active', show); }
+  function showFightVisuals(show) { els.fightFish.style.display = show ? 'block' : 'none'; }
+  function showBobber(show) { els.bobberEl.style.display = show ? 'block' : 'none'; els.rippleIdle.style.display = show ? 'block' : 'none'; }
+  function showFishLeap(show) { els.fishLeap.style.display = show ? 'block' : 'none'; if (!show) els.fishLeap.innerHTML = ''; }
+
+  function triggerZoom(on) {
+    if (els.zoomwrap) els.zoomwrap.classList.toggle('fh-zoomed', on);
+    if (els.vignette) els.vignette.classList.toggle('active', on);
+  }
+
+  function setLineStart(x, y) { if (els.lineEl) { els.lineEl.setAttribute('x1', x); els.lineEl.setAttribute('y1', y); } }
+  function setLineEnd(x, y) { if (els.lineEl) { els.lineEl.setAttribute('x2', x); els.lineEl.setAttribute('y2', y); } }
+
+  // Bends the hand-held rod by `deg` (driven by cast power / reel pulses) and
+  // keeps the line's rod-side anchor roughly in sync with the bend — cheap
+  // trig only, no layout reads, safe to call every animation frame.
+  function positionRod(deg) {
+    if (els.rodEl) els.rodEl.style.transform = `rotate(${deg}deg)`;
+    const rad = (deg || 0) * Math.PI / 180;
+    setLineStart(ROD_TIP_BASE.x + Math.sin(rad) * 5, ROD_TIP_BASE.y - Math.cos(rad) * 3 + 3);
+  }
+
+  function jerkRod() {
+    if (!els.rodEl) return;
+    els.rodEl.classList.remove('fh-rod-pulse');
+    void els.rodEl.offsetWidth;
+    els.rodEl.classList.add('fh-rod-pulse');
+  }
+
+  function spawnSplashFx() {
+    if (!els.fxLayer) return;
+    const fx = document.createElement('div');
+    fx.className = 'fh-splash-fx fh-splash-fx-fight';
+    fx.textContent = '💦';
+    els.fxLayer.appendChild(fx);
+    setTimeout(() => fx.remove(), 500);
+  }
+
+  function spawnCastSplash() {
+    if (!els.fxLayer) return;
+    const fx = document.createElement('div');
+    fx.className = 'fh-splash-fx';
+    fx.textContent = '💦';
+    els.fxLayer.appendChild(fx);
+    const r1 = document.createElement('div');
+    r1.className = 'fh-ripple fh-ripple-1';
+    const r2 = document.createElement('div');
+    r2.className = 'fh-ripple fh-ripple-2';
+    els.fxLayer.appendChild(r1);
+    els.fxLayer.appendChild(r2);
+    setTimeout(() => fx.remove(), 500);
+    setTimeout(() => { r1.remove(); r2.remove(); }, 1100);
+  }
+
+  // ===== Cast (power meter overlay + hand-held rod/line + fly animation) =====
+  function beginCast() {
+    showScreen('cast');
+    showCastMeter(true);
+    positionRod(0);
+    castState = { pos: 0, dir: 1, speed: 65, lastTs: null, raf: null };
+    castState.raf = requestAnimationFrame(castLoop);
   }
 
   function castLoop(ts) {
@@ -366,7 +518,7 @@ const FishingGame = (() => {
     if (castState.pos > 100) { castState.pos = 100; castState.dir = -1; }
     if (castState.pos < 0) { castState.pos = 0; castState.dir = 1; }
     if (els.castMarker) els.castMarker.style.left = castState.pos + '%';
-    if (els.rod) els.rod.style.transform = `rotate(${(castState.pos - 50) / 6}deg)`;
+    positionRod((castState.pos - 50) / 6);
     castState.raf = requestAnimationFrame(castLoop);
   }
 
@@ -375,8 +527,8 @@ const FishingGame = (() => {
     if (castState.raf) cancelAnimationFrame(castState.raf);
     const score = 1 - Math.abs(castState.pos - 50) / 50; // 0..1, 1 = perfect center
     castState = null;
-    renderCastFlyDom();
-    setTimeout(() => {
+    showCastMeter(false);
+    playCastFly(() => {
       if (currentScreen !== 'cast') return;
       renderCastWaitingDom();
       const waitMs = 1500 + Math.random() * 2500;
@@ -389,62 +541,70 @@ const FishingGame = (() => {
           enterReel(pickFishForCast(score));
         }, 550);
       }, waitMs);
-    }, 480);
+    });
   }
 
-  // Rod bends back, the line arcs the bobber out, it lands with a splash
-  // and expanding ripples.
-  function renderCastFlyDom() {
-    els.castScreen.innerHTML = `
-      <div class="fh-cast-title">🌊 拋出去！</div>
-      <div class="fh-cast-fly-wrap">
-        <div class="fh-cast-line"></div>
-        <div class="fh-cast-flying-bobber">🔴</div>
-      </div>
-    `;
-    setTimeout(() => {
-      if (currentScreen !== 'cast') return;
-      const wrap = document.querySelector('.fh-cast-fly-wrap');
-      if (wrap) wrap.insertAdjacentHTML('beforeend', `
-        <div class="fh-splash-fx">💦</div>
-        <div class="fh-ripple fh-ripple-1"></div>
-        <div class="fh-ripple fh-ripple-2"></div>
-      `);
-    }, 320);
+  // Rod bends back and the line follows the bobber (JS-driven, per animation
+  // frame) as it arcs from the rod tip out to the water; it lands with a
+  // splash + expanding ripples at the fixed hook point.
+  function playCastFly(cb) {
+    els.flyingBobber.style.display = 'block';
+    const dur = reducedMotion() ? 1 : 520;
+    const from = ROD_TIP_BASE;
+    const to = HOOK_POINT;
+    const start = performance.now();
+    function step(ts) {
+      const t = Math.min(1, (ts - start) / dur);
+      const ease = 1 - Math.pow(1 - t, 2);
+      const x = from.x + (to.x - from.x) * ease;
+      const lift = Math.sin(Math.PI * t) * -16;
+      const y = from.y + (to.y - from.y) * ease + lift;
+      els.flyingBobber.style.left = x + '%';
+      els.flyingBobber.style.top = y + '%';
+      setLineEnd(x, y);
+      if (t < 1) { requestAnimationFrame(step); }
+      else {
+        els.flyingBobber.style.display = 'none';
+        setLineEnd(to.x, to.y);
+        spawnCastSplash();
+        showBobber(true);
+        cb();
+      }
+    }
+    requestAnimationFrame(step);
   }
 
   function renderCastWaitingDom() {
-    els.castScreen.innerHTML = `
-      <div class="fh-cast-title">🌊 拋竿中...</div>
-      <div class="fh-bobber-wrap">
-        <div class="fh-wait-shadows" id="fh-wait-shadows">${fishShadowHtml(3)}</div>
-        <div class="fh-approach-shadow" id="fh-approach-shadow">🐟</div>
-        <div class="fh-bobber">🔴</div>
-        <div class="fh-ripple fh-ripple-idle"></div>
-      </div>
-      <div class="fh-cast-hint">耐心等待魚兒上鉤...</div>
-    `;
+    els.waitShadows.innerHTML = fishShadowHtml(3);
+    els.waitShadows.style.display = 'block';
+    els.approachShadow.style.display = 'block';
   }
 
   // Animate a shadow drifting toward the bobber over the wait duration to
   // build anticipation before the bite.
   function animateApproachingShadow(waitMs) {
-    const shadow = document.getElementById('fh-approach-shadow');
+    const shadow = els.approachShadow;
     if (!shadow) return;
-    shadow.style.left = '-20%';
+    shadow.style.left = '-15%';
+    shadow.style.top = '58%';
     shadow.style.opacity = '0.35';
     // Force layout so the transition below actually animates from the start.
     void shadow.offsetWidth;
-    shadow.style.transition = `left ${Math.max(300, waitMs - 300)}ms linear, opacity ${Math.max(300, waitMs - 300)}ms linear`;
+    const dur = reducedMotion() ? 200 : Math.max(300, waitMs - 300);
+    shadow.style.transition = `left ${dur}ms linear, opacity ${dur}ms linear`;
     requestAnimationFrame(() => {
       if (currentScreen !== 'cast') return;
-      shadow.style.left = '48%';
+      shadow.style.left = '46%';
       shadow.style.opacity = '0.9';
     });
   }
 
   function renderCastBiteDom() {
-    els.castScreen.innerHTML = `<div class="fh-bite-flash">🎣 上鉤了！！</div>`;
+    els.waitShadows.style.display = 'none';
+    els.approachShadow.style.display = 'none';
+    showBobber(false);
+    showBiteFlash(true);
+    triggerZoom(true);
   }
 
   // Test hook: skip the timing bar + wait entirely and go straight to the
@@ -452,6 +612,8 @@ const FishingGame = (() => {
   function skipToBite() {
     if (castState) { cancelAnimationFrame(castState.raf); castState = null; }
     showScreen('cast');
+    showCastMeter(false);
+    triggerZoom(true);
     enterReel(pickFishForCast(1));
   }
 
@@ -478,42 +640,23 @@ const FishingGame = (() => {
     return source[source.length - 1];
   }
 
-  // ===== Reel-in tension fight =====
+  // ===== Reel-in tension fight (still zoomed in from the bite) =====
   function enterReel(fish) {
     GameEngine.setDeferLevelUp(true);
     showScreen('reel');
+    showBiteFlash(false);
+    showBobber(false);
+    showFightVisuals(true);
+    showTensionOverlay(true);
     const tuning = FIGHT_TUNING[fish.rarity] || FIGHT_TUNING[1];
-    renderReelDom(tuning);
+    els.reelTarget.style.bottom = (50 - tuning.half) + '%';
+    els.reelTarget.style.height = (tuning.half * 2) + '%';
     reelState = {
       fish, tuning, tension: 50, progress: 0, holding: false,
       time: 0, nextPulse: tuning.pulseEvery * (0.6 + Math.random() * 0.6),
       lastTs: null, raf: null,
     };
     reelState.raf = requestAnimationFrame(reelLoop);
-  }
-
-  function renderReelDom(tuning) {
-    els.reelScreen.innerHTML = `
-      <div class="fh-reel-title">🎣 拉竿大戰！按住畫面或空白鍵拉緊魚線，讓張力停在安全區！</div>
-      <div class="fh-rod-rig fh-rod-rig-reel">
-        <div class="fh-rod fh-rod-fight" id="fh-rod-fight">🎣</div>
-      </div>
-      <div class="fh-reel-gauge" id="fh-reel-gauge">
-        <div class="fh-reel-zone-hi"></div>
-        <div class="fh-reel-target" id="fh-reel-target"></div>
-        <div class="fh-reel-zone-lo"></div>
-        <div class="fh-reel-marker" id="fh-reel-marker">🐟</div>
-      </div>
-      <div class="fh-reel-progress-wrap"><div class="fh-reel-progress-fill" id="fh-reel-progress-fill"></div></div>
-      <div class="fh-reel-hint">魚兒用力拉扯魚線，讓標記停在黃色安全區！</div>
-    `;
-    els.reelTarget = document.getElementById('fh-reel-target');
-    els.reelMarker = document.getElementById('fh-reel-marker');
-    els.reelProgressFill = document.getElementById('fh-reel-progress-fill');
-    els.reelGauge = document.getElementById('fh-reel-gauge');
-    els.rodFight = document.getElementById('fh-rod-fight');
-    els.reelTarget.style.bottom = (50 - tuning.half) + '%';
-    els.reelTarget.style.height = (tuning.half * 2) + '%';
   }
 
   function reelLoop(ts) {
@@ -535,15 +678,15 @@ const FishingGame = (() => {
     if (reelState.nextPulse <= 0) {
       reelState.tension -= t.pulseStrength;
       reelState.nextPulse = t.pulseEvery * (0.7 + Math.random() * 0.6);
-      if (els.rodFight) {
-        els.rodFight.classList.remove('fh-rod-pulse');
-        void els.rodFight.offsetWidth;
-        els.rodFight.classList.add('fh-rod-pulse');
-      }
-      flashSplash();
+      jerkRod();
+      spawnSplashFx();
     }
 
     reelState.tension = Math.max(0, Math.min(100, reelState.tension));
+
+    // The rod stays gently bent toward the fish throughout the fight, with
+    // pulse jerks layered on top via the fh-rod-pulse animation class.
+    positionRod((reelState.tension - 50) / 8);
 
     if (reelState.tension <= 0) { resolveReelFail('loose'); return; }
     if (reelState.tension >= 100) { resolveReelFail('snap'); return; }
@@ -556,15 +699,6 @@ const FishingGame = (() => {
 
     if (reelState.progress >= 100) { reelSuccess(); return; }
     reelState.raf = requestAnimationFrame(reelLoop);
-  }
-
-  function flashSplash() {
-    if (!els.reelGauge) return;
-    const fx = document.createElement('div');
-    fx.className = 'fh-reel-splash-fx';
-    fx.textContent = '💦';
-    els.reelGauge.appendChild(fx);
-    setTimeout(() => fx.remove(), 500);
   }
 
   function updateReelDom() {
@@ -582,7 +716,11 @@ const FishingGame = (() => {
     if (reelState.raf) cancelAnimationFrame(reelState.raf);
     const fish = reelState.fish;
     reelState = null;
-    startQuiz(fish);
+    showTensionOverlay(false);
+    showFightVisuals(false);
+    positionRod(0);
+    triggerZoom(false);
+    playCatchLeap(fish, () => startQuiz(fish));
   }
 
   function resolveReelFail(reason) {
@@ -591,7 +729,55 @@ const FishingGame = (() => {
     const fish = reelState.fish;
     reelState = null;
     SoundManager.playWrong();
-    doEscape(fish, reason);
+    showTensionOverlay(false);
+    positionRod(0);
+    triggerZoom(false);
+    if (reason === 'snap') {
+      playLineSnapFx(() => { showFightVisuals(false); doEscape(fish, reason); });
+    } else {
+      showFightVisuals(false);
+      doEscape(fish, reason);
+    }
+  }
+
+  // Catch moment: the fish leaps out of the water in an arc with water
+  // droplets before the game hands off to the listening quiz. Skipped
+  // (near-instant) under prefers-reduced-motion.
+  function playCatchLeap(fish, cb) {
+    if (reducedMotion()) { cb(); return; }
+    els.fishLeap.innerHTML = fishLeapHtml(fish);
+    els.fishLeap.style.display = 'block';
+    els.fishLeap.classList.remove('fh-leap-play');
+    void els.fishLeap.offsetWidth;
+    els.fishLeap.classList.add('fh-leap-play');
+    setTimeout(() => {
+      showFishLeap(false);
+      els.fishLeap.classList.remove('fh-leap-play');
+      cb();
+    }, 650);
+  }
+
+  function fishLeapHtml(fish) {
+    let html = `<span class="fh-leap-fish">${fish.emoji}</span>`;
+    for (let i = 0; i < 5; i++) {
+      const dx = (Math.random() * 46 - 23).toFixed(1);
+      const delay = (Math.random() * 0.15).toFixed(2);
+      html += `<span class="fh-leap-drop" style="--dx:${dx}px; animation-delay:${delay}s;">💧</span>`;
+    }
+    return html;
+  }
+
+  // Line-snap failure: the line whips back and the fish's shadow darts away
+  // before the escape message shows.
+  function playLineSnapFx(cb) {
+    if (reducedMotion()) { cb(); return; }
+    els.lineSvg.classList.add('fh-line-snap');
+    els.fightFish.classList.add('fh-shadow-dart');
+    setTimeout(() => {
+      els.lineSvg.classList.remove('fh-line-snap');
+      els.fightFish.classList.remove('fh-shadow-dart');
+      cb();
+    }, 420);
   }
 
   // Test hook: instantly complete the reel-in regardless of gauge state.
@@ -607,6 +793,18 @@ const FishingGame = (() => {
     if (!reelState) return false;
     reelState.tension = 100;
     resolveReelFail('snap');
+    return true;
+  }
+
+  // Test hook: abort a pending cast cleanly (used by tests to measure the
+  // cast-meter overlay without following through the whole random-wait chain).
+  function cancelCast() {
+    if (!castState) return false;
+    cancelAnimationFrame(castState.raf);
+    castState = null;
+    showCastMeter(false);
+    positionRod(0);
+    showScreen('pond');
     return true;
   }
 
@@ -780,6 +978,13 @@ const FishingGame = (() => {
 
     GameEngine.recordWord(fish.word);
     GameEngine.recordFishCatch();
+    // Distinct/legendary dex counters only advance on a species' FIRST catch,
+    // so they always equal the count of distinct (legendary) species caught —
+    // never on repeat catches of an already-caught species.
+    if (isNew) {
+      GameEngine.recordFishDistinct();
+      if (isLegendary(fish)) GameEngine.recordFishLegendary();
+    }
 
     const reward = RARITY_REWARD[fish.rarity] || RARITY_REWARD[1];
     let xp = reward.xp, gems = reward.gems;

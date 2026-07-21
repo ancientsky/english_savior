@@ -1,5 +1,5 @@
 /* ===== Fishing Pond Species Data =====
-   70 species across 9 ponds:
+   110 species across 14 ponds:
      pond 1 — 陽光池塘 Sunny Pond        (8 fish, easy words, rarity 1)          [unchanged]
      pond 2 — 森林小溪 Forest Stream     (8 fish, easy/medium, rarity 1-2)       [unchanged]
      pond 3 — 珊瑚海灣 Coral Bay         (8 fish, medium, rarity 2)              [unchanged]
@@ -9,10 +9,16 @@
      pond 7 — 雲霧瀑布潭 Misty Falls     (8 fish: 7 rarity 1-2 + 1 legendary)
      pond 8 — 深海海溝 Abyssal Trench   (8 fish: 7 rarity 1-2 + 1 legendary)
      pond 9 — 星空夢境湖 Starlight Lake  (8 fish: 7 rarity 1-2 + 1 legendary)
-   Each entry: { id, emoji, word (UPPERCASE EN), zh, rarity: 1|2|3|4, pond: 1-9 }
+     pond 10 — 櫻花花瓣溪 Blossom Stream (8 fish: 7 rarity 1-2 + 1 legendary)
+     pond 11 — 恐龍化石湖 Fossil Lake    (8 fish: 7 rarity 1-2 + 1 legendary)
+     pond 12 — 幽靈沼澤 Ghost Swamp      (8 fish: 7 rarity 1-2 + 1 legendary)
+     pond 13 — 糖果汽水湖 Candy Soda Lake(8 fish: 7 rarity 1-2 + 1 legendary)
+     pond 14 — 未來科技水道 Neon Tech Canal (8 fish: 7 rarity 1-2 + 1 legendary)
+   Each entry: { id, emoji, word (UPPERCASE EN), zh, rarity: 1|2|3|4, pond: 1-14 }
    rarity 4 == legendary (also flagged `legendary: true` for readability/UI);
    the original 30 entries (ponds 1-4) are byte-for-byte unchanged so old
-   saves (english_savior_fishing.caught) stay valid.
+   saves (english_savior_fishing.caught) stay valid. 10 legendary species total
+   (one per pond 5-14) back the 傳說獵人/傳說大師 achievements.
 */
 
 const FISH_SPECIES = [
@@ -103,4 +109,54 @@ const FISH_SPECIES = [
   { id: 'cloud',      emoji: '☁️', word: 'CLOUD',      zh: '雲朵',   rarity: 2, pond: 9 },
   { id: 'wizard',     emoji: '🧙', word: 'WIZARD',     zh: '巫師',   rarity: 2, pond: 9 },
   { id: 'starwhale',  emoji: '🐳', word: 'STARWHALE',  say: 'star whale',  zh: '星空鯨', rarity: 4, pond: 9, legendary: true },
+
+  // ===== Pond 10: 櫻花花瓣溪 (Cherry-Blossom Stream) — spring/petals, rarity 1-2 + legendary =====
+  { id: 'petal',     emoji: '🌸', word: 'PETAL',     zh: '花瓣',     rarity: 1, pond: 10 },
+  { id: 'blossom',   emoji: '🌼', word: 'BLOSSOM',   zh: '花朵',     rarity: 1, pond: 10 },
+  { id: 'koi',       emoji: '🎏', word: 'KOI',       zh: '錦鯉',     rarity: 1, pond: 10 },
+  { id: 'sparrow',   emoji: '🐦', word: 'SPARROW',   zh: '麻雀',     rarity: 1, pond: 10 },
+  { id: 'rabbit',    emoji: '🐰', word: 'RABBIT',    zh: '兔子',     rarity: 2, pond: 10 },
+  { id: 'lantern',   emoji: '🏮', word: 'LANTERN',   zh: '燈籠',     rarity: 2, pond: 10 },
+  { id: 'origami',   emoji: '🎴', word: 'ORIGAMI',   zh: '摺紙',     rarity: 2, pond: 10 },
+  { id: 'cherrykoi', emoji: '🎏', word: 'CHERRYKOI', say: 'cherry koi', zh: '櫻花錦鯉', rarity: 4, pond: 10, legendary: true },
+
+  // ===== Pond 11: 恐龍化石湖 (Dino Fossil Lake) — prehistoric, rarity 1-2 + legendary =====
+  { id: 'fossil',   emoji: '🦴', word: 'FOSSIL',   zh: '化石',     rarity: 1, pond: 11 },
+  { id: 'bone',     emoji: '🍖', word: 'BONE',     zh: '骨頭',     rarity: 1, pond: 11 },
+  { id: 'amber',    emoji: '🔶', word: 'AMBER',    zh: '琥珀',     rarity: 1, pond: 11 },
+  { id: 'cave',     emoji: '🕳️', word: 'CAVE',     zh: '洞穴',     rarity: 1, pond: 11 },
+  { id: 'rock',     emoji: '🪨', word: 'ROCK',     zh: '石頭',     rarity: 2, pond: 11 },
+  { id: 'raptor',   emoji: '🦖', word: 'RAPTOR',   zh: '迅猛龍',   rarity: 2, pond: 11 },
+  { id: 'mammoth',  emoji: '🐘', word: 'MAMMOTH',  zh: '長毛象',   rarity: 2, pond: 11 },
+  { id: 'dinosaur', emoji: '🦕', word: 'DINOSAUR', zh: '恐龍',     rarity: 4, pond: 11, legendary: true },
+
+  // ===== Pond 12: 幽靈沼澤 (Ghost Swamp) — cute-spooky, rarity 1-2 + legendary =====
+  { id: 'pumpkin',    emoji: '🎃',  word: 'PUMPKIN',    zh: '南瓜',     rarity: 1, pond: 12 },
+  { id: 'bat',        emoji: '🦇',  word: 'BAT',        zh: '蝙蝠',     rarity: 1, pond: 12 },
+  { id: 'spider',     emoji: '🕷️', word: 'SPIDER',     zh: '蜘蛛',     rarity: 1, pond: 12 },
+  { id: 'candle',     emoji: '🕯️', word: 'CANDLE',     zh: '蠟燭',     rarity: 1, pond: 12 },
+  { id: 'witch',      emoji: '🧙‍♀️', word: 'WITCH',      zh: '女巫',     rarity: 2, pond: 12 },
+  { id: 'skeleton',   emoji: '💀',  word: 'SKELETON',   zh: '骷髏',     rarity: 2, pond: 12 },
+  { id: 'zombie',     emoji: '🧟',  word: 'ZOMBIE',     zh: '殭屍',     rarity: 2, pond: 12 },
+  { id: 'ghostking',  emoji: '👑',  word: 'GHOSTKING',  say: 'ghost king', zh: '幽靈王', rarity: 4, pond: 12, legendary: true },
+
+  // ===== Pond 13: 糖果汽水湖 (Candy Soda Lake) — sweets, rarity 1-2 + legendary =====
+  { id: 'candy',        emoji: '🍬', word: 'CANDY',        zh: '糖果',     rarity: 1, pond: 13 },
+  { id: 'cookie',       emoji: '🍪', word: 'COOKIE',       zh: '餅乾',     rarity: 1, pond: 13 },
+  { id: 'donut',        emoji: '🍩', word: 'DONUT',        zh: '甜甜圈',   rarity: 1, pond: 13 },
+  { id: 'lollipop',     emoji: '🍭', word: 'LOLLIPOP',     zh: '棒棒糖',   rarity: 1, pond: 13 },
+  { id: 'gummy',        emoji: '🐻', word: 'GUMMY',        zh: '軟糖',     rarity: 2, pond: 13 },
+  { id: 'marshmallow',  emoji: '🍡', word: 'MARSHMALLOW',  zh: '棉花糖',   rarity: 2, pond: 13 },
+  { id: 'cupcake',      emoji: '🧁', word: 'CUPCAKE',      zh: '杯子蛋糕', rarity: 2, pond: 13 },
+  { id: 'candywhale',   emoji: '🐳', word: 'CANDYWHALE',   say: 'candy whale', zh: '糖果鯨魚', rarity: 4, pond: 13, legendary: true },
+
+  // ===== Pond 14: 未來科技水道 (Neon Tech Canal) — sci-fi, rarity 1-2 + legendary =====
+  { id: 'robot',       emoji: '🤖', word: 'ROBOT',       zh: '機器人',   rarity: 1, pond: 14 },
+  { id: 'laser',       emoji: '🔦', word: 'LASER',       zh: '雷射',     rarity: 1, pond: 14 },
+  { id: 'rocket',      emoji: '🚀', word: 'ROCKET',      zh: '火箭',     rarity: 1, pond: 14 },
+  { id: 'drone',       emoji: '🚁', word: 'DRONE',       zh: '無人機',   rarity: 1, pond: 14 },
+  { id: 'circuit',     emoji: '🔌', word: 'CIRCUIT',     zh: '電路',     rarity: 2, pond: 14 },
+  { id: 'hologram',    emoji: '🔮', word: 'HOLOGRAM',    zh: '全息影像', rarity: 2, pond: 14 },
+  { id: 'android',     emoji: '🦾', word: 'ANDROID',     zh: '仿生人',   rarity: 2, pond: 14 },
+  { id: 'cybershark',  emoji: '🦈', word: 'CYBERSHARK',  say: 'cyber shark', zh: '電子鯊魚', rarity: 4, pond: 14, legendary: true },
 ];
