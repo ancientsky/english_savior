@@ -220,6 +220,8 @@ const GameEngine = (() => {
       tutorLessons: 0,
       detectiveCases: 0,
       fishCatches: 0,
+      fishLegendaries: 0,
+      fishDistinct: 0,
       builderSentences: 0,
       builderLandmarks: 0,
       speakCasts: 0,
@@ -666,6 +668,20 @@ const GameEngine = (() => {
     save();
     checkAchievements();
     checkDailyQuests();
+  }
+
+  // fishing.js calls these only on the FIRST catch of a species, so the
+  // counters equal distinct species / distinct legendaries collected.
+  function recordFishLegendary() {
+    state.fishLegendaries = (state.fishLegendaries || 0) + 1;
+    save();
+    checkAchievements();
+  }
+
+  function recordFishDistinct() {
+    state.fishDistinct = (state.fishDistinct || 0) + 1;
+    save();
+    checkAchievements();
   }
 
   function recordCandy() {
@@ -1380,6 +1396,7 @@ const GameEngine = (() => {
     recordSpelling, recordListening,
     recordEmpire, recordEmpireAge, recordCandy, recordSling,
     recordPetCatch, recordPetGym, recordTypingWord, recordTutorLesson, recordDetectiveCase, recordFishCatch,
+    recordFishLegendary, recordFishDistinct,
     recordBuilder, recordBuilderLandmark, recordSpeak,
     recordTowerWord, recordTowerBoss,
     recordRpgTalk, recordRpgChapter,
