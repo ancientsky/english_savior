@@ -191,7 +191,7 @@ const FishingGame = (() => {
   // Coordinates (0-100 scene-relative space, matching the SVG line viewBox)
   // that the rod's resting tip and the hooked-fish point live at. Used both
   // to draw the line and to place the fly-cast animation's start/end.
-  const ROD_TIP_BASE = { x: 82, y: 40 };
+  const ROD_TIP_BASE = { x: 80, y: 76 };
   const HOOK_POINT = { x: 50, y: 60 };
 
   // ===== DOM scaffold =====
