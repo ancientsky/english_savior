@@ -99,8 +99,8 @@
   position: absolute; font-size: 20px; opacity: 0.32; filter: brightness(0) blur(0.5px);
   animation-timing-function: linear; animation-iteration-count: infinite;
 }
-.fh-shadow-ltr { left: -12%; animation-name: fh-shadow-right; }
-.fh-shadow-rtl { right: -12%; animation-name: fh-shadow-left; transform: scaleX(-1); }
+.fh-shadow-ltr { left: -12%; animation-name: fh-shadow-right; transform: scaleX(-1); }
+.fh-shadow-rtl { right: -12%; animation-name: fh-shadow-left; }
 @keyframes fh-shadow-right { 0% { left: -12%; } 100% { left: 108%; } }
 @keyframes fh-shadow-left { 0% { right: -12%; } 100% { right: 108%; } }
 .fh-wave {
@@ -620,8 +620,8 @@
   filter: drop-shadow(0 2px 3px rgba(0,0,0,0.3));
 }
 .fh-swim-fish.fh-swim-legendary { filter: drop-shadow(0 0 8px #ffd23f) drop-shadow(0 2px 3px rgba(0,0,0,0.3)); font-size: 32px; }
-.fh-swim-ltr { left: -10%; animation: fh-swim-right linear infinite; }
-.fh-swim-rtl { right: -10%; animation: fh-swim-left linear infinite; transform: scaleX(-1); }
+.fh-swim-ltr { left: -10%; animation: fh-swim-right linear infinite; transform: scaleX(-1); }
+.fh-swim-rtl { right: -10%; animation: fh-swim-left linear infinite; }
 @keyframes fh-swim-right {
   0% { left: -10%; }
   100% { left: 105%; }
@@ -686,3 +686,27 @@ body.game-max #zone-fishing.active .fh-reel-gauge,
 body.game-max #zone-fishing.active .fh-reel-progress-wrap { height: clamp(180px, 42vh, 480px); }
 body.game-max #zone-fishing.active .fh-rod { font-size: clamp(36px, 5vw, 64px); }
 body.game-max #zone-fishing.active .fh-hand-emoji { font-size: clamp(22px, 3.2vw, 40px); }
+
+
+/* ===== game-max：聽力題/結果畫面與場景版面一致（撐滿高度、置中、放大） ===== */
+body.game-max #zone-fishing.active .fh-screen {
+  min-height: calc(100vh - 120px);
+}
+body.game-max #zone-fishing.active #fh-screen-quiz,
+body.game-max #zone-fishing.active #fh-screen-result {
+  /* JS 用 inline display:block 切換畫面，需 !important 才能改成置中 flex */
+  display: flex !important;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+}
+body.game-max #zone-fishing.active #fh-screen-quiz[style*="display: none"],
+body.game-max #zone-fishing.active #fh-screen-result[style*="display: none"] {
+  display: none !important;
+}
+body.game-max #zone-fishing.active .fh-quiz-fish-emoji { font-size: 96px; }
+body.game-max #zone-fishing.active .fh-quiz-prompt { font-size: 20px; }
+body.game-max #zone-fishing.active .fh-quiz-body button { font-size: 18px; padding: 16px 22px; min-width: 220px; }
+body.game-max #zone-fishing.active #fh-result-body { font-size: 1.25em; display: flex; flex-direction: column; align-items: center; gap: 16px; }
+body.game-max #zone-fishing.active .fh-escape-msg { font-size: 22px; max-width: 640px; }
