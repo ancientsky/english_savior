@@ -189,6 +189,69 @@
     linear-gradient(180deg, #0a2a40 0%, #001018 100%);
 }
 
+/* Ponds 15-29 (third expansion pack) */
+.fh-pond-15 .fh-scene-sky { background: linear-gradient(180deg, #0e1a2e 0%, #2a3d52 100%); }
+.fh-pond-15 .fh-scene-far { background-color: rgba(30, 70, 45, 0.5); }
+.fh-pond-15 .fh-water { background: linear-gradient(180deg, #1c4a3a 0%, #0a1f18 100%); }
+
+.fh-pond-16 .fh-scene-sky { background: linear-gradient(180deg, #6b7686 0%, #c3ccd6 100%); }
+.fh-pond-16 .fh-scene-far { background-color: rgba(70, 80, 95, 0.5); }
+.fh-pond-16 .fh-water { background: linear-gradient(180deg, #4a6478 0%, #1c2c3a 100%); }
+
+.fh-pond-17 .fh-scene-sky { background: linear-gradient(180deg, #14401f 0%, #4a8c4a 100%); }
+.fh-pond-17 .fh-scene-far { background-color: rgba(20, 90, 40, 0.5); }
+.fh-pond-17 .fh-water { background: linear-gradient(180deg, #245c34 0%, #0e2a18 100%); }
+
+.fh-pond-18 .fh-scene-sky { background: linear-gradient(180deg, #f2d08a 0%, #fff3d6 100%); }
+.fh-pond-18 .fh-scene-far { background-color: rgba(210, 160, 90, 0.5); }
+.fh-pond-18 .fh-water { background: linear-gradient(180deg, #3fbfb0 0%, #1a6e64 100%); }
+
+.fh-pond-19 .fh-scene-sky { background: linear-gradient(180deg, #103838 0%, #1f6363 100%); }
+.fh-pond-19 .fh-scene-far { background-color: rgba(10, 60, 60, 0.55); }
+.fh-pond-19 .fh-water { background: linear-gradient(180deg, #0d4a4a 0%, #021616 100%); }
+
+.fh-pond-20 .fh-scene-sky { background: linear-gradient(180deg, #ffd9ec 0%, #fff0f8 100%); }
+.fh-pond-20 .fh-scene-far { background-color: rgba(255, 190, 220, 0.45); }
+.fh-pond-20 .fh-water { background: linear-gradient(180deg, #4ab8b0 0%, #1d6c68 100%); }
+
+.fh-pond-21 .fh-scene-sky { background: linear-gradient(180deg, #b8362f 0%, #ffe4d6 100%); }
+.fh-pond-21 .fh-scene-far { background-color: rgba(180, 50, 40, 0.4); }
+.fh-pond-21 .fh-water { background: linear-gradient(180deg, #d94f3f 0%, #7a1f18 100%); }
+
+.fh-pond-22 .fh-scene-sky { background: linear-gradient(180deg, #a8102f 0%, #ffd23f 100%); }
+.fh-pond-22 .fh-scene-far { background-color: rgba(200, 30, 60, 0.4); }
+.fh-pond-22 .fh-water { background: linear-gradient(180deg, #e0304f 0%, #7a1030 100%); }
+
+.fh-pond-23 .fh-scene-sky { background: linear-gradient(180deg, #4a1c5c 0%, #ff8c3f 100%); }
+.fh-pond-23 .fh-scene-far { background-color: rgba(90, 40, 110, 0.5); }
+.fh-pond-23 .fh-water { background: linear-gradient(180deg, #3a1a4a 0%, #140818 100%); }
+
+.fh-pond-24 .fh-scene-sky { background: linear-gradient(180deg, #0c3320 0%, #1e5c38 100%); }
+.fh-pond-24 .fh-scene-far { background-color: rgba(160, 20, 30, 0.4); }
+.fh-pond-24 .fh-water { background: linear-gradient(180deg, #bfe9ff 0%, #4a90b8 100%); }
+
+.fh-pond-25 .fh-scene-sky { background: linear-gradient(180deg, #ff9a3c 0%, #ffe0a3 100%); }
+.fh-pond-25 .fh-scene-far { background-color: rgba(230, 140, 40, 0.4); }
+.fh-pond-25 .fh-water { background: linear-gradient(180deg, #ffb84f 0%, #b8620f 100%); }
+
+.fh-pond-26 .fh-scene-sky { background: linear-gradient(180deg, #3a1a6e 0%, #7a4ac0 100%); }
+.fh-pond-26 .fh-scene-far { background-color: rgba(90, 40, 140, 0.5); }
+.fh-pond-26 .fh-water { background: linear-gradient(180deg, #4a1a7a 0%, #170833 100%); }
+
+.fh-pond-27 .fh-scene-sky { background: linear-gradient(180deg, #2a2e38 0%, #545e6e 100%); }
+.fh-pond-27 .fh-scene-far { background-color: rgba(40, 45, 60, 0.55); }
+.fh-pond-27 .fh-water { background: linear-gradient(180deg, #1c3a5c 0%, #060c18 100%); }
+
+.fh-pond-28 .fh-scene-sky { background: linear-gradient(180deg, #dff3ff 0%, #ffffff 100%); }
+.fh-pond-28 .fh-scene-far { background-color: rgba(200, 230, 250, 0.5); }
+.fh-pond-28 .fh-water { background: linear-gradient(180deg, #aee0ff 0%, #5ba8dc 100%); }
+
+.fh-pond-29 .fh-scene-sky {
+  background: linear-gradient(180deg, #ffd6e8 0%, #d6e8ff 40%, #d6fff0 70%, #fff6d6 100%);
+}
+.fh-pond-29 .fh-scene-far { background-color: rgba(220, 180, 240, 0.4); }
+.fh-pond-29 .fh-water { background: linear-gradient(180deg, #c084fc 0%, #60a5fa 50%, #34d399 100%); }
+
 /* ===== Action buttons ===== */
 .fh-actions { display: flex; justify-content: center; gap: 14px; flex-wrap: wrap; }
 .fh-btn-primary, .fh-btn-secondary {
@@ -615,6 +678,8 @@
 .fh-aq-tank-ghost { background: linear-gradient(180deg, #3a5a4a 0%, #0a120d 100%); }
 .fh-aq-tank-soda { background: linear-gradient(180deg, #a06fff 0%, #341654 100%); }
 .fh-aq-tank-tech { background: linear-gradient(180deg, #0a2a40 0%, #000508 100%); }
+.fh-aq-tank-confetti { background: linear-gradient(180deg, #e0304f 0%, #7a1030 100%); }
+.fh-aq-tank-spark { background: linear-gradient(180deg, #1c3a5c 0%, #060c18 100%); }
 .fh-swim-fish {
   position: absolute; font-size: 28px; cursor: pointer; z-index: 2;
   filter: drop-shadow(0 2px 3px rgba(0,0,0,0.3));
