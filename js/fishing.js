@@ -432,6 +432,11 @@ const FishingGame = (() => {
       btn.addEventListener('click', () => selectPond(p.id));
       els.pondTabs.appendChild(btn);
     });
+    // 29 池在手機是橫向滑動條：讓目前的池自動捲到可見位置
+    const activeTab = els.pondTabs.querySelector('.fh-pond-tab.active');
+    if (activeTab && activeTab.scrollIntoView) {
+      activeTab.scrollIntoView({ block: 'nearest', inline: 'center' });
+    }
   }
 
   function selectPond(id) {
@@ -1128,6 +1133,10 @@ const FishingGame = (() => {
       btn.addEventListener('click', () => { aquariumPond = p.id; renderAquarium(); });
       els.aqTabs.appendChild(btn);
     });
+    const aqActiveTab = els.aqTabs.querySelector('.fh-aq-tab.active');
+    if (aqActiveTab && aqActiveTab.scrollIntoView) {
+      aqActiveTab.scrollIntoView({ block: 'nearest', inline: 'center' });
+    }
 
     const speciesInPond = FISH_SPECIES.filter(f => f.pond === aquariumPond);
     const caughtInPond = speciesInPond.filter(f => save.caught[f.id]).length;

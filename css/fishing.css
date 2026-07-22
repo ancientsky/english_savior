@@ -775,3 +775,22 @@ body.game-max #zone-fishing.active .fh-quiz-prompt { font-size: 20px; }
 body.game-max #zone-fishing.active .fh-quiz-body button { font-size: 18px; padding: 16px 22px; min-width: 220px; }
 body.game-max #zone-fishing.active #fh-result-body { font-size: 1.25em; display: flex; flex-direction: column; align-items: center; gap: 16px; }
 body.game-max #zone-fishing.active .fh-escape-msg { font-size: 22px; max-width: 640px; }
+
+
+/* ===== 手機：29 池分頁改單列橫向滑動條（主畫面＋水族箱） ===== */
+@media (max-width: 640px) {
+  .fh-pond-tabs, .fh-aq-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    padding-bottom: 6px;
+    max-width: 100%;
+  }
+  .fh-pond-tab, .fh-aq-tab {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+}
+/* 水族箱分頁在任何寬度都不可擠掉水槽：上限兩列高，超過改捲動 */
+.fh-aq-tabs { max-height: 96px; overflow-y: auto; }
