@@ -1,5 +1,5 @@
 /* ===== 悠閒釣魚塘 (Cozy Fishing Pond) =====
-   A listening + collection game across 14 ponds (110 species total):
+   A listening + collection game across 29 ponds (305 species total):
      1. 拋竿: the interaction lives INSIDE the scene as overlays anchored to a
         hand-held rod (bottom-right) with an SVG line running to the bobber.
         A power-meter arc oscillates near the waterline; click/space stops it
@@ -42,7 +42,8 @@ const FishingGame = (() => {
   //   abyss = deep glints, ember = volcano, snow = ice cave,
   //   mist = waterfall, bubble = trench, stars = dream lake,
   //   petal = blossom stream, fossil = dino lake, ghost = swamp wisps,
-  //   soda = candy lake bubbles, tech = neon grid glow
+  //   soda = candy lake bubbles, tech = neon grid glow,
+  //   confetti = circus streamers (new), spark = electric storm crackle (new)
   const PONDS = [
     { id: 1, name: '陽光池塘',     icon: '☀️', unlockAt: 0,  ambience: 'default' },
     { id: 2, name: '森林小溪',     icon: '🌲', unlockAt: 6,  ambience: 'leaf' },
@@ -58,6 +59,21 @@ const FishingGame = (() => {
     { id: 12, name: '幽靈沼澤',    icon: '👻', unlockAt: 72, ambience: 'ghost' },
     { id: 13, name: '糖果汽水湖',  icon: '🍬', unlockAt: 78, ambience: 'soda' },
     { id: 14, name: '未來科技水道', icon: '🤖', unlockAt: 84, ambience: 'tech' },
+    { id: 15, name: '忍者庭園池',   icon: '🏯', unlockAt: 90,  ambience: 'leaf' },
+    { id: 16, name: '城堡護城河',   icon: '🏰', unlockAt: 100, ambience: 'mist' },
+    { id: 17, name: '亞馬遜雨林河', icon: '🌿', unlockAt: 110, ambience: 'leaf' },
+    { id: 18, name: '沙漠綠洲',     icon: '🏜️', unlockAt: 120, ambience: 'fossil' },
+    { id: 19, name: '沉船寶藏灣',   icon: '⚓', unlockAt: 130, ambience: 'bubble' },
+    { id: 20, name: '人魚珊瑚宮',   icon: '🧜', unlockAt: 140, ambience: 'coral' },
+    { id: 21, name: '神社錦鯉池',   icon: '⛩️', unlockAt: 150, ambience: 'petal' },
+    { id: 22, name: '馬戲團水舞台', icon: '🎪', unlockAt: 160, ambience: 'confetti' },
+    { id: 23, name: '萬聖南瓜沼',   icon: '🎃', unlockAt: 170, ambience: 'ghost' },
+    { id: 24, name: '聖誕冰湖',     icon: '🎄', unlockAt: 180, ambience: 'snow' },
+    { id: 25, name: '夕陽金灘',     icon: '🌅', unlockAt: 190, ambience: 'ember' },
+    { id: 26, name: '魔法藥水湖',   icon: '🔮', unlockAt: 200, ambience: 'abyss' },
+    { id: 27, name: '雷雨閃電湖',   icon: '🌩️', unlockAt: 212, ambience: 'spark' },
+    { id: 28, name: '天空雲海池',   icon: '☁️', unlockAt: 224, ambience: 'mist' },
+    { id: 29, name: '彩虹瀑布秘境', icon: '🌈', unlockAt: 236, ambience: 'stars' },
   ];
 
   const RARITY_REWARD = {
@@ -164,6 +180,7 @@ const FishingGame = (() => {
       default: '💧', leaf: '🍃', coral: '🫧', abyss: '✨',
       ember: '🔥', snow: '❄️', mist: '🌫️', bubble: '🫧', stars: '⭐',
       petal: '🌸', fossil: '🦴', ghost: '👻', soda: '🫧', tech: '💠',
+      confetti: '🎊', spark: '⚡',
     };
     const glyph = glyphByAmbience[ambience] || '💧';
     let html = '';
