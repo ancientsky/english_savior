@@ -35,24 +35,42 @@
   padding: 6px 10px;
   white-space: nowrap;
 }
-.fh-pond-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
-.fh-pond-tab {
-  font-family: var(--ui-font);
-  font-weight: 700;
-  font-size: 13px;
-  padding: 7px 12px;
-  border-radius: 999px;
-  border: 2px solid #7cc4e8;
-  background: rgba(255,255,255,0.75);
-  color: #205a78;
-  cursor: pointer;
-  transition: transform 0.15s, background 0.15s;
-  min-height: 32px;
+/* Compact pond nav (replaces the old 29-tab wall): [◀] [chip] [▶] [🗺️ map] */
+.fh-pond-nav {
+  display: flex; align-items: center; gap: 8px; flex-wrap: nowrap;
+  max-width: 100%; min-width: 0;
 }
-.fh-pond-tab:hover { transform: translateY(-2px); }
-.fh-pond-tab.active { background: #ffd23f; border-color: #e0a800; color: #5a3d00; }
-.fh-pond-tab.locked { background: rgba(120,120,140,0.25); border-color: #8a8aa0; color: #52526a; cursor: not-allowed; font-size: 12px; }
-.fh-pond-tab.locked:hover { transform: none; }
+.fh-pond-nav-arrow {
+  font-family: var(--pixel-font);
+  flex: 0 0 auto;
+  width: 32px; height: 32px; min-height: 32px;
+  border-radius: 50%; border: 2px solid #2a7ba8;
+  background: #eaf9ff; color: #08344a; cursor: pointer;
+  font-size: 13px; display: flex; align-items: center; justify-content: center;
+  transition: transform 0.15s, background 0.15s;
+}
+.fh-pond-nav-arrow:hover:not(:disabled) { transform: translateY(-2px); background: #cdeeff; }
+.fh-pond-nav-arrow:disabled { opacity: 0.35; cursor: not-allowed; }
+.fh-pond-chip {
+  display: flex; align-items: center; gap: 6px;
+  font-family: var(--ui-font); font-weight: 700; font-size: 13px;
+  padding: 6px 12px; border-radius: 999px;
+  border: 2px solid #e0a800; background: #ffd23f; color: #5a3d00;
+  min-height: 32px; min-width: 0;
+  flex: 1 1 auto; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  justify-content: center;
+}
+.fh-pond-chip-icon { flex: 0 0 auto; }
+.fh-pond-chip-name { overflow: hidden; text-overflow: ellipsis; }
+.fh-pond-chip-count { flex: 0 0 auto; font-size: 11px; opacity: 0.8; }
+.fh-pond-map-btn {
+  font-family: var(--ui-font); font-weight: 700; font-size: 12px;
+  flex: 0 0 auto; white-space: nowrap;
+  padding: 7px 12px; border-radius: 999px;
+  border: 2px solid #7cc4e8; background: rgba(255,255,255,0.85); color: #205a78;
+  cursor: pointer; min-height: 32px; transition: transform 0.15s, background 0.15s;
+}
+.fh-pond-map-btn:hover { transform: translateY(-2px); background: #eaf9ff; }
 
 /* ===== Pond scene (layered 2.5D) ===== */
 .fh-scene {
@@ -269,6 +287,13 @@
 .fh-btn-secondary { background: #7cc4e8; border-color: #2a7ba8; color: #08344a; }
 .fh-btn-primary:hover, .fh-btn-secondary:hover { transform: translateY(-3px); }
 .fh-btn-primary:active, .fh-btn-secondary:active { transform: translateY(1px); box-shadow: 0 1px 0 rgba(0,0,0,0.2); }
+/* 拋竿 button greyed out during fly/wait/reel (a click there is ignored —
+   this just makes that state visible, and native :disabled blocks the
+   click from ever reaching the handler). */
+.fh-btn-cast.fh-btn-disabled, .fh-btn-cast:disabled {
+  opacity: 0.45; cursor: not-allowed; box-shadow: none; transform: none;
+}
+.fh-btn-cast.fh-btn-disabled:hover, .fh-btn-cast:disabled:hover { transform: none; }
 
 /* ===== Cast / reel-fight: immersive in-scene overlays =====
    The power meter, tension gauge, rod+line and camera-zoom all live INSIDE
@@ -717,6 +742,60 @@
 .fh-dex-count { font-size: 10px; color: #666; }
 .fh-dex-legend-tag { position: absolute; top: 2px; right: 4px; font-size: 11px; }
 
+/* ===== Pond map overlay (🗺️ 釣場地圖) — modeled on the aquarium overlay ===== */
+.fh-pond-map-overlay {
+  display: none;
+  position: fixed; inset: 0; z-index: 500;
+  background: rgba(6, 20, 32, 0.72);
+  align-items: center; justify-content: center;
+  padding: 20px;
+}
+.fh-pond-map-overlay.active { display: flex; }
+.fh-map-panel {
+  width: 100%; max-width: 900px; max-height: 90vh;
+  background: linear-gradient(180deg, #eaf9ff, #cdeeff);
+  border: 3px solid #1c74a8; border-radius: 18px;
+  padding: 16px; display: flex; flex-direction: column; gap: 10px;
+  overflow-y: auto; color: #08344a;
+}
+.fh-map-header { display: flex; align-items: center; gap: 10px; }
+.fh-map-title { font-family: var(--pixel-font); font-size: 16px; flex: 1; }
+.fh-map-close {
+  width: 32px; height: 32px; border-radius: 50%; border: 2px solid #2a7ba8;
+  background: #fff; cursor: pointer; font-size: 14px;
+}
+.fh-map-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;
+}
+@media (min-width: 560px) { .fh-map-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (min-width: 820px) { .fh-map-grid { grid-template-columns: repeat(4, 1fr); } }
+@media (min-width: 1100px) { .fh-map-grid { grid-template-columns: repeat(5, 1fr); } }
+@media (min-width: 1360px) { .fh-map-grid { grid-template-columns: repeat(6, 1fr); } }
+.fh-map-card {
+  position: relative;
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 12px 8px; border-radius: 12px; border: 2px solid #7cc4e8;
+  background: rgba(255,255,255,0.85); color: #205a78;
+  cursor: pointer; font-family: var(--ui-font); font-size: 12px;
+  min-height: 32px; transition: transform 0.15s, box-shadow 0.15s;
+}
+.fh-map-card:hover:not(:disabled) { transform: translateY(-3px); }
+.fh-map-card.current { border-color: #e0a800; box-shadow: 0 0 0 2px #ffd23f inset, 0 0 10px rgba(255,178,0,0.5); }
+.fh-map-card.locked { background: rgba(120,120,140,0.25); border-color: #8a8aa0; color: #52526a; cursor: not-allowed; }
+.fh-map-card-icon { font-size: 26px; }
+.fh-map-card-locked-icon { font-size: 20px; opacity: 0.8; }
+.fh-map-card-name { font-weight: 700; text-align: center; }
+.fh-map-card-count { font-size: 11px; opacity: 0.85; }
+.fh-map-card-badge {
+  position: absolute; top: 4px; right: 6px; font-size: 13px;
+  filter: drop-shadow(0 0 3px rgba(255,178,0,0.8));
+}
+.fh-map-progress {
+  width: 100%; height: 6px; border-radius: 999px; background: rgba(0,0,0,0.15);
+  overflow: hidden; margin-top: 2px;
+}
+.fh-map-progress-fill { height: 100%; background: linear-gradient(90deg, #7cc4e8, #2a7ba8); border-radius: 999px; }
+
 /* ===== Responsive ===== */
 @media (max-width: 600px) {
   .fh-screen { padding: 12px; min-height: 380px; }
@@ -732,8 +811,11 @@
 @media (max-width: 420px) {
   .fh-container { max-width: 100%; }
   .fh-scene { height: 170px; }
-  .fh-pond-tabs { gap: 4px; }
-  .fh-pond-tab { font-size: 11px; padding: 6px 9px; }
+  .fh-pond-nav { gap: 5px; }
+  .fh-pond-nav-arrow { width: 28px; height: 28px; min-height: 28px; font-size: 11px; }
+  .fh-pond-chip { font-size: 11px; padding: 5px 8px; gap: 4px; }
+  .fh-pond-chip-count { font-size: 10px; }
+  .fh-pond-map-btn { font-size: 10px; padding: 6px 8px; }
   .fh-reel-gauge { width: 60px; }
   .fh-reel-progress-wrap { width: 20px; }
   .fh-aq-panel { padding: 10px; }
@@ -777,9 +859,9 @@ body.game-max #zone-fishing.active #fh-result-body { font-size: 1.25em; display:
 body.game-max #zone-fishing.active .fh-escape-msg { font-size: 22px; max-width: 640px; }
 
 
-/* ===== 手機：29 池分頁改單列橫向滑動條（主畫面＋水族箱） ===== */
+/* ===== 手機：水族箱的 29 池分頁改單列橫向滑動條 ===== */
 @media (max-width: 640px) {
-  .fh-pond-tabs, .fh-aq-tabs {
+  .fh-aq-tabs {
     flex-wrap: nowrap;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
@@ -787,7 +869,7 @@ body.game-max #zone-fishing.active .fh-escape-msg { font-size: 22px; max-width: 
     padding-bottom: 6px;
     max-width: 100%;
   }
-  .fh-pond-tab, .fh-aq-tab {
+  .fh-aq-tab {
     flex: 0 0 auto;
     white-space: nowrap;
   }
