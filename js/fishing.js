@@ -104,6 +104,15 @@ const FishingGame = (() => {
   let reelState = null;      // { fish, tension, vel, progress, holding, time, tuning, nextPulse, lastTs, raf }
   let activeQuiz = null;     // { type: 'options'|'spell', fish, ... }
 
+  // Generation token guarding the fly->wait->bite setTimeout chain kicked off
+  // by stopCast(): every transition back to the pond / into a fresh cast /
+  // into the reel fight / into the result screen bumps this, and every
+  // pending timeout in the OLD chain checks it before touching shared state.
+  // This is what makes rapid re-clicking of 拋竿 safe — a stale chain from a
+  // cast the player already abandoned can never fire a bite or open the reel
+  // fight on top of whatever is happening now.
+  let castSession = 0;
+
   function init() {
     const root = document.getElementById('fh-root');
     if (!root) return;
@@ -217,7 +226,12 @@ const FishingGame = (() => {
       <div class="fh-screen" id="fh-screen-pond">
         <div class="fh-topbar">
           <div class="fh-dex-counter" id="fh-dex-counter">📖 圖鑑 0/110</div>
-          <div class="fh-pond-tabs" id="fh-pond-tabs"></div>
+          <div class="fh-pond-nav" id="fh-pond-nav">
+            <button type="button" class="fh-pond-nav-arrow" id="fh-pond-prev" aria-label="上一個池塘">◀</button>
+            <div class="fh-pond-chip" id="fh-pond-chip"></div>
+            <button type="button" class="fh-pond-nav-arrow" id="fh-pond-next" aria-label="下一個池塘">▶</button>
+            <button type="button" class="fh-pond-map-btn" id="fh-pond-map-btn">🗺️ 釣場地圖</button>
+          </div>
         </div>
         <div class="fh-scene fh-pond-1" id="fh-scene">
           <div class="fh-scene-zoomwrap" id="fh-scene-zoomwrap">
@@ -306,6 +320,16 @@ const FishingGame = (() => {
           <div class="fh-aq-dex-strip" id="fh-aq-dex-strip"></div>
         </div>
       </div>
+
+      <div class="fh-pond-map-overlay" id="fh-pond-map-overlay">
+        <div class="fh-map-panel">
+          <div class="fh-map-header">
+            <div class="fh-map-title">🗺️ 釣場地圖</div>
+            <button type="button" class="fh-map-close" id="fh-map-close">✕</button>
+          </div>
+          <div class="fh-map-grid" id="fh-map-grid"></div>
+        </div>
+      </div>
     `;
     // Set initial screen(result) hidden — it starts empty and is only shown
     // via showScreen(), but give it display:none up front like the others.
@@ -318,7 +342,14 @@ const FishingGame = (() => {
         result: document.getElementById('fh-screen-result'),
       },
       dexCounter: document.getElementById('fh-dex-counter'),
-      pondTabs: document.getElementById('fh-pond-tabs'),
+      pondNav: document.getElementById('fh-pond-nav'),
+      pondPrev: document.getElementById('fh-pond-prev'),
+      pondChip: document.getElementById('fh-pond-chip'),
+      pondNext: document.getElementById('fh-pond-next'),
+      pondMapBtn: document.getElementById('fh-pond-map-btn'),
+      pondMapOverlay: document.getElementById('fh-pond-map-overlay'),
+      pondMapGrid: document.getElementById('fh-map-grid'),
+      pondMapClose: document.getElementById('fh-map-close'),
       sceneWrap: document.getElementById('fh-scene'),
       zoomwrap: document.getElementById('fh-scene-zoomwrap'),
       vignette: document.getElementById('fh-vignette'),
@@ -367,9 +398,17 @@ const FishingGame = (() => {
 
     resetSceneOverlays();
 
-    els.btnCast.addEventListener('click', beginCast);
+    els.btnCast.addEventListener('click', handleCastClick);
     els.btnAquarium.addEventListener('click', openAquarium);
     els.aqClose.addEventListener('click', closeAquarium);
+
+    els.pondPrev.addEventListener('click', () => stepPond(-1));
+    els.pondNext.addEventListener('click', () => stepPond(1));
+    els.pondMapBtn.addEventListener('click', openPondMap);
+    els.pondMapClose.addEventListener('click', closePondMap);
+    els.pondMapOverlay.addEventListener('click', (e) => {
+      if (e.target === els.pondMapOverlay) closePondMap();
+    });
 
     els.quizReplayBtn.addEventListener('click', () => {
       if (activeQuiz && activeQuiz.fish) TTSManager.speak(sayWord(activeQuiz.fish), 'en-US', 0.85);
@@ -397,6 +436,41 @@ const FishingGame = (() => {
     });
 
     renderSceneAmbience(save.pond);
+    updateCastButton();
+  }
+
+  // The 拋竿 button doubles as the cast-power-meter's stop control, and is
+  // disabled (visually + via the `disabled` attribute, so it can't even
+  // receive a click) whenever a click could re-enter the fly/wait/reel
+  // sequence mid-flight. This — plus the castSession token guarding the
+  // fly->wait->bite chain below — is what makes rapid re-clicking safe.
+  function updateCastButton() {
+    if (!els.btnCast) return;
+    if (castState) {
+      els.btnCast.disabled = false;
+      els.btnCast.textContent = '⏸ 停止';
+      els.btnCast.classList.remove('fh-btn-disabled');
+    } else if (currentScreen === 'pond' && !reelState) {
+      els.btnCast.disabled = false;
+      els.btnCast.textContent = '🎣 拋竿';
+      els.btnCast.classList.remove('fh-btn-disabled');
+    } else {
+      els.btnCast.disabled = true;
+      els.btnCast.textContent = '🎣 拋竿';
+      els.btnCast.classList.add('fh-btn-disabled');
+    }
+  }
+
+  // Click router for the 拋竿 button: while the power meter is running a
+  // click STOPS it (more intuitive than restarting a fresh meter); while
+  // idle at the pond it STARTS a cast; any other phase (fly/wait/reel/quiz)
+  // ignores the click outright — the button is disabled then anyway, but
+  // this guard also protects against clicks that land before the disabled
+  // attribute takes effect (e.g. very rapid repeated clicks).
+  function handleCastClick() {
+    if (castState) { stopCast(); return; }
+    if (currentScreen === 'pond' && !castState && !reelState) { beginCast(); return; }
+    // Ignore: a cast/reel is already in flight.
   }
 
   function showScreen(name) {
@@ -421,22 +495,8 @@ const FishingGame = (() => {
     els.dexCounter.textContent = `📖 圖鑑 ${distinctCaughtCount()}/${FISH_SPECIES.length}`;
     els.sceneWrap.className = 'fh-scene fh-pond-' + save.pond;
     renderSceneAmbience(save.pond);
-    els.pondTabs.innerHTML = '';
-    PONDS.forEach(p => {
-      const unlocked = isPondUnlocked(p.id);
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'fh-pond-tab' + (p.id === save.pond ? ' active' : '') + (unlocked ? '' : ' locked');
-      btn.innerHTML = unlocked ? `${p.icon} ${p.name}` : `🔒 需收藏 ${p.unlockAt} 種`;
-      btn.title = p.name;
-      btn.addEventListener('click', () => selectPond(p.id));
-      els.pondTabs.appendChild(btn);
-    });
-    // 29 池在手機是橫向滑動條：讓目前的池自動捲到可見位置
-    const activeTab = els.pondTabs.querySelector('.fh-pond-tab.active');
-    if (activeTab && activeTab.scrollIntoView) {
-      activeTab.scrollIntoView({ block: 'nearest', inline: 'center' });
-    }
+    renderPondNav();
+    if (pondMapOpen) renderPondMap();
   }
 
   function selectPond(id) {
@@ -449,6 +509,95 @@ const FishingGame = (() => {
     save.pond = id;
     persist();
     renderPondScreen();
+  }
+
+  // How many of this pond's own species have been caught so far (out of
+  // its total roster) — shared by the compact nav chip and the pond map.
+  function pondFishCounts(pondId) {
+    const speciesInPond = FISH_SPECIES.filter(f => f.pond === pondId);
+    const caught = speciesInPond.filter(f => save.caught[f.id]).length;
+    return { caught, total: speciesInPond.length };
+  }
+
+  function unlockedPondIds() {
+    return PONDS.filter(p => isPondUnlocked(p.id)).map(p => p.id);
+  }
+
+  // Compact nav: [◀] [current-pond chip] [▶] [🗺️ 釣場地圖] — replaces the
+  // old 29-tab wall. ◀/▶ step between unlocked ponds only and disable at
+  // either end (no wrap) so the control stays predictable.
+  function renderPondNav() {
+    const p = PONDS.find(x => x.id === save.pond);
+    if (!p || !els.pondChip) return;
+    const { caught, total } = pondFishCounts(p.id);
+    els.pondChip.innerHTML = `<span class="fh-pond-chip-icon">${p.icon}</span><span class="fh-pond-chip-name">${p.name}</span><span class="fh-pond-chip-count">本池 ${caught}/${total}</span>`;
+    const ids = unlockedPondIds();
+    const idx = ids.indexOf(p.id);
+    if (els.pondPrev) els.pondPrev.disabled = idx <= 0;
+    if (els.pondNext) els.pondNext.disabled = idx === -1 || idx >= ids.length - 1;
+  }
+
+  function stepPond(dir) {
+    const ids = unlockedPondIds();
+    if (!ids.length) return;
+    const idx = ids.indexOf(save.pond);
+    if (idx === -1) { selectPond(ids[0]); return; }
+    const next = idx + dir;
+    if (next < 0 || next >= ids.length) return; // disabled at the ends, nothing to do
+    selectPond(ids[next]);
+  }
+
+  // ===== Pond map overlay (🗺️ 釣場地圖) =====
+  let pondMapOpen = false;
+
+  function openPondMap() {
+    pondMapOpen = true;
+    els.pondMapOverlay.classList.add('active');
+    renderPondMap();
+  }
+
+  function closePondMap() {
+    pondMapOpen = false;
+    els.pondMapOverlay.classList.remove('active');
+  }
+
+  function renderPondMap() {
+    if (!els.pondMapGrid) return;
+    els.pondMapGrid.innerHTML = '';
+    PONDS.forEach(p => {
+      const unlocked = isPondUnlocked(p.id);
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'fh-map-card' + (unlocked ? '' : ' locked') + (unlocked && p.id === save.pond ? ' current' : '');
+      if (unlocked) {
+        const { caught, total } = pondFishCounts(p.id);
+        const legendaryFish = FISH_SPECIES.find(f => f.pond === p.id && isLegendary(f));
+        const legendaryCaught = legendaryFish && save.caught[legendaryFish.id];
+        card.innerHTML = `
+          <span class="fh-map-card-icon">${p.icon}</span>
+          <span class="fh-map-card-name">${p.name}</span>
+          <span class="fh-map-card-count">本池 ${caught}/${total}</span>
+          ${legendaryCaught ? '<span class="fh-map-card-badge">🌟</span>' : ''}
+        `;
+        card.title = p.name;
+        card.addEventListener('click', () => { selectPond(p.id); closePondMap(); });
+      } else {
+        card.disabled = true;
+        card.title = p.name;
+        // A thin sliver stays visible as soon as the player has caught
+        // anything at all, so progress always reads as "started" rather
+        // than silently 0-width for very high unlock thresholds.
+        const pct = distinctCaughtCount() > 0
+          ? Math.max(2, Math.min(100, Math.round((distinctCaughtCount() / p.unlockAt) * 100)))
+          : 0;
+        card.innerHTML = `
+          <span class="fh-map-card-icon fh-map-card-locked-icon">🔒</span>
+          <span class="fh-map-card-name">需收藏 ${p.unlockAt} 種</span>
+          <div class="fh-map-progress"><div class="fh-map-progress-fill" style="width:${pct}%"></div></div>
+        `;
+      }
+      els.pondMapGrid.appendChild(card);
+    });
   }
 
   // ===== Scene overlay helpers (cast meter / tension bar / rod+line / zoom) =====
@@ -524,11 +673,13 @@ const FishingGame = (() => {
 
   // ===== Cast (power meter overlay + hand-held rod/line + fly animation) =====
   function beginCast() {
+    castSession++; // invalidate any leftover fly/wait/bite chain from a prior cast
     showScreen('cast');
     showCastMeter(true);
     positionRod(0);
     castState = { pos: 0, dir: 1, speed: 65, lastTs: null, raf: null };
     castState.raf = requestAnimationFrame(castLoop);
+    updateCastButton();
   }
 
   function castLoop(ts) {
@@ -550,16 +701,24 @@ const FishingGame = (() => {
     const score = 1 - Math.abs(castState.pos - 50) / 50; // 0..1, 1 = perfect center
     castState = null;
     showCastMeter(false);
-    playCastFly(() => {
-      if (currentScreen !== 'cast') return;
+    updateCastButton();
+    // Snapshot the session token: every step of the fly->wait->bite chain
+    // below re-checks it against the live `castSession` before touching
+    // shared state, so a cancelCast()+beginCast() (or any other transition
+    // back to the pond) fired while this chain is still pending makes it a
+    // silent no-op instead of double-firing a stale bite/reel on top of the
+    // new cast.
+    const session = castSession;
+    playCastFly(session, () => {
+      if (session !== castSession || currentScreen !== 'cast') return;
       renderCastWaitingDom();
       const waitMs = 1500 + Math.random() * 2500;
-      animateApproachingShadow(waitMs);
+      animateApproachingShadow(waitMs, session);
       setTimeout(() => {
-        if (currentScreen !== 'cast') return;
+        if (session !== castSession || currentScreen !== 'cast') return;
         renderCastBiteDom();
         setTimeout(() => {
-          if (currentScreen !== 'cast') return;
+          if (session !== castSession || currentScreen !== 'cast') return;
           enterReel(pickFishForCast(score));
         }, 550);
       }, waitMs);
@@ -568,14 +727,17 @@ const FishingGame = (() => {
 
   // Rod bends back and the line follows the bobber (JS-driven, per animation
   // frame) as it arcs from the rod tip out to the water; it lands with a
-  // splash + expanding ripples at the fixed hook point.
-  function playCastFly(cb) {
+  // splash + expanding ripples at the fixed hook point. Aborts early (hides
+  // the flying bobber, skips the splash/cb) if `session` goes stale mid-flight
+  // — e.g. cancelCast() fired while this animation was still running.
+  function playCastFly(session, cb) {
     els.flyingBobber.style.display = 'block';
     const dur = reducedMotion() ? 1 : 520;
     const from = ROD_TIP_BASE;
     const to = HOOK_POINT;
     const start = performance.now();
     function step(ts) {
+      if (session !== castSession) { els.flyingBobber.style.display = 'none'; return; }
       const t = Math.min(1, (ts - start) / dur);
       const ease = 1 - Math.pow(1 - t, 2);
       const x = from.x + (to.x - from.x) * ease;
@@ -604,7 +766,7 @@ const FishingGame = (() => {
 
   // Animate a shadow drifting toward the bobber over the wait duration to
   // build anticipation before the bite.
-  function animateApproachingShadow(waitMs) {
+  function animateApproachingShadow(waitMs, session) {
     const shadow = els.approachShadow;
     if (!shadow) return;
     shadow.style.left = '-15%';
@@ -615,7 +777,7 @@ const FishingGame = (() => {
     const dur = reducedMotion() ? 200 : Math.max(300, waitMs - 300);
     shadow.style.transition = `left ${dur}ms linear, opacity ${dur}ms linear`;
     requestAnimationFrame(() => {
-      if (currentScreen !== 'cast') return;
+      if (session !== castSession || currentScreen !== 'cast') return;
       shadow.style.left = '46%';
       shadow.style.opacity = '0.9';
     });
@@ -633,6 +795,7 @@ const FishingGame = (() => {
   // reel-in minigame (deterministic — no click timing / random wait needed).
   function skipToBite() {
     if (castState) { cancelAnimationFrame(castState.raf); castState = null; }
+    castSession++; // invalidate any pending chain from a prior real cast
     showScreen('cast');
     showCastMeter(false);
     triggerZoom(true);
@@ -664,6 +827,7 @@ const FishingGame = (() => {
 
   // ===== Reel-in tension fight (still zoomed in from the bite) =====
   function enterReel(fish) {
+    castSession++; // entering the fight closes out the cast chain for good
     GameEngine.setDeferLevelUp(true);
     showScreen('reel');
     showBiteFlash(false);
@@ -679,6 +843,7 @@ const FishingGame = (() => {
       lastTs: null, raf: null,
     };
     reelState.raf = requestAnimationFrame(reelLoop);
+    updateCastButton();
   }
 
   function reelLoop(ts) {
@@ -805,6 +970,7 @@ const FishingGame = (() => {
   // Test hook: instantly complete the reel-in regardless of gauge state.
   function forceReelSuccess() {
     if (!reelState) return false;
+    castSession++;
     reelState.progress = 100;
     reelSuccess();
     return true;
@@ -813,20 +979,27 @@ const FishingGame = (() => {
   // Test hook: force a line-snap failure regardless of gauge state.
   function forceReelSnap() {
     if (!reelState) return false;
+    castSession++;
     reelState.tension = 100;
     resolveReelFail('snap');
     return true;
   }
 
-  // Test hook: abort a pending cast cleanly (used by tests to measure the
-  // cast-meter overlay without following through the whole random-wait chain).
+  // Test hook: abort a pending cast (or an in-progress reel fight) cleanly —
+  // used by tests to measure the cast-meter overlay without following
+  // through the whole random-wait chain, and to simulate a player bailing
+  // out mid-cast/mid-fight. Bumps castSession unconditionally so any
+  // fly/wait/bite chain still pending from this cast can never fire into
+  // whatever happens next.
   function cancelCast() {
-    if (!castState) return false;
-    cancelAnimationFrame(castState.raf);
-    castState = null;
-    showCastMeter(false);
-    positionRod(0);
+    if (currentScreen !== 'cast' && currentScreen !== 'reel') return false;
+    castSession++;
+    if (castState) { cancelAnimationFrame(castState.raf); castState = null; }
+    if (reelState) { if (reelState.raf) cancelAnimationFrame(reelState.raf); reelState = null; }
+    GameEngine.setDeferLevelUp(false);
+    resetSceneOverlays();
     showScreen('pond');
+    updateCastButton();
     return true;
   }
 
@@ -994,6 +1167,7 @@ const FishingGame = (() => {
   }
 
   function doCatch(fish) {
+    castSession++;
     const isNew = !save.caught[fish.id];
     save.caught[fish.id] = (save.caught[fish.id] || 0) + 1;
     persist();
@@ -1074,6 +1248,7 @@ const FishingGame = (() => {
   };
 
   function doEscape(fish, reason) {
+    castSession++;
     GameEngine.setDeferLevelUp(false);
     GameEngine.flushPendingLevelUps();
 
@@ -1093,7 +1268,7 @@ const FishingGame = (() => {
     const again = document.getElementById('fh-result-cast-again');
     const back = document.getElementById('fh-result-back');
     if (again) again.addEventListener('click', () => { renderPondScreen(); showScreen('pond'); beginCast(); });
-    if (back) back.addEventListener('click', () => { renderPondScreen(); showScreen('pond'); });
+    if (back) back.addEventListener('click', () => { renderPondScreen(); showScreen('pond'); updateCastButton(); });
   }
 
   function checkPondCompletion(pondId) {

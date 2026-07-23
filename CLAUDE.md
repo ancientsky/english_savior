@@ -55,7 +55,7 @@ js/
   typing.js             — Typing Defense: monsters carry words across 3 lanes, type the word to laser them (first-letter target lock, prefix highlight, boss waves, WPM stats, mobile mini-QWERTY)
   tutor.js              — Touch-Typing Camp: 20 sequential lessons — basic camp 1-12 (home row F/J outward + word graduation exam) and advanced camp 13-20 (space/Shift caps/number row/symbols/function-key intro incl. Tab/Caps/Backspace/Delete/Ctrl/Alt/Win/sentence exam), 9-color finger-zone keyboard (extended layout for lessons ≥13), two-hand+thumb indicator, star rating
   detective.js          — English Detective Agency: 48 escape-room mystery cases — 24 basic (4 rooms) + 24 advanced 特別調查組 (adv: true, 8 rooms, phantom-thief arc with arcZh interstitials, clear pays 60XP+15💎) × 6 puzzle types (read/liar/code-lock/witness/timeline-ordering/alibi cross-check), clue board, culprit accusation, star rating (DETECTIVE_CASES in data/detective.js)
-  fishing.js            — Cozy Fishing Pond: 2.5D parallax scenes, in-scene cast/reel overlays (hand-held rod + SVG line, bite camera-zoom + vignette, tension-fight with thrashing fish, catch-moment fish leap; scales up in game-max), TTS listening quiz (rare/legendary = spelling), 305 fish across 29 unlockable ponds (25 rarity-4 legendaries paying 30XP+5💎; first-catch calls recordFishDistinct/recordFishLegendary; dex milestones at 100/200/300), per-pond aquarium album (FISH_SPECIES in data/fishing.js)
+  fishing.js            — Cozy Fishing Pond: 2.5D parallax scenes, in-scene cast/reel overlays (hand-held rod + SVG line, bite camera-zoom + vignette, tension-fight with thrashing fish, catch-moment fish leap; scales up in game-max), TTS listening quiz (rare/legendary = spelling), 305 fish across 29 unlockable ponds (25 rarity-4 legendaries paying 30XP+5💎; first-catch calls recordFishDistinct/recordFishLegendary; dex milestones at 100/200/300), per-pond aquarium album, compact pond nav + full-screen pond-map picker (cast button is re-entrancy-guarded via a castSession generation token) (FISH_SPECIES in data/fishing.js)
   sky.js                — Sky Citadel open-world 3D adventure (Three.js; islands/physics/camera/mobs/84 quests incl. 18 hidden/4 bosses/galaxy+secret+underground regions/world events/puzzle types/active-item tray/title perks/minimap)
   cloud.js              — Save backup: file export/import + optional Google Drive appDataFolder sync (owner fills GOOGLE_CLIENT_ID; see DEPLOYMENT.md)
   daily.js              — Daily quest tracking and rendering
@@ -179,7 +179,7 @@ python3 -m http.server 8000
 ```
 
 ### Cache busting
-All CSS/JS references in index.html carry a `?v=N` query string. GitHub Pages caches assets for 10 minutes, so a freshly deployed index.html can otherwise pair with stale cached JS/CSS (symptoms: a new game's zone shows but its dynamic UI is empty). **Bump the version number on every release that changes JS or CSS** (single `sed -i 's/?v=45/?v=46/g' index.html`-style edit).
+All CSS/JS references in index.html carry a `?v=N` query string. GitHub Pages caches assets for 10 minutes, so a freshly deployed index.html can otherwise pair with stale cached JS/CSS (symptoms: a new game's zone shows but its dynamic UI is empty). **Bump the version number on every release that changes JS or CSS** (single `sed -i 's/?v=46/?v=47/g' index.html`-style edit).
 
 ### Testing
 There is no automated test suite. Manual testing in a browser is the current workflow. Verify changes by opening `index.html` and exercising the affected game zone.
