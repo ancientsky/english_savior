@@ -165,6 +165,35 @@
   box-shadow: 0 0 14px rgba(0, 180, 216, 0.85);
 }
 
+/* Super star (🌟): born when 3+ specials line up and merge. The biggest,
+   showiest glow in the game — gold/white shimmer to match its "clear the
+   whole board" power. Reuses the base .star cd-star-glow pulse (see above)
+   rather than adding a second `filter`-driven animation, so the two never
+   fight over the same property. */
+.cd-cell.star.sp-super {
+  background: conic-gradient(from 0deg,
+    rgba(255, 255, 255, 0.65), rgba(255, 209, 102, 0.65), rgba(255, 255, 255, 0.65),
+    rgba(255, 209, 102, 0.65), rgba(255, 255, 255, 0.65));
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.95), 0 0 36px rgba(255, 209, 102, 0.85);
+}
+
+/* Light full-board flash the instant a special×special combo detonates
+   (see js/candy.js comboDetonate). Toggled onto .cd-board-wrap for ~0.4s. */
+.cd-board-wrap.cd-combo-flash::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 15;
+  pointer-events: none;
+  border-radius: inherit;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0) 70%);
+  animation: cd-combo-flash-fade 0.4s ease-out forwards;
+}
+@keyframes cd-combo-flash-fade {
+  0%   { opacity: 1; }
+  100% { opacity: 0; }
+}
+
 /* NOTE: deliberately does NOT animate `transform` here (no scale breathing).
    Stars must keep a perfectly static bounding box at rest — kids need a
    stable tap target, and a continuously resizing box also breaks
