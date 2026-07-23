@@ -13,10 +13,10 @@ const CandyGame = (() => {
   const COLS = 8, ROWS = 8;
   const STAR = 'star'; // special candy type
 
-  // Themed-foods expansion: 10 daily food themes × 6 foods. Each level picks
-  // a theme (level - 1) % 10, so the board's candies + goal words rotate
+  // Themed-foods expansion: 20 daily food themes × 6 foods. Each level picks
+  // a theme (level - 1) % 20, so the board's candies + goal words rotate
   // through a different food vocabulary set every day/level. Every emoji and
-  // English word is unique across all 60 foods.
+  // English word is unique across all 120 foods.
   const FOOD_THEMES = [
     {
       id: 'fruit1', name: '水果日 I', icon: '🍎',
@@ -128,6 +128,116 @@ const CandyGame = (() => {
         { id: 'skewer',    emoji: '🍢', word: 'SKEWER',    zh: '串燒' },
       ],
     },
+    {
+      id: 'fruit3', name: '水果日 III', icon: '🍈',
+      foods: [
+        { id: 'melon',       emoji: '🍈', word: 'MELON',       zh: '哈密瓜' },
+        { id: 'pear',        emoji: '🍐', word: 'PEAR',        zh: '梨子' },
+        { id: 'blueberry',   emoji: '🫐', word: 'BLUEBERRY',   zh: '藍莓' },
+        { id: 'avocado',     emoji: '🥑', word: 'AVOCADO',     zh: '酪梨' },
+        { id: 'green_apple', emoji: '🍏', word: 'GREEN APPLE', zh: '青蘋果' },
+        { id: 'olive',       emoji: '🫒', word: 'OLIVE',       zh: '橄欖' },
+      ],
+    },
+    {
+      id: 'veggie2', name: '蔬菜日 II', icon: '🥒',
+      foods: [
+        { id: 'cucumber',   emoji: '🥒', word: 'CUCUMBER',   zh: '小黃瓜' },
+        { id: 'eggplant',   emoji: '🍆', word: 'EGGPLANT',   zh: '茄子' },
+        { id: 'mushroom',   emoji: '🍄', word: 'MUSHROOM',   zh: '蘑菇' },
+        { id: 'bell_pepper',emoji: '🫑', word: 'BELL PEPPER',zh: '甜椒' },
+        { id: 'garlic',     emoji: '🧄', word: 'GARLIC',     zh: '大蒜' },
+        { id: 'lettuce',    emoji: '🥬', word: 'LETTUCE',    zh: '萵苣' },
+      ],
+    },
+    {
+      id: 'bakery', name: '烘焙日', icon: '🥐',
+      foods: [
+        { id: 'croissant', emoji: '🥐', word: 'CROISSANT', zh: '可頌' },
+        { id: 'baguette',  emoji: '🥖', word: 'BAGUETTE',  zh: '法國麵包' },
+        { id: 'bagel',     emoji: '🥯', word: 'BAGEL',     zh: '貝果' },
+        { id: 'pie',       emoji: '🥧', word: 'PIE',       zh: '派' },
+        { id: 'butter',    emoji: '🧈', word: 'BUTTER',    zh: '奶油' },
+        { id: 'cheese',    emoji: '🧀', word: 'CHEESE',    zh: '起司' },
+      ],
+    },
+    {
+      id: 'snacks', name: '日式點心日', icon: '🍡',
+      foods: [
+        { id: 'dango',        emoji: '🍡', word: 'DANGO',        zh: '糯米糰子' },
+        { id: 'onigiri',      emoji: '🍙', word: 'ONIGIRI',      zh: '飯糰' },
+        { id: 'rice_cracker', emoji: '🍘', word: 'RICE CRACKER', zh: '米餅' },
+        { id: 'fish_cake',    emoji: '🍥', word: 'FISH CAKE',    zh: '魚板' },
+        { id: 'mooncake',     emoji: '🥮', word: 'MOONCAKE',     zh: '月餅' },
+        { id: 'shaved_ice',   emoji: '🍧', word: 'SHAVED ICE',   zh: '剉冰' },
+      ],
+    },
+    {
+      id: 'grains', name: '堅果穀物日', icon: '🥜',
+      foods: [
+        { id: 'peanut',   emoji: '🥜', word: 'PEANUT',   zh: '花生' },
+        { id: 'chestnut', emoji: '🌰', word: 'CHESTNUT', zh: '栗子' },
+        { id: 'beans',    emoji: '🫘', word: 'BEANS',    zh: '豆子' },
+        { id: 'peas',     emoji: '🫛', word: 'PEAS',     zh: '豌豆' },
+        { id: 'cereal',   emoji: '🥣', word: 'CEREAL',   zh: '穀片' },
+        { id: 'grain',    emoji: '🌾', word: 'GRAIN',    zh: '穀物' },
+      ],
+    },
+    {
+      id: 'global', name: '異國料理日', icon: '🍝',
+      foods: [
+        { id: 'pasta',   emoji: '🍝', word: 'PASTA',   zh: '義大利麵' },
+        { id: 'salad',   emoji: '🥗', word: 'SALAD',   zh: '沙拉' },
+        { id: 'stew',    emoji: '🥘', word: 'STEW',    zh: '燉菜' },
+        { id: 'fondue',  emoji: '🫕', word: 'FONDUE',  zh: '起司鍋' },
+        { id: 'burrito', emoji: '🌯', word: 'BURRITO', zh: '墨西哥捲餅' },
+        { id: 'wrap',    emoji: '🥙', word: 'WRAP',    zh: '阿拉伯烤餅' },
+      ],
+    },
+    {
+      id: 'seasoning', name: '調味料日', icon: '🧂',
+      foods: [
+        { id: 'salt',   emoji: '🧂', word: 'SALT',   zh: '鹽巴' },
+        { id: 'honey',  emoji: '🍯', word: 'HONEY',  zh: '蜂蜜' },
+        { id: 'ginger', emoji: '🫚', word: 'GINGER', zh: '薑' },
+        { id: 'chili',  emoji: '🌶️', word: 'CHILI',  zh: '辣椒' },
+        { id: 'oil',    emoji: '🫗', word: 'OIL',    zh: '食用油' },
+        { id: 'herb',   emoji: '🌿', word: 'HERB',   zh: '香草' },
+      ],
+    },
+    {
+      id: 'kitchen', name: '廚房用品日', icon: '🍽️',
+      foods: [
+        { id: 'plate',      emoji: '🍽️', word: 'PLATE',      zh: '盤子' },
+        { id: 'spoon',      emoji: '🥄', word: 'SPOON',      zh: '湯匙' },
+        { id: 'chopsticks', emoji: '🥢', word: 'CHOPSTICKS', zh: '筷子' },
+        { id: 'knife',      emoji: '🔪', word: 'KNIFE',      zh: '刀子' },
+        { id: 'teapot',     emoji: '🫖', word: 'TEAPOT',     zh: '茶壺' },
+        { id: 'fork',       emoji: '🍴', word: 'FORK',       zh: '叉子' },
+      ],
+    },
+    {
+      id: 'bbq', name: '烤肉野餐日', icon: '🥩',
+      foods: [
+        { id: 'steak',       emoji: '🥩', word: 'STEAK',       zh: '牛排' },
+        { id: 'drumstick',   emoji: '🍗', word: 'DRUMSTICK',   zh: '雞腿' },
+        { id: 'rib',         emoji: '🍖', word: 'RIB',         zh: '排骨' },
+        { id: 'canned_food', emoji: '🥫', word: 'CANNED FOOD', zh: '罐頭食品' },
+        { id: 'basket',      emoji: '🧺', word: 'BASKET',      zh: '野餐籃' },
+        { id: 'ice',         emoji: '🧊', word: 'ICE',         zh: '冰塊' },
+      ],
+    },
+    {
+      id: 'world', name: '美食大集合日', icon: '🎂',
+      foods: [
+        { id: 'oyster',         emoji: '🦪', word: 'OYSTER',         zh: '牡蠣' },
+        { id: 'prawn',          emoji: '🦐', word: 'PRAWN',          zh: '明蝦' },
+        { id: 'birthday_cake',  emoji: '🎂', word: 'BIRTHDAY CAKE',  zh: '生日蛋糕' },
+        { id: 'flatbread',      emoji: '🫓', word: 'FLATBREAD',      zh: '薄餅' },
+        { id: 'ice_cream_cone', emoji: '🍦', word: 'ICE CREAM CONE', zh: '甜筒' },
+        { id: 'fried_egg',      emoji: '🍳', word: 'FRIED EGG',      zh: '荷包蛋' },
+      ],
+    },
   ];
   let currentTheme = FOOD_THEMES[0];
   let TYPES = currentTheme.foods;
@@ -153,6 +263,7 @@ const CandyGame = (() => {
   let quizTries = 0;
   let quizStarPos = null;
   let quizKind = 'wrap';
+  let quizCombo = null;    // { a, b, key, name } when the open quiz is a special×special combo
 
   // Spawn-juice state: makes new special candies impossible to miss
   let spawnFx = new Set();     // 'r,c' keys currently playing the one-shot spawn burst
@@ -223,6 +334,14 @@ const CandyGame = (() => {
       themes: () => FOOD_THEMES.map(th => ({ id: th.id, name: th.name, foods: th.foods.map(f => ({ ...f })) })),
       introOpen: () => introOpen,
       startPlay: () => { if (introOpen) hideIntro(); },
+      quizWord: () => quizWord ? { ...quizWord } : null,
+      // Resolves once the board has finished animating/cascading and input
+      // is unlocked again — lets tests await a swap/quiz-answer settling
+      // without hardcoding timeout durations.
+      stable: () => new Promise(resolve => {
+        const check = () => { if (!busy) resolve(); else setTimeout(check, 40); };
+        check();
+      }),
     };
   }
 
@@ -544,9 +663,18 @@ const CandyGame = (() => {
 
   // ===== Match-3 core =====
   function attemptSwap(a, b) {
+    const aIsStar = board[a.r][a.c]?.type === STAR;
+    const bIsStar = board[b.r][b.c]?.type === STAR;
+
+    // Swapping two specials together triggers a combo detonation instead of
+    // a normal swap or single activation — check this FIRST.
+    if (aIsStar && bIsStar) {
+      openComboQuiz(a, b);
+      return;
+    }
+
     // Swiping a star (or into one) activates it instead of swapping
-    const starPos = board[a.r][a.c]?.type === STAR ? a
-      : board[b.r][b.c]?.type === STAR ? b : null;
+    const starPos = aIsStar ? a : bIsStar ? b : null;
     if (starPos) {
       openQuiz(starPos);
       return;
@@ -705,10 +833,120 @@ const CandyGame = (() => {
     wrap:      { icon: '🎁', name: '包裝糖果', desc: '5×5 大爆炸', toast: '🎁 包裝糖果出現了！點它答題引爆 5×5！' },
     rainbow:   { icon: '🌈', name: '彩虹糖果', desc: '清除所有目標糖果', toast: '🌈 彩虹糖果出現了！點它答題清光目標糖果！' },
     fish:      { icon: '🐟', name: '糖果魚', desc: '游走清除目標糖果', toast: '🐟 糖果魚出現了！點它答題，讓魚兒游去吃掉目標糖果！' },
+    super:     { icon: '🌟', name: '超級星星', desc: '清除整個盤面', toast: '🌟 三顆特殊糖果合體！超級星星誕生，點它答題清除整個盤面！' },
   };
+
+  // ===== Special × special swap combos =====
+  // Two normalized special "families" (stripeRow/stripeCol both count as
+  // 'stripe') combine into a stronger, named blast when swapped together.
+  // Any combo involving a 'super' star always clears the whole board.
+  function normKind(kind) {
+    return (kind === 'stripeRow' || kind === 'stripeCol') ? 'stripe' : kind;
+  }
+  function comboKey(kindA, kindB) {
+    const nA = normKind(kindA), nB = normKind(kindB);
+    if (nA === 'super' || nB === 'super') return 'super';
+    return [nA, nB].sort().join('+');
+  }
+  const COMBO_NAMES = {
+    'stripe+stripe':   '十字爆裂',
+    'stripe+wrap':     '巨型十字',
+    'wrap+wrap':       '超級大爆炸',
+    'fish+fish':        '魚群風暴',
+    'fish+stripe':      '條紋魚',
+    'fish+wrap':        '爆炸魚',
+    'rainbow+stripe':   '彩虹風暴',
+    'rainbow+wrap':     '彩虹核彈',
+    'fish+rainbow':     '彩虹魚群',
+    'rainbow+rainbow':  '雙彩虹奇蹟',
+    super:              '超新星',
+  };
+
+  // Scan the board for 3+ CONTIGUOUS special (STAR) cells in a straight
+  // horizontal or vertical line — any mix of kinds — and merge each run
+  // into a single 🌟 super star at the run's middle cell. This is a purely
+  // passive board effect (no quiz, no player action): it fires whenever
+  // gravity happens to settle three specials into a line. Returns true if
+  // at least one merge happened, so the caller knows to re-apply gravity
+  // (removing cells opens gaps) and can re-check for further merges.
+  function checkSpecialMerges() {
+    const runs = [];
+    // Horizontal runs of 3+ contiguous STAR cells
+    for (let r = 0; r < ROWS; r++) {
+      let start = 0;
+      for (let c = 1; c <= COLS; c++) {
+        const same = c < COLS && board[r][c]?.type === STAR && board[r][start]?.type === STAR;
+        if (!same) {
+          if (c - start >= 3) {
+            const run = [];
+            for (let i = start; i < c; i++) run.push({ r, c: i });
+            runs.push(run);
+          }
+          start = c;
+        }
+      }
+    }
+    // Vertical runs of 3+ contiguous STAR cells
+    for (let c = 0; c < COLS; c++) {
+      let start = 0;
+      for (let r = 1; r <= ROWS; r++) {
+        const same = r < ROWS && board[r][c]?.type === STAR && board[start][c]?.type === STAR;
+        if (!same) {
+          if (r - start >= 3) {
+            const run = [];
+            for (let i = start; i < r; i++) run.push({ r: i, c });
+            runs.push(run);
+          }
+          start = r;
+        }
+      }
+    }
+    if (!runs.length) return false;
+
+    // Runs were all found from the same board snapshot, so a cell can be
+    // consumed by at most the first run that claims it (an L/T/cross of
+    // specials would otherwise try to clear the same cell twice).
+    const consumed = new Set();
+    let merged = false;
+    runs.forEach(run => {
+      if (run.some(p => consumed.has(p.r + ',' + p.c))) return;
+      run.forEach(p => {
+        consumed.add(p.r + ',' + p.c);
+        board[p.r][p.c] = null;
+      });
+      const mid = run[Math.floor(run.length / 2)];
+      board[mid.r][mid.c] = { type: STAR, kind: 'super', _new: true };
+      merged = true;
+    });
+    return merged;
+  }
+
+  // Repeatedly merges lined-up specials (see checkSpecialMerges) and
+  // re-settles gravity after each merge, since clearing 3 cells down to 1
+  // opens gaps that can shift other specials into a new line. `fellInto`
+  // (optional) accumulates every moved cell so callers can fold it into
+  // their own `fall` render effect. Returns true if anything merged.
+  function settleSpecialMerges(fellInto) {
+    let any = false;
+    while (checkSpecialMerges()) {
+      any = true;
+      const fell = applyGravity();
+      if (fellInto) fell.forEach(k => fellInto.add(k));
+    }
+    return any;
+  }
 
   // Remove matches, spawn stars, apply gravity, cascade until stable
   function resolveBoard(swapPos, onDone) {
+    // Catch specials that lined up from a PREVIOUS gravity settle (e.g. the
+    // gravity that follows a detonation) even when this call has no candy
+    // matches of its own — this is the entry point right after detonate().
+    if (settleSpecialMerges()) {
+      const spawned = collectNewSpecials();
+      if (spawned.length) registerSpawn(spawned);
+      renderBoard();
+    }
+
     const { cells, runs, squares } = findMatches();
     if (cells.size === 0) {
       onDone();
@@ -745,6 +983,7 @@ const CandyGame = (() => {
         board[s.pos.r][s.pos.c] = { type: STAR, kind: s.kind, _new: true };
       });
       const fell = applyGravity();
+      settleSpecialMerges(fell);
       const spawned = collectNewSpecials();
       if (spawned.length) registerSpawn(spawned);
       renderBoard({ fall: fell });
@@ -811,7 +1050,7 @@ const CandyGame = (() => {
   // Big colorful banner announcing what kind of special just spawned
   function showSpawnBanner(positions) {
     if (!els.spawnBanner) return;
-    const priority = { rainbow: 3, wrap: 2, fish: 2, stripeRow: 1, stripeCol: 1 };
+    const priority = { super: 4, rainbow: 3, wrap: 2, fish: 2, stripeRow: 1, stripeCol: 1 };
     const top = positions.reduce((a, b) => (priority[b.kind] > priority[a.kind] ? b : a), positions[0]);
     const info = SPECIAL_INFO[top.kind] || SPECIAL_INFO.wrap;
     els.spawnBanner.textContent = positions.length > 1 ? `${info.toast}（×${positions.length}）` : info.toast;
@@ -922,13 +1161,46 @@ const CandyGame = (() => {
     busy = true;
     clearSpawnFx();
     quizStarPos = starPos;
+    quizCombo = null;
     quizKind = board[starPos.r][starPos.c]?.kind || 'wrap';
     quizTries = 0;
 
     const info = SPECIAL_INFO[quizKind];
-    const titleEl = document.getElementById('cd-quiz-title');
-    if (titleEl) titleEl.textContent = `${info.icon} ${info.name}單字題（${info.desc}）`;
+    setQuizTitle(`${info.icon} ${info.name}單字題（${info.desc}）`);
+    prepareQuizContent();
 
+    els.board.style.display = 'none';
+    els.quiz.style.display = 'flex';
+  }
+
+  // Swapping two adjacent specials together opens the same vocabulary quiz,
+  // but a correct answer triggers a named combo blast (comboDetonate)
+  // instead of a single special's own effect.
+  function openComboQuiz(a, b) {
+    busy = true;
+    clearSpawnFx();
+    const key = comboKey(board[a.r][a.c]?.kind, board[b.r][b.c]?.kind);
+    const name = COMBO_NAMES[key] || '組合大爆炸';
+    quizStarPos = null;
+    quizCombo = { a: { ...a }, b: { ...b }, key, name };
+    quizTries = 0;
+
+    setQuizTitle(`💥 ${name}單字題（特殊組合技，答對觸發大爆炸！）`);
+    prepareQuizContent();
+
+    els.board.style.display = 'none';
+    els.quiz.style.display = 'flex';
+  }
+
+  function setQuizTitle(text) {
+    const titleEl = document.getElementById('cd-quiz-title');
+    if (titleEl) titleEl.textContent = text;
+  }
+
+  // Shared body of openQuiz/openComboQuiz: pick a quiz word + build/render
+  // its answer options. Both callers set up quizStarPos/quizCombo, the
+  // title, and busy/clearSpawnFx themselves beforehand.
+  function prepareQuizContent() {
     // Quiz only words whose zh field yields a concise meaning (either the
     // "含義 — 說明" format or a **含義** marker inside an example sentence)
     const fullPool = VOCAB_DATA[tierName()];
@@ -980,9 +1252,6 @@ const CandyGame = (() => {
       btn.addEventListener('click', () => answerQuiz(opt, btn));
       els.quizOptions.appendChild(btn);
     });
-
-    els.board.style.display = 'none';
-    els.quiz.style.display = 'flex';
   }
 
   function shortZh(zh) {
@@ -1026,7 +1295,13 @@ const CandyGame = (() => {
       setTimeout(() => {
         els.quiz.style.display = 'none';
         els.board.style.display = 'grid';
-        detonate(quizStarPos);
+        if (quizCombo) {
+          const { a, b } = quizCombo;
+          quizCombo = null;
+          comboDetonate(a, b);
+        } else {
+          detonate(quizStarPos);
+        }
       }, 900);
     } else {
       SoundManager.playWrong();
@@ -1055,7 +1330,7 @@ const CandyGame = (() => {
     visited.add(pos.r + ',' + pos.c);
     popped.add(pos.r + ',' + pos.c);
 
-    const targets = [];
+    let targets = [];
     if (kind === 'wrap') {
       for (let r = pos.r - 2; r <= pos.r + 2; r++) {
         for (let c = pos.c - 2; c <= pos.c + 2; c++) targets.push({ r, c });
@@ -1066,34 +1341,23 @@ const CandyGame = (() => {
       for (let r = 0; r < ROWS; r++) targets.push({ r, c: pos.c });
     } else if (kind === 'rainbow') {
       // Clears every candy of the first unfinished goal type
-      const goal = goals.find(g => g.got < g.need);
-      const targetType = goal ? goal.type : mostCommonType();
-      for (let r = 0; r < ROWS; r++) {
-        for (let c = 0; c < COLS; c++) {
-          if (board[r][c] && board[r][c].type === targetType) targets.push({ r, c });
-        }
-      }
+      targets = goalTypeCells();
     } else if (kind === 'fish') {
       // 3 fish swim to 3 goal-color candies, each clearing itself + its
       // 4 orthogonal neighbors. Prefers the current unfinished goal type.
-      const goal = goals.find(g => g.got < g.need);
-      const targetType = goal ? goal.type : mostCommonType();
-      const candidates = [];
-      for (let r = 0; r < ROWS; r++) {
-        for (let c = 0; c < COLS; c++) {
-          if (board[r][c] && board[r][c].type === targetType) candidates.push({ r, c });
-        }
-      }
-      shuffleInPlace(candidates);
-      candidates.slice(0, 3).forEach(p => {
-        targets.push(p);
-        targets.push({ r: p.r - 1, c: p.c });
-        targets.push({ r: p.r + 1, c: p.c });
-        targets.push({ r: p.r, c: p.c - 1 });
-        targets.push({ r: p.r, c: p.c + 1 });
-      });
+      targets = fishBlastTargets(3);
+    } else if (kind === 'super') {
+      // Super star: clear the entire board
+      targets = fullBoardTargets();
     }
 
+    sweepTargets(targets, popped, visited);
+  }
+
+  // Walks a list of target cells: normal candies are added to `popped`;
+  // any special (STAR) caught in the blast chain-detonates via
+  // collectBlast (shared by single-special blasts and combo blasts).
+  function sweepTargets(targets, popped, visited) {
     targets.forEach(p => {
       if (!inBounds(p) || !board[p.r][p.c]) return;
       const key = p.r + ',' + p.c;
@@ -1116,6 +1380,147 @@ const CandyGame = (() => {
       }
     }
     return counts.indexOf(Math.max(...counts));
+  }
+
+  // All board cells of the first unfinished goal type (or the most common
+  // type if every goal is done) — the "target type" rainbow/fish combos aim at.
+  function goalTypeCells() {
+    const goal = goals.find(g => g.got < g.need);
+    const targetType = goal ? goal.type : mostCommonType();
+    const cells = [];
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        if (board[r][c] && board[r][c].type === targetType) cells.push({ r, c });
+      }
+    }
+    return cells;
+  }
+
+  // Up to `n` random goal-type candy positions for a fish-style blast.
+  function fishCandidates(n) {
+    const candidates = goalTypeCells();
+    shuffleInPlace(candidates);
+    return candidates.slice(0, n);
+  }
+
+  // `n` fish, each clearing its landing candy + its 4 orthogonal neighbors.
+  function fishBlastTargets(n) {
+    const targets = [];
+    fishCandidates(n).forEach(p => {
+      targets.push(p);
+      targets.push({ r: p.r - 1, c: p.c });
+      targets.push({ r: p.r + 1, c: p.c });
+      targets.push({ r: p.r, c: p.c - 1 });
+      targets.push({ r: p.r, c: p.c + 1 });
+    });
+    return targets;
+  }
+
+  function fullBoardTargets() {
+    const targets = [];
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) targets.push({ r, c });
+    return targets;
+  }
+
+  // Target cells for a special×special combo (see comboKey/COMBO_NAMES).
+  // `a`/`b` are the two swapped special positions; row/col/blast effects
+  // are centered on `b` by convention.
+  function comboTargets(key, a, b) {
+    switch (key) {
+      case 'stripe+stripe': {
+        const t = [];
+        for (let c = 0; c < COLS; c++) t.push({ r: b.r, c });
+        for (let r = 0; r < ROWS; r++) t.push({ r, c: b.c });
+        return t;
+      }
+      case 'stripe+wrap': {
+        const t = [];
+        for (let dr = -1; dr <= 1; dr++) for (let c = 0; c < COLS; c++) t.push({ r: b.r + dr, c });
+        for (let dc = -1; dc <= 1; dc++) for (let r = 0; r < ROWS; r++) t.push({ r, c: b.c + dc });
+        return t;
+      }
+      case 'wrap+wrap': {
+        const t = [];
+        for (let r = b.r - 3; r <= b.r + 3; r++) for (let c = b.c - 3; c <= b.c + 3; c++) t.push({ r, c });
+        return t;
+      }
+      case 'fish+fish':
+        return fishBlastTargets(6);
+      case 'fish+stripe': {
+        const t = [];
+        fishCandidates(3).forEach(p => { for (let c = 0; c < COLS; c++) t.push({ r: p.r, c }); });
+        return t;
+      }
+      case 'fish+wrap': {
+        const t = [];
+        fishCandidates(3).forEach(p => {
+          for (let r = p.r - 1; r <= p.r + 1; r++) for (let c = p.c - 1; c <= p.c + 1; c++) t.push({ r, c });
+        });
+        return t;
+      }
+      case 'rainbow+stripe': {
+        const t = goalTypeCells();
+        for (let c = 0; c < COLS; c++) t.push({ r: b.r, c });
+        for (let r = 0; r < ROWS; r++) t.push({ r, c: b.c });
+        return t;
+      }
+      case 'rainbow+wrap': {
+        const t = goalTypeCells();
+        for (let r = b.r - 2; r <= b.r + 2; r++) for (let c = b.c - 2; c <= b.c + 2; c++) t.push({ r, c });
+        return t;
+      }
+      case 'fish+rainbow':
+        // 6 fish, all targeting the goal type (same mechanic as fish+fish)
+        return fishBlastTargets(6);
+      case 'rainbow+rainbow':
+        return fullBoardTargets();
+      case 'super':
+        return fullBoardTargets();
+      default:
+        return [];
+    }
+  }
+
+  // Detonate a special×special combo formed by swapping two adjacent
+  // specials together (see attemptSwap/openComboQuiz). Both stars are
+  // always consumed; the blast shape depends on the combo key.
+  function comboDetonate(a, b) {
+    const key = comboKey(board[a.r][a.c]?.kind, board[b.r][b.c]?.kind);
+    const name = COMBO_NAMES[key] || '組合大爆炸';
+    const popped = new Set();
+    const visited = new Set();
+    [a, b].forEach(p => { popped.add(p.r + ',' + p.c); visited.add(p.r + ',' + p.c); });
+
+    sweepTargets(comboTargets(key, a, b), popped, visited);
+
+    GameEngine.showToast(`💥 ${name}！`, 'achievement');
+    SoundManager.playQuestComplete();
+    if (els.wrap) {
+      els.wrap.classList.add('cd-combo-flash');
+      setTimeout(() => els.wrap.classList.remove('cd-combo-flash'), 400);
+    }
+
+    popped.forEach(k => {
+      const [r, c] = k.split(',').map(Number);
+      const cell = board[r][c];
+      if (cell && cell.type !== STAR) {
+        const goal = goals.find(g => g.type === cell.type);
+        if (goal) goal.got++;
+        progress.totalCleared++;
+      }
+    });
+    renderGoals();
+    saveProgress();
+    renderBoard({ pop: popped });
+    setTimeout(() => {
+      popped.forEach(k => {
+        const [r, c] = k.split(',').map(Number);
+        board[r][c] = null;
+      });
+      const fell = applyGravity();
+      renderBoard({ fall: fell });
+      setTimeout(() => resolveBoard(null, () => afterMove()), 220);
+    }, 260);
   }
 
   // Detonate the special at pos; collected candies count toward goals
