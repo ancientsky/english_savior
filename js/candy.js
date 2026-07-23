@@ -13,10 +13,10 @@ const CandyGame = (() => {
   const COLS = 8, ROWS = 8;
   const STAR = 'star'; // special candy type
 
-  // Themed-foods expansion: 10 daily food themes × 6 foods. Each level picks
-  // a theme (level - 1) % 10, so the board's candies + goal words rotate
+  // Themed-foods expansion: 20 daily food themes × 6 foods. Each level picks
+  // a theme (level - 1) % 20, so the board's candies + goal words rotate
   // through a different food vocabulary set every day/level. Every emoji and
-  // English word is unique across all 60 foods.
+  // English word is unique across all 120 foods.
   const FOOD_THEMES = [
     {
       id: 'fruit1', name: '水果日 I', icon: '🍎',
@@ -126,6 +126,116 @@ const CandyGame = (() => {
         { id: 'ice_cream', emoji: '🍨', word: 'ICE CREAM', zh: '冰淇淋' },
         { id: 'pretzel',   emoji: '🥨', word: 'PRETZEL',   zh: '蝴蝶餅' },
         { id: 'skewer',    emoji: '🍢', word: 'SKEWER',    zh: '串燒' },
+      ],
+    },
+    {
+      id: 'fruit3', name: '水果日 III', icon: '🍈',
+      foods: [
+        { id: 'melon',       emoji: '🍈', word: 'MELON',       zh: '哈密瓜' },
+        { id: 'pear',        emoji: '🍐', word: 'PEAR',        zh: '梨子' },
+        { id: 'blueberry',   emoji: '🫐', word: 'BLUEBERRY',   zh: '藍莓' },
+        { id: 'avocado',     emoji: '🥑', word: 'AVOCADO',     zh: '酪梨' },
+        { id: 'green_apple', emoji: '🍏', word: 'GREEN APPLE', zh: '青蘋果' },
+        { id: 'olive',       emoji: '🫒', word: 'OLIVE',       zh: '橄欖' },
+      ],
+    },
+    {
+      id: 'veggie2', name: '蔬菜日 II', icon: '🥒',
+      foods: [
+        { id: 'cucumber',   emoji: '🥒', word: 'CUCUMBER',   zh: '小黃瓜' },
+        { id: 'eggplant',   emoji: '🍆', word: 'EGGPLANT',   zh: '茄子' },
+        { id: 'mushroom',   emoji: '🍄', word: 'MUSHROOM',   zh: '蘑菇' },
+        { id: 'bell_pepper',emoji: '🫑', word: 'BELL PEPPER',zh: '甜椒' },
+        { id: 'garlic',     emoji: '🧄', word: 'GARLIC',     zh: '大蒜' },
+        { id: 'lettuce',    emoji: '🥬', word: 'LETTUCE',    zh: '萵苣' },
+      ],
+    },
+    {
+      id: 'bakery', name: '烘焙日', icon: '🥐',
+      foods: [
+        { id: 'croissant', emoji: '🥐', word: 'CROISSANT', zh: '可頌' },
+        { id: 'baguette',  emoji: '🥖', word: 'BAGUETTE',  zh: '法國麵包' },
+        { id: 'bagel',     emoji: '🥯', word: 'BAGEL',     zh: '貝果' },
+        { id: 'pie',       emoji: '🥧', word: 'PIE',       zh: '派' },
+        { id: 'butter',    emoji: '🧈', word: 'BUTTER',    zh: '奶油' },
+        { id: 'cheese',    emoji: '🧀', word: 'CHEESE',    zh: '起司' },
+      ],
+    },
+    {
+      id: 'snacks', name: '日式點心日', icon: '🍡',
+      foods: [
+        { id: 'dango',        emoji: '🍡', word: 'DANGO',        zh: '糯米糰子' },
+        { id: 'onigiri',      emoji: '🍙', word: 'ONIGIRI',      zh: '飯糰' },
+        { id: 'rice_cracker', emoji: '🍘', word: 'RICE CRACKER', zh: '米餅' },
+        { id: 'fish_cake',    emoji: '🍥', word: 'FISH CAKE',    zh: '魚板' },
+        { id: 'mooncake',     emoji: '🥮', word: 'MOONCAKE',     zh: '月餅' },
+        { id: 'shaved_ice',   emoji: '🍧', word: 'SHAVED ICE',   zh: '剉冰' },
+      ],
+    },
+    {
+      id: 'grains', name: '堅果穀物日', icon: '🥜',
+      foods: [
+        { id: 'peanut',   emoji: '🥜', word: 'PEANUT',   zh: '花生' },
+        { id: 'chestnut', emoji: '🌰', word: 'CHESTNUT', zh: '栗子' },
+        { id: 'beans',    emoji: '🫘', word: 'BEANS',    zh: '豆子' },
+        { id: 'peas',     emoji: '🫛', word: 'PEAS',     zh: '豌豆' },
+        { id: 'cereal',   emoji: '🥣', word: 'CEREAL',   zh: '穀片' },
+        { id: 'grain',    emoji: '🌾', word: 'GRAIN',    zh: '穀物' },
+      ],
+    },
+    {
+      id: 'global', name: '異國料理日', icon: '🍝',
+      foods: [
+        { id: 'pasta',   emoji: '🍝', word: 'PASTA',   zh: '義大利麵' },
+        { id: 'salad',   emoji: '🥗', word: 'SALAD',   zh: '沙拉' },
+        { id: 'stew',    emoji: '🥘', word: 'STEW',    zh: '燉菜' },
+        { id: 'fondue',  emoji: '🫕', word: 'FONDUE',  zh: '起司鍋' },
+        { id: 'burrito', emoji: '🌯', word: 'BURRITO', zh: '墨西哥捲餅' },
+        { id: 'wrap',    emoji: '🥙', word: 'WRAP',    zh: '阿拉伯烤餅' },
+      ],
+    },
+    {
+      id: 'seasoning', name: '調味料日', icon: '🧂',
+      foods: [
+        { id: 'salt',   emoji: '🧂', word: 'SALT',   zh: '鹽巴' },
+        { id: 'honey',  emoji: '🍯', word: 'HONEY',  zh: '蜂蜜' },
+        { id: 'ginger', emoji: '🫚', word: 'GINGER', zh: '薑' },
+        { id: 'chili',  emoji: '🌶️', word: 'CHILI',  zh: '辣椒' },
+        { id: 'oil',    emoji: '🫗', word: 'OIL',    zh: '食用油' },
+        { id: 'herb',   emoji: '🌿', word: 'HERB',   zh: '香草' },
+      ],
+    },
+    {
+      id: 'kitchen', name: '廚房用品日', icon: '🍽️',
+      foods: [
+        { id: 'plate',      emoji: '🍽️', word: 'PLATE',      zh: '盤子' },
+        { id: 'spoon',      emoji: '🥄', word: 'SPOON',      zh: '湯匙' },
+        { id: 'chopsticks', emoji: '🥢', word: 'CHOPSTICKS', zh: '筷子' },
+        { id: 'knife',      emoji: '🔪', word: 'KNIFE',      zh: '刀子' },
+        { id: 'teapot',     emoji: '🫖', word: 'TEAPOT',     zh: '茶壺' },
+        { id: 'fork',       emoji: '🍴', word: 'FORK',       zh: '叉子' },
+      ],
+    },
+    {
+      id: 'bbq', name: '烤肉野餐日', icon: '🥩',
+      foods: [
+        { id: 'steak',       emoji: '🥩', word: 'STEAK',       zh: '牛排' },
+        { id: 'drumstick',   emoji: '🍗', word: 'DRUMSTICK',   zh: '雞腿' },
+        { id: 'rib',         emoji: '🍖', word: 'RIB',         zh: '排骨' },
+        { id: 'canned_food', emoji: '🥫', word: 'CANNED FOOD', zh: '罐頭食品' },
+        { id: 'basket',      emoji: '🧺', word: 'BASKET',      zh: '野餐籃' },
+        { id: 'ice',         emoji: '🧊', word: 'ICE',         zh: '冰塊' },
+      ],
+    },
+    {
+      id: 'world', name: '美食大集合日', icon: '🎂',
+      foods: [
+        { id: 'oyster',         emoji: '🦪', word: 'OYSTER',         zh: '牡蠣' },
+        { id: 'prawn',          emoji: '🦐', word: 'PRAWN',          zh: '明蝦' },
+        { id: 'birthday_cake',  emoji: '🎂', word: 'BIRTHDAY CAKE',  zh: '生日蛋糕' },
+        { id: 'flatbread',      emoji: '🫓', word: 'FLATBREAD',      zh: '薄餅' },
+        { id: 'ice_cream_cone', emoji: '🍦', word: 'ICE CREAM CONE', zh: '甜筒' },
+        { id: 'fried_egg',      emoji: '🍳', word: 'FRIED EGG',      zh: '荷包蛋' },
       ],
     },
   ];
