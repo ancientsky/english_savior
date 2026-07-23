@@ -848,6 +848,8 @@ body.game-max #zone-fishing.active #fh-screen-result {
   justify-content: center;
   gap: 18px;
 }
+body.game-max #zone-fishing.active #fh-screen-quiz[style*="display:none"],
+body.game-max #zone-fishing.active #fh-screen-result[style*="display:none"],
 body.game-max #zone-fishing.active #fh-screen-quiz[style*="display: none"],
 body.game-max #zone-fishing.active #fh-screen-result[style*="display: none"] {
   display: none !important;

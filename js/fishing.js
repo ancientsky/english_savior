@@ -291,7 +291,7 @@ const FishingGame = (() => {
         </div>
       </div>
 
-      <div class="fh-screen" id="fh-screen-quiz" style="display:none">
+      <div class="fh-screen" id="fh-screen-quiz" style="display: none">
         <div class="fh-quiz-fish-emoji" id="fh-quiz-emoji">🐟</div>
         <div class="fh-quiz-word-fallback" id="fh-quiz-word-fallback" style="display:none"></div>
         <button type="button" class="fh-quiz-replay-btn" id="fh-quiz-replay">🔊 再聽一次</button>
@@ -427,8 +427,13 @@ const FishingGame = (() => {
     // Space bar: stop cast / hold reel (only while the fishing zone is visible)
     document.addEventListener('keydown', (e) => {
       if (e.code !== 'Space' || !isZoneActive()) return;
-      if (currentScreen === 'cast' && castState) { e.preventDefault(); stopCast(); }
-      else if (currentScreen === 'reel' && reelState) { e.preventDefault(); reelState.holding = true; }
+      // 釣魚流程中一律吃掉 Space 的頁面捲動（含拋線/等待/答題階段）
+      if (currentScreen === 'cast' || currentScreen === 'reel' ||
+          currentScreen === 'quiz' || currentScreen === 'result') {
+        e.preventDefault();
+      }
+      if (currentScreen === 'cast' && castState) stopCast();
+      else if (currentScreen === 'reel' && reelState) reelState.holding = true;
     });
     document.addEventListener('keyup', (e) => {
       if (e.code !== 'Space' || !isZoneActive()) return;
