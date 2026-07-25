@@ -8,184 +8,73 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Architecture
 
-Pure frontend (HTML/CSS/JS), no build tools, bundlers, or backend required. Open `index.html` directly in a browser or serve via any static HTTP server (e.g. `python -m http.server`).
+Pure frontend (HTML/CSS/JS): no build step, no dependencies, no backend. Serve statically (`python3 -m http.server 8000`) or open `index.html` directly. Three.js r149 is vendored at `js/vendor/three.min.js` — no CDN libraries. The only external resources are Google Fonts and Google Identity Services (the latter lazy-loaded by js/cloud.js only when the owner configures GOOGLE_CLIENT_ID; see DEPLOYMENT.md and .github/workflows/deploy.yml).
 
 ### File Structure
-```
-index.html              — Single-page app shell (all zones, modals, HUD)
-css/
-  style.css             — Global styles, HUD, modals, navigation
-  hub.css               — Adventure-guild hub landing page (hb- prefix: starfield/mist/compass, 5 region sections, medallion cards, progress badges)
-  minecraft.css         — Minecraft vocabulary theme
-  roblox.css            — Roblox grammar theme
-  youtube.css           — YouTube video theme
-  spelling.css          — Spelling runner theme
-  listening.css         — Listening game theme
-  empire.css            — Empire 3D defense theme
-  candy.css             — Candy match-3 theme
-  sling.css             — Word slingshot theme
-  builder.css           — Sentence builder theme
-  speak.css             — Spell academy (speaking) theme
-  tower.css             — Word boss tower (orb battle) theme
-  rpg.css               — English adventure RPG (Undertale-style) theme
-  sky.css               — Sky Citadel open-world 3D theme (prefix aw-)
-  pets.css              — Word Pets Island theme (pt- prefix)
-  typing.css            — Typing Defense theme (tp- prefix)
-  tutor.css             — Touch-Typing Camp theme (tu- prefix)
-  detective.css         — English Detective Agency theme (dt- prefix)
-  fishing.css           — Cozy Fishing Pond theme (fh- prefix)
-js/
-  app.js                — Navigation and initialization (DOMContentLoaded entry point)
-  hub.js                — HubView: fills hub passport chips + per-game progress badges from localStorage (read-only)
-  engine.js             — Core game engine (XP, levels, gems, inventory, achievements, shop, buff system, daily quest rewards, sound effects, localStorage save)
-  music.js              — Background music (MusicManager: 24 synthesized Web Audio tracks, per-zone rotation playlists, crossfades, 🎵 toggle persisted as music_enabled)
-  minecraft.js          — Minecraft-themed vocabulary crafting game
-  roblox.js             — Roblox-themed grammar obstacle course
-  youtube.js            — YouTube-themed reading comprehension with quizzes
-  spelling.js           — Chrome Dino-style spelling runner (canvas; auto-skips non-letter chars in words like "MR.", power-ups/flyers+duck/biomes/combo transforms)
-  listening.js          — Magical listening card game (Web Speech API)
-  empire.js             — Age of Empires-style 3D castle defense (Three.js; procedural textures/sky dome, per-age scenery rebuilds, combo & floating-reward juice, battle consumables fire_bomb/wall_repair/freeze_trap)
-  candy.js              — Candy Crush-style match-3 with vocabulary quizzes (FOOD_THEMES: 20 themed food days × 6 foods = 120 words; level N uses theme (N-1)%20, per-level intro card with TTS; 3 specials in a line auto-merge into a 🌟 super star that clears the whole board, swapping two specials triggers 11 named special×special combos via a combo-titled quiz)
-  sling.js              — Angry Birds-style word slingshot (canvas physics, DPR-aware HD canvas via fitCanvas; 5 ability birds triggered by mid-flight tap, 4 crate styles × 2 sizes with measureText label fit, 8 non-overlap-validated layout templates, ice/stone/TNT obstacles with weakest-bird solvability guarantee, gem balloons, 4 rotating scene themes, screen shake/floating score text)
-  builder.js            — Duolingo-style sentence builder (word-order game building 33 world landmarks with cultural facts; animated site scene + crane drops + blueprint silhouette, worker mascot, combo streak/golden bolt, medium/hard decoy words, perfect-landmark trophies, landmark gallery overlay, postcard done-screen)
-  speak.js              — Spell academy speaking game (Web Speech Recognition, honor-mode fallback)
-  tower.js              — Tower of Saviors-style word boss battle (drag letter orbs to spell words; 12 bosses scale endlessly by floor; 12 elemental realm themes, jewel-tone high-contrast orbs + SVG drag-trail, charged orbs/crit-combo, particle FX)
-  rpg.js                — Undertale-style 2D RPG engine for conversation practice (interprets RPG_CHAPTERS data; puzzle tiles K key/D locked door/S switch/G gate/P,Q portal pair/H cracked wall/! chest, chapter-select world grouping every 9 chapters)
-  pets.js               — Word Pets Island: quiz-catch 90 word pets (30 evolution chains — evolving teaches a new word), type-effectiveness turn battles, 15 gyms (PET_SPECIES in data/pets.js)
-  typing.js             — Typing Defense: monsters carry words across 3 lanes, type the word to laser them (first-letter target lock, prefix highlight, boss waves, WPM stats, mobile mini-QWERTY)
-  tutor.js              — Touch-Typing Camp: 20 sequential lessons — basic camp 1-12 (home row F/J outward + word graduation exam) and advanced camp 13-20 (space/Shift caps/number row/symbols/function-key intro incl. Tab/Caps/Backspace/Delete/Ctrl/Alt/Win/sentence exam), 9-color finger-zone keyboard (extended layout for lessons ≥13), two-hand+thumb indicator, star rating
-  detective.js          — English Detective Agency: 48 escape-room mystery cases — 24 basic (4 rooms) + 24 advanced 特別調查組 (adv: true, 8 rooms, phantom-thief arc with arcZh interstitials, clear pays 60XP+15💎) × 6 puzzle types (read/liar/code-lock/witness/timeline-ordering/alibi cross-check), clue board, culprit accusation, star rating (DETECTIVE_CASES in data/detective.js)
-  fishing.js            — Cozy Fishing Pond: 2.5D parallax scenes, in-scene cast/reel overlays (hand-held rod + SVG line, bite camera-zoom + vignette, tension-fight with thrashing fish, catch-moment fish leap; scales up in game-max), TTS listening quiz (rare/legendary = spelling), 305 fish across 29 unlockable ponds (25 rarity-4 legendaries paying 30XP+5💎; first-catch calls recordFishDistinct/recordFishLegendary; dex milestones at 100/200/300), per-pond aquarium album, compact pond nav + full-screen pond-map picker (cast button is re-entrancy-guarded via a castSession generation token) (FISH_SPECIES in data/fishing.js)
-  sky.js                — Sky Citadel open-world 3D adventure (Three.js; islands/physics/camera/mobs/84 quests incl. 18 hidden/4 bosses/galaxy+secret+underground regions/world events/puzzle types/active-item tray/title perks/minimap)
-  cloud.js              — Save backup: file export/import + optional Google Drive appDataFolder sync (owner fills GOOGLE_CLIENT_ID; see DEPLOYMENT.md)
-  daily.js              — Daily quest tracking and rendering
-  tts.js                — Text-to-speech module (Web Speech API)
-  vendor/
-    three.min.js        — Three.js r149 (vendored UMD build, no CDN)
-  data/
-    vocab.js            — Vocabulary words (VOCAB_DATA, easy/medium/hard, 2,080 words covering the 十二年國教課綱 2,000-word list)
-    vocab2.js           — Vocabulary expansion pack #2 (+1,000 words pushed into VOCAB_DATA → 3,080 total; loaded after vocab.js)
-    grammar.js          — Grammar questions (GRAMMAR_DATA, 480 questions, 68 topics covering the 國中基礎文法句構參考表)
-    grammar2.js         — Grammar expansion pack #2 (+1,000 questions pushed into GRAMMAR_DATA → 1,480 total; loaded after grammar.js)
-    video.js            — Video lessons (VIDEO_LESSONS, 42 lessons with 126 quiz questions)
-    empire.js           — Empire dialogues (EMPIRE_DIALOGUES) and daily-life English (EMPIRE_LIFE), easy/medium/hard
-    empire2.js          — Conversation expansion pack #2 (+1,200 dialogues → 1,260, +800 life scenes → 856; loaded after empire.js)
-    rpg.js              — RPG chapters (RPG_CHAPTERS, chapters 1-9 mapped to 課綱學習主題; maps, NPCs, dialogue scripts)
-    rpg2.js             — RPG expansion pack 2 (chapters 10-18 第二世界·生活城市; loaded after rpg.js)
-    rpg3.js             — RPG expansion pack 3 (chapters 19-27 第三世界·探索樂園)
-    rpg4.js             — RPG expansion pack 4 (chapters 28-36 第四世界·奇幻次元 incl. world_finale) → 36 chapters total, 360 dialogue questions
-    sky.js              — Sky Citadel world data (SKY_CONFIG, SKY_ISLANDS ×41 incl. 12 galaxy + 8 secret + 5 underground isles, SKY_BRIDGES, SKY_PADS, SKY_PORTALS ×12, SKY_SWITCHES ×4, SKY_QUESTS ×84 incl. 18 hidden sqh_ + 8 underground squ_, SKY_MOBS ×12, SKY_SKIN_TINTS)
-    pets.js             — Word-pet species (PET_SPECIES ×90: word/type/rarity/evolution chains, 18 per type)
-    detective.js        — Detective cases (DETECTIVE_CASES ×8, 4 rooms each)
-    detective2.js       — Detective expansion pack #2 (+16 cases 9-24, medium/hard tiers; loaded after detective.js)
-    detective3.js       — Advanced cases 25-36 特別調查組前半 (adv 8-room cases, phantom-thief clue arc)
-    detective4.js       — Advanced cases 37-48 特別調查組後半 incl. clocktower finale → 48 total
-    fishing.js          — Fish species (FISH_SPECIES ×305 across 29 ponds; ponds 5-29 each have a legendary: true rarity-4 fish, invented compounds carry say fields for TTS)
-    game.js             — Achievements (71, each with pts; `hidden` ones show ??? until unlocked), daily quests (16), inventory items (8, usable as charms), shop items (consumables/skins/titles/themes), ACH_POINT_REWARDS, LEVEL_MILESTONES, CHARM_PERKS, SELL_PRICES
-reference/
-  taiwan_elementary_1000_minecraft_flavor.csv  — Source word list reference
-```
+
+- `index.html` — single-page app shell (all zones, modals, HUD)
+- `css/` — `style.css` (global/HUD/modals/themes) + `hub.css` + one themed file per game
+- `js/app.js` — navigation + init entry point (DOMContentLoaded); `js/hub.js` — hub landing page (read-only progress badges from localStorage)
+- `js/engine.js` — GameEngine + SoundManager: XP/levels/gems/inventory/achievements/shop/buffs/daily rewards/save
+- `js/music.js` — MusicManager: synthesized Web Audio BGM, per-zone playlists (`ZONE_TRACKS`, rotated in app.js switchZone)
+- `js/tts.js` — TTSManager (Web Speech API); `js/daily.js` — daily quests; `js/cloud.js` — CloudSave file export/import + optional Google Drive sync
+- Game modules (one file each in `js/`): minecraft (vocabulary crafting), roblox (grammar), youtube (video quizzes), spelling (canvas runner), listening, empire (Three.js castle defense), candy (match-3; `FOOD_THEMES` inline: 20 themes × 6 foods = 120 words; special-candy merges + special×special combos), sling (canvas slingshot physics), builder (sentence builder, 33 landmarks), speak (speech recognition with honor-mode fallback), tower (orb-spelling boss battle), rpg (Undertale-style engine that interprets RPG_CHAPTERS — no code changes for new chapters), pets (collect-and-battle, 90 pets/15 gyms), typing (typing defense), tutor (20-lesson touch-typing camp), detective (48 escape-room cases), fishing (TTS listening quiz, 305 fish/29 ponds), sky (Three.js open world, 84 quests)
+- `js/data/` — vocab.js+vocab2.js (`VOCAB_DATA`, 3,080 words, easy/medium/hard), grammar.js+grammar2.js (`GRAMMAR_DATA`, 1,480), video.js (`VIDEO_LESSONS`, 42), empire.js+empire2.js (`EMPIRE_DIALOGUES` 1,260 / `EMPIRE_LIFE` 856), rpg.js+rpg2-4.js (`RPG_CHAPTERS`, 36), sky.js (`SKY_*` world data), pets.js (`PET_SPECIES` ×90), detective.js+detective2-4.js (`DETECTIVE_CASES` ×48), fishing.js (`FISH_SPECIES` ×305), game.js (`ACHIEVEMENTS`/quests/items/shop/`ACH_POINT_REWARDS`/`LEVEL_MILESTONES`/`CHARM_PERKS`/`SELL_PRICES`)
+
+Expansion packs (`*2.js`, `*3.js`, `*4.js`) push into their base arrays and must load after the base file (script order in index.html).
 
 ### Module Pattern
 
-All game modules use the IIFE (Immediately Invoked Function Expression) pattern and expose a single global object:
-- `GameEngine` — core state management (engine.js)
-- `SoundManager` — synthesized audio (engine.js)
-- `MusicManager` — synthesized background music (music.js)
-- `MinecraftGame` — vocabulary game (minecraft.js)
-- `RobloxGame` — grammar game (roblox.js)
-- `YoutubeGame` — video comprehension (youtube.js)
-- `SpellingGame` — spelling runner (spelling.js)
-- `ListeningGame` — listening game (listening.js)
-- `EmpireGame` — 3D castle defense (empire.js)
-- `CandyGame` — match-3 vocabulary game (candy.js)
-- `SlingGame` — word slingshot physics game (sling.js)
-- `BuilderGame` — sentence builder word-order game (builder.js)
-- `SpeakGame` — spell academy speaking game (speak.js)
-- `TowerGame` — word boss tower orb battle (tower.js)
-- `RpgGame` — English adventure RPG (rpg.js)
-- `SkyGame` — Sky Citadel open-world 3D adventure (sky.js)
-- `PetsGame` — word pets collect-and-battle (pets.js)
-- `TypingGame` — typing defense (typing.js)
-- `TutorGame` — touch-typing camp lessons (tutor.js)
-- `DetectiveGame` — reading-mystery escape rooms (detective.js)
-- `FishingGame` — fishing listening collection (fishing.js)
-- `CloudSave` — save export/import + Google Drive sync (cloud.js)
-- `DailyQuests` — daily quest system (daily.js)
-- `TTSManager` — text-to-speech (tts.js)
+Every game module is an IIFE exposing a single PascalCase global with `{ init }`; app.js calls all `.init()` on DOMContentLoaded. `EmpireGame`, `SlingGame`, `SpellingGame` and `SkyGame` additionally export `onShow()`, called by app.js when their zone becomes visible to resume paused render loops.
 
-Each game module exports `{ init }`. `app.js` calls all `.init()` methods on `DOMContentLoaded`. `EmpireGame`, `SlingGame`, `SpellingGame` and `SkyGame` additionally export `onShow()`, called by app.js when their zone becomes visible to resume their paused render loops.
+## Naming Conventions
 
-### Adding Content
-- **Vocabulary**: add entries to `VOCAB_DATA` in `js/data/vocab.js` (easy/medium/hard). Each entry needs `word`, `hint` (emoji), `zh` (Chinese explanation), `sentence` (fill-in-the-blank with `___`).
-- **Grammar**: add entries to `GRAMMAR_DATA` in `js/data/grammar.js`. Each entry needs `sentence`, `blank`, `options` (4 choices), `explain`, `topic`.
-- **Video lessons**: add entries to `VIDEO_LESSONS` in `js/data/video.js`. Each entry needs `title`, `titleZh`, `thumbnail`, `script`, `vocab`, and quiz `questions`.
-- **Empire dialogues**: add entries to `EMPIRE_DIALOGUES` in `js/data/empire.js` (easy/medium/hard). Each entry needs `q` (line spoken to the player), `qZh` (Chinese meaning), `a` (correct response), `wrong` (3 distractors).
-- **RPG chapters**: append entries to `RPG_CHAPTERS` in `js/data/rpg.js`. Each chapter needs `id`, `title`, `theme` (課綱學習主題), `icon`, tile emoji (`wall`/`deco`) and colours (`floor`/`path`), a 13×9 ASCII `map`, `spawn`, `npcs` (each with a `talk` script of say/ask entries), and a `boss`. Map tiles: `#` wall, `*` deco, `=` path, `.` floor, plus puzzle tiles `K` key, `D` locked door (consumes a key), `S` switch, `G` gate (opened by any S), `P`/`Q` portal pair, `H` cracked wall (breaks on bump), `!` treasure chest (+3 gems). Expansion chapters live in rpg2/rpg3/rpg4.js (`RPG_CHAPTERS.push(...)`, loaded in order after rpg.js). Run `node validate_rpg_chapters.js` (scratchpad) before shipping new chapters — it checks the schema, 10-asks rule and fixpoint-BFS puzzle solvability (every NPC/boss/key/chest reachable). The engine in js/rpg.js interprets everything — no code changes needed for new chapters.
-- **Empire life English**: add entries to `EMPIRE_LIFE` in `js/data/empire.js` (easy/medium/hard). Each entry needs `scene` (Chinese scenario), `q` (English question), `a`, `wrong` (3 distractors). Empire also reuses `VOCAB_DATA` and `GRAMMAR_DATA` for vocabulary/grammar questions.
-- **Sky quests**: add entries to `SKY_QUESTS` in `js/data/sky.js`. Each quest needs `id`, `island` (a SKY_ISLANDS id), `type` (`chest`/`gate`/`npc`/`listen`/`pillars`/`runes`/`arena`/`bridge`/`race`/`boss`/`order` word-order stepping stones/`maze` portal maze), `name`, `diff` (`easy`/`medium`/`hard`/`boss` — sets the reward tier), `n` (questions/pairs/mobs/rings/words by type), `dx`/`dz` (position relative to the island centre), `intro`, and optionally `npc` (emoji), `mob` (SKY_MOBS id for arenas), `time` (race seconds), `lock` (total clears required). js/sky.js builds the quest object, marker and quiz flow automatically. New islands go in `SKY_ISLANDS` (id/name/type/pos/r/seed) and are decorated procedurally by type. The galaxy region (`isle_gx_*` islands, `sqg_*` quests, all `lock: 22`+) is reached through `SKY_PORTALS` after 22 total clears; bosses are parameterized via BOSS_DEFS in js/sky.js. The secret realm (`isle_sc_*` isles with `secret: true`, `sqh_*` quests with `hidden: true`) is entered through hidden portals OR rune-stone switches (`SKY_SWITCHES` — interacting builds a hidden stepstone staircase, persisted in `save.stairsBuilt`); both reveal within 12u proximity (persisted in `save.secretsFound`); hidden quests are masked as ??? in the journal, excluded from `totalCleared()` lock math, and tracked by the engine's `skySecretQuests`/`skySecretFound`/`skySecretBoss`/`skySwitches` counters for the 4 `hidden` achievements. The underground region (`isle_und_*` isles with `underground: true`, `squ_*` quests, locks 30-40) is entered via the crater portal on the lava island; below y≈-20 the atmosphere blends to dark-red cave fog, `undergroundVoidY: -160` replaces the surface void line while inside, and `cave` music plays. Random world events (meteor-shower shard collecting — each shard carries a letter badge and collecting them in the word's letter order pays a +10-gem spelling bonus via pickShardWord/updateMeteorHud; storm-falcon air raids with a dive-bombing `flies: true` mob AI) fire every 90-150s of free roaming (`skyShards`/`skyRaids` counters). Active-use consumables (lightning_staff/bubble_shield/cloud_mount) are triggered via the in-adventure item tray or Q/R/F (`skyItemUses` counter). Terrain uses procedural CanvasTexture patterns (noiseTexture/TEX cache in js/sky.js; matOf's third arg picks the pattern).
-- **Achievements/quests/items/shop**: edit `js/data/game.js`.
+- CSS classes: kebab-case with a short per-game prefix (`mc-`, `rb-`, `yt-`, `cd-`, `fh-`, `aw-` sky, `hb-` hub, …)
+- JS: camelCase functions/variables, PascalCase module globals, UPPER_SNAKE_CASE data constants, kebab-case DOM IDs
 
-### Key Systems
-- **Gamification**: XP (dynamic scaling: 80 + level × 20 per level), gems (currency), streaks, achievements (each grants 15 gems + pts), daily quests
-- **Achievement points**: derived from unlocked achievements (10/20/40 pts tiers, 1,410 total); ACH_POINT_REWARDS thresholds grant exclusive titles/skins/themes (state.pointRewardsClaimed)
-- **Level milestones**: LEVEL_MILESTONES every 5 levels to 50 grant gems/items/exclusive unlocks (state.milestonesClaimed; granted in addXP via grantLevelMilestones)
-- **Shop**: Consumables (buffs, some with `uses`/`minLevel`), skins (13), titles (15), themes (6) — `unlock`-flagged items are never purchasable (granted by milestones/points/collection)
-- **Themes**: body[data-theme] overrides :root CSS vars (style.css); applyTheme() on load/equip; owned in state.owned.themes
-- **Lucky charms**: equip an inventory collectible (state.equipped.charm) for passive XP/gem perks (CHARM_PERKS, applied inside addXP/addGems); duplicates sellable via sellItem (SELL_PRICES); owning all 8 grants a one-time collection reward
-- **Buff system**: `double_xp`, `hint`, `revive`, `lucky`, `instant_xp`, `gem_bonus`, `streak_shield` (consumed in load()), `double_gems` (consumed in addGems), `glide`/`jump_boost` (consumed once per Sky Citadel adventure), plus instant effects `instant_xp_big`, `mystery_item`
-- **Sky title perks**: js/sky.js maps every equipped shop title to an in-world ability (TITLE perks in computePerks(): speed/jump/double-jump/glide/damage/hearts/XP/gem multipliers, quiz hints); recomputed on adventure start and re-equip
-- **Re-entrancy rule**: reward grants inside checkAchievements/checkPointRewards/grantLevelMilestones/checkCollectionReward mutate `state.gems`/`state.owned` directly — never call addGems/addXP there
-- **Cloud save**: js/cloud.js exports all 9 localStorage keys as a v1 JSON payload; file export/import always works; Google Drive appDataFolder sync activates only when GOOGLE_CLIENT_ID is set (GIS script lazy-loaded on sign-in — the sole external-script exception); the ID can live in the source or be injected at deploy time from the repo's Actions variable/secret GOOGLE_CLIENT_ID by .github/workflows/deploy.yml (requires Pages source = GitHub Actions)
-- **Sound**: Synthesized via Web Audio API (no audio files needed)
-- **Music**: js/music.js composes 24 looping tracks as data (chords/bass/melody) and renders them live with Web Audio (soft palette for learning screens, chiptune for battle); `ZONE_TRACKS` maps each zone to a playlist and `MusicManager.playForZone()` (run on every zone switch, called in app.js switchZone) rotates through it per visit; the sky boss fight swaps to the `boss` track, secret realms to `mystic`, the underground to `cave`, meteor showers to `starfall`; independent 🎵 HUD toggle persisted as localStorage `music_enabled`; playback starts only after the first user gesture (autoplay policy)
-- **TTS**: Web Speech API for word pronunciation (en-US, zh-TW)
-- **Storage**: All state persisted in `localStorage` as JSON
-- **Level-up deferral**: `GameEngine.setDeferLevelUp(true/false)` prevents modal spam during rapid answer sequences; call `flushPendingLevelUps()` when the game round ends
+## Adding Content
+
+- **Vocabulary** (`VOCAB_DATA`, easy/medium/hard): `word`, `hint` (emoji), `zh`, `sentence` (fill-in-the-blank with `___`)
+- **Grammar** (`GRAMMAR_DATA`): `sentence`, `blank`, `options` (4 choices), `explain`, `topic`
+- **Video lessons** (`VIDEO_LESSONS`): `title`, `titleZh`, `thumbnail`, `script`, `vocab`, quiz `questions`
+- **Empire dialogues** (`EMPIRE_DIALOGUES`, easy/medium/hard): `q`, `qZh`, `a`, `wrong` (3 distractors). **Life scenes** (`EMPIRE_LIFE`): `scene` (Chinese scenario), `q`, `a`, `wrong`. Empire also reuses VOCAB_DATA/GRAMMAR_DATA.
+- **RPG chapters** (`RPG_CHAPTERS`): `id`, `title`, `theme`, `icon`, tile emoji (`wall`/`deco`) and colours (`floor`/`path`), 13×9 ASCII `map`, `spawn`, `npcs` (each with a `talk` script of say/ask entries), `boss`. Map tiles: `#` wall, `*` deco, `=` path, `.` floor, `K` key, `D` locked door, `S` switch, `G` gate, `P`/`Q` portal pair, `H` cracked wall, `!` chest. Run `node validate_rpg_chapters.js` (scratchpad) before shipping new chapters — checks schema, 10-asks rule and BFS puzzle solvability.
+- **Sky quests** (`SKY_QUESTS`): `id`, `island`, `type` (`chest`/`gate`/`npc`/`listen`/`pillars`/`runes`/`arena`/`bridge`/`race`/`boss`/`order`/`maze`), `name`, `diff` (easy/medium/hard/boss — sets reward tier), `n`, `dx`/`dz`, `intro`, optional `npc`/`mob`/`time`/`lock`. New islands go in `SKY_ISLANDS` (id/name/type/pos/r/seed), decorated procedurally by type; bosses are parameterized via BOSS_DEFS in js/sky.js. Quests with `hidden: true` are masked as ??? and excluded from `totalCleared()` lock math.
+- **Achievements/quests/items/shop**: edit `js/data/game.js`
+
+## Key Systems (behavioral contracts)
+
+- **XP/levels**: 80 + level × 20 per level; achievements grant 15 gems + pts; `ACH_POINT_REWARDS` thresholds grant exclusive titles/skins/themes; `LEVEL_MILESTONES` every 5 levels to 50 (granted in addXP via grantLevelMilestones)
+- **Re-entrancy rule**: reward grants inside checkAchievements/checkPointRewards/grantLevelMilestones/checkCollectionReward mutate `state.gems`/`state.owned` directly — **never call addGems/addXP there**
+- **Level-up deferral**: `GameEngine.setDeferLevelUp(true/false)` prevents modal spam during rapid answers; call `flushPendingLevelUps()` when the round ends
+- **Buffs**: `double_xp`, `hint`, `revive`, `lucky`, `instant_xp`, `gem_bonus`, `streak_shield` (consumed in load()), `double_gems` (consumed in addGems), `glide`/`jump_boost` (once per Sky adventure); instant effects `instant_xp_big`, `mystery_item`
+- **Charms**: `state.equipped.charm` gives passive perks (`CHARM_PERKS`, applied inside addXP/addGems); duplicates sellable (`SELL_PRICES`); owning all 8 grants a one-time reward
+- **Shop**: `unlock`-flagged items are never purchasable (granted by milestones/points/collection). **Themes**: body[data-theme] overrides :root CSS vars; applyTheme() on load/equip
+- **Sky title perks**: js/sky.js computePerks() maps every equipped shop title to an in-world ability; recomputed on adventure start and re-equip
+- **Audio**: all sound and music is synthesized via Web Audio (no audio files); music playback starts only after the first user gesture (autoplay policy); 🎵 toggle persisted as `music_enabled`
+- **Storage** (localStorage, JSON): `english_savior_save` (engine), `_empire`, `_candy`, `_builder`, `_tower`, `_rpg`, `_sky`, `_pets`, `_detective`, `_fishing`, `_typing_best`, `_tutor` (same prefix), plus `music_enabled`. js/cloud.js exports all keys as a v1 payload.
 
 ### Reward Scaling by Difficulty
+
 | Game | Easy | Medium | Hard |
 |------|------|--------|------|
 | Vocabulary (Minecraft) | 10 XP, 1 gem | 20 XP, 2 gems | 35 XP, 4 gems |
-| Spelling runner | 15 XP + 1 gem/word, +10 gems round bonus | per-word same, +20 gems bonus | per-word same, +30 gems bonus |
-| Listening | 10 XP/correct | 12 XP/correct | 15 XP/correct |
-| Word slingshot | 12 XP + 1 gem/hit, +10 gems round bonus | 16 XP + 1 gem/hit, +15 gems bonus | 20 XP + 1 gem/hit, +20 gems bonus |
-| Sentence builder | 15 XP + 1 gem/sentence, +10 gems house bonus | 20 XP + 1 gem, +15 gems bonus | 25 XP + 1 gem, +20 gems bonus |
-| Spell academy | 12 XP + 1 gem/monster, +10 gems round bonus | 16 XP + 1 gem, +15 gems bonus | 20 XP + 1 gem, +20 gems bonus (honor mode halves XP and bonus) |
+| Spelling runner | 15 XP + 1 gem/word, +10 gems bonus | same, +20 gems | same, +30 gems |
+| Listening | 10 XP/correct | 12 XP | 15 XP |
+| Word slingshot | 12 XP + 1 gem/hit, +10 gems | 16 XP + 1 gem, +15 | 20 XP + 1 gem, +20 |
+| Sentence builder | 15 XP + 1 gem/sentence, +10 gems | 20 XP + 1 gem, +15 | 25 XP + 1 gem, +20 |
+| Spell academy | 12 XP + 1 gem/monster, +10 gems | 16 XP + 1 gem, +15 | 20 XP + 1 gem, +20 (honor mode halves) |
 
-RPG (英語冒險物語) is chapter-based instead of difficulty-based: each first-try correct conversation answer grants 10 XP + 1 gem (5 XP after a retry, no gem), and clearing chapter N grants 40+15×(N-1) XP and 10+2×(N-1) gems with a 1-3 star rating from the first-try correct ratio. Tower (單字魔王塔) scales by floor tier (1-9 easy / 10-19 medium / 20+ hard): boss kill grants 30/45/60 XP + 5/8/11 gems, spelling the quest word grants 10 XP + 1 gem (plus double damage and +15 HP in-game). Empire (英語帝國) scales by age instead of difficulty: 10/15/20/25 XP + 1 gem per kill in Dark/Feudal/Castle/Imperial age, plus a 5/10/15/20-gem wave-clear bonus. Candy (糖果消消樂) scales by level tier (1-9 easy / 10-19 medium / 20+ hard): level clear grants 30/45/60 XP + 5/8/11 gems, and answering a magic-star vocabulary quiz on the first try grants 15 XP + 1 gem. Sky Citadel (天空之城) scales by quest `diff`: each first-try correct answer grants 8/12/16 XP + 1 gem (easy/medium/hard, retries half XP, no gem), first clears grant 30/50/80 XP + 5/8/12 gems (boss 150 XP + 25 gems), replays pay half XP with no clear bonus, mob kills pay +2 gems; equipped-title perks multiply these further. Every completed daily quest grants 10 XP; completing all of them grants a one-time 50 gems + random item per day.
-
-### Browser APIs Used
-- **Web Audio API** — synthesized sound effects (SoundManager)
-- **Web Speech API** — text-to-speech pronunciation (TTSManager), listening game audio, and speech recognition for the spell academy (with self-graded "honor mode" fallback where unavailable, e.g. iOS Safari)
-- **Canvas 2D API** — spelling runner rendering (800×340 px), word slingshot physics (880×420 px), and the Sky Citadel minimap (140×140 px)
-- **WebGL via Three.js** — empire 3D battlefield and Sky Citadel open world (`js/vendor/three.min.js`, r149)
-- **localStorage** — game state persistence (`english_savior_save` for the engine, `english_savior_empire` for empire campaign progress, `english_savior_candy` for candy level progress, `english_savior_builder` for the landmark collection, `english_savior_tower` for the tower floor, `english_savior_rpg` for RPG chapter progress, `english_savior_sky` for Sky Citadel quests/settings, `english_savior_pets` for the pet collection, `english_savior_detective` for solved cases, `english_savior_fishing` for the aquarium, `english_savior_typing_best` for best WPM, `english_savior_tutor` for typing-camp lesson stars)
-
-## Naming Conventions
-- **CSS classes**: kebab-case with module prefix (`mc-block`, `rb-platform`, `yt-card`, `sp-canvas`, `ls-card`)
-- **JavaScript functions/variables**: camelCase
-- **Global modules**: PascalCase (`MinecraftGame`, `GameEngine`)
-- **Data constants**: UPPER_SNAKE_CASE (`VOCAB_DATA`, `GRAMMAR_DATA`, `ACHIEVEMENTS`)
-- **DOM IDs**: kebab-case (`zone-minecraft`, `modal-shop`, `btn-help`)
+Tier-based instead of difficulty-based: **RPG** — 10 XP + 1 gem per first-try answer (5 XP retry, no gem); chapter N clear = 40+15×(N-1) XP, 10+2×(N-1) gems, 1-3 stars. **Tower** (floors 1-9/10-19/20+): boss 30/45/60 XP + 5/8/11 gems; quest-word spell 10 XP + 1 gem. **Empire** (by age): 10/15/20/25 XP + 1 gem per kill, +5/10/15/20 gems wave bonus. **Candy** (levels 1-9/10-19/20+): clear 30/45/60 XP + 5/8/11 gems; magic-star quiz first try 15 XP + 1 gem. **Sky** (by quest diff): 8/12/16 XP + 1 gem per first-try answer, first clears 30/50/80 XP + 5/8/12 gems (boss 150 XP + 25 gems), replays half XP. Daily quests: 10 XP each; all done = one-time 50 gems + random item per day.
 
 ## Development
 
-No build step. No dependencies. No package.json. To run locally:
-```bash
-# Any static file server works:
-python3 -m http.server 8000
-# Then open http://localhost:8000
-```
+No build step. Run locally with any static server (`python3 -m http.server 8000`).
 
 ### Cache busting
-All CSS/JS references in index.html carry a `?v=N` query string. GitHub Pages caches assets for 10 minutes, so a freshly deployed index.html can otherwise pair with stale cached JS/CSS (symptoms: a new game's zone shows but its dynamic UI is empty). **Bump the version number on every release that changes JS or CSS** (single `sed -i 's/?v=49/?v=50/g' index.html`-style edit).
+
+All CSS/JS references in index.html carry a `?v=N` query string. GitHub Pages caches assets for 10 minutes, so a freshly deployed index.html can otherwise pair with stale cached JS/CSS. **Bump the version on every release that changes JS or CSS** (single `sed -i 's/?v=49/?v=50/g' index.html`-style edit).
 
 ### Testing
-There is no automated test suite. Manual testing in a browser is the current workflow. Verify changes by opening `index.html` and exercising the affected game zone.
 
-### External Resources
-- **Google Fonts**: Press Start 2P (pixel game font), Noto Sans TC (Chinese text)
-- **Google Identity Services** (`accounts.google.com/gsi/client`): lazy-loaded by js/cloud.js only when the owner has configured GOOGLE_CLIENT_ID and the user clicks sign-in — never loaded otherwise
-- **Three.js r149**: vendored at `js/vendor/three.min.js`, loaded via plain script tag
-- No CDN libraries or npm packages — fully self-contained
+No automated test suite. Verify changes by opening index.html in a browser and exercising the affected game zone.
