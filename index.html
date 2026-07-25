@@ -110,6 +110,9 @@
   <link rel="stylesheet" href="css/rpg.css?v=50">
   <link rel="stylesheet" href="css/sky.css?v=50">
   <link rel="stylesheet" href="css/wizard.css?v=50">
+  <link rel="stylesheet" href="css/rhythm.css?v=50">
+  <link rel="stylesheet" href="css/alchemy.css?v=50">
+  <link rel="stylesheet" href="css/order.css?v=50">
 </head>
 <body>
   <!-- Top HUD Bar -->
@@ -202,6 +205,15 @@
     </button>
     <button class="nav-tab" data-zone="wizard">
       <span class="nav-icon">🪄</span><span class="nav-label">單字魔法師</span>
+    </button>
+    <button class="nav-tab" data-zone="rhythm">
+      <span class="nav-icon">🎵</span><span class="nav-label">英語節奏星</span>
+    </button>
+    <button class="nav-tab" data-zone="alchemy">
+      <span class="nav-icon">🔤</span><span class="nav-label">單字鍊金術</span>
+    </button>
+    <button class="nav-tab" data-zone="order">
+      <span class="nav-icon">🍜</span><span class="nav-label">英語餐廳大亂鬥</span>
     </button>
     <button class="nav-tab" data-zone="daily">
       <span class="nav-icon">📋</span><span class="nav-label">每日任務</span>
@@ -309,6 +321,20 @@
               <span class="hb-skill-tag">單字</span>
               <span class="hb-badge" data-badge="tower"></span>
             </div>
+            <div class="hb-card" data-zone="rhythm" data-region="cyan">
+              <div class="hb-medallion"><span>🎵</span></div>
+              <h3 class="hb-card-name">英語節奏星</h3>
+              <p class="hb-card-desc">跟著節奏敲出音節，抓到英文的重音！</p>
+              <span class="hb-skill-tag">發音</span>
+              <span class="hb-badge" data-badge="rhythm"></span>
+            </div>
+            <div class="hb-card" data-zone="order" data-region="cyan">
+              <div class="hb-medallion"><span>🍜</span></div>
+              <h3 class="hb-card-name">英語餐廳大亂鬥</h3>
+              <p class="hb-card-desc">聽懂客人點什麼，親手做出來端上桌！</p>
+              <span class="hb-skill-tag">聽力</span>
+              <span class="hb-badge" data-badge="order"></span>
+            </div>
           </div>
         </section>
 
@@ -349,6 +375,13 @@
               <p class="hb-card-desc">彩色指法鍵盤，學會雙手正確打字！</p>
               <span class="hb-skill-tag">打字</span>
               <span class="hb-badge" data-badge="tutor"></span>
+            </div>
+            <div class="hb-card" data-zone="alchemy" data-region="green">
+              <div class="hb-medallion"><span>🔤</span></div>
+              <h3 class="hb-card-name">單字鍊金術</h3>
+              <p class="hb-card-desc">字首＋字根合成新單字，一次學會一整家族！</p>
+              <span class="hb-skill-tag">構詞</span>
+              <span class="hb-badge" data-badge="alchemy"></span>
             </div>
           </div>
         </section>
@@ -1178,6 +1211,36 @@
     </div>
   </main>
 
+  <main id="zone-rhythm" class="zone">
+    <div class="rh-container">
+      <div class="rh-header">
+        <h2>🎵 英語節奏星</h2>
+        <button class="zone-fs-btn" title="遊戲畫面最大化">⛶</button>
+      </div>
+      <div id="rh-root"><!-- built by js/rhythm.js --></div>
+    </div>
+  </main>
+
+  <main id="zone-alchemy" class="zone">
+    <div class="al-container">
+      <div class="al-header">
+        <h2>🔤 單字鍊金術</h2>
+        <button class="zone-fs-btn" title="遊戲畫面最大化">⛶</button>
+      </div>
+      <div id="al-root"><!-- built by js/alchemy.js --></div>
+    </div>
+  </main>
+
+  <main id="zone-order" class="zone">
+    <div class="od-container">
+      <div class="od-header">
+        <h2>🍜 英語餐廳大亂鬥</h2>
+        <button class="zone-fs-btn" title="遊戲畫面最大化">⛶</button>
+      </div>
+      <div id="od-root"><!-- built by js/order.js --></div>
+    </div>
+  </main>
+
   <main id="zone-daily" class="zone">
     <div class="daily-container">
       <h2>📋 每日任務</h2>
@@ -1527,6 +1590,9 @@
   <script src="js/data/detective4.js?v=50"></script>
   <script src="js/data/fishing.js?v=50"></script>
   <script src="js/data/wizard.js?v=50"></script>
+  <script src="js/data/rhythm.js?v=50"></script>
+  <script src="js/data/alchemy.js?v=50"></script>
+  <script src="js/data/order.js?v=50"></script>
   <script src="js/engine.js?v=50"></script>
   <script src="js/music.js?v=50"></script>
   <script src="js/minecraft.js?v=50"></script>
@@ -1548,6 +1614,9 @@
   <script src="js/detective.js?v=50"></script>
   <script src="js/fishing.js?v=50"></script>
   <script src="js/wizard.js?v=50"></script>
+  <script src="js/rhythm.js?v=50"></script>
+  <script src="js/alchemy.js?v=50"></script>
+  <script src="js/order.js?v=50"></script>
   <script src="js/cloud.js?v=50"></script>
   <script src="js/daily.js?v=50"></script>
   <script src="js/hub.js?v=50"></script>

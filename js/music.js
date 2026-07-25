@@ -386,6 +386,9 @@ const MusicManager = (() => {
     detective: ['mystic', 'story2', 'dream'],
     fishing: ['lake', 'lullaby', 'dream'],
     wizard: ['mystic', 'dream', 'story2'],
+    rhythm: ['playful2', 'carnival', 'race'],
+    alchemy: ['mystic', 'story', 'dream'],
+    order: ['playful', 'carnival', 'playful3'],
   };
 
   // ---------- audio plumbing ----------

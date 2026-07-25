@@ -1,0 +1,4 @@
+.rh-container { max-width: 1000px; margin: 0 auto; padding: 14px 14px 28px; }
+.rh-header { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.rh-header h2 { margin: 0; }
+.rh-soon { text-align: center; padding: 48px 16px; color: var(--text-dim); }

@@ -1,0 +1,4 @@
+.od-container { max-width: 1000px; margin: 0 auto; padding: 14px 14px 28px; }
+.od-header { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.od-header h2 { margin: 0; }
+.od-soon { text-align: center; padding: 48px 16px; color: var(--text-dim); }

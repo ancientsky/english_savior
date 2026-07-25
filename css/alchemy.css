@@ -1,0 +1,4 @@
+.al-container { max-width: 1000px; margin: 0 auto; padding: 14px 14px 28px; }
+.al-header { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.al-header h2 { margin: 0; }
+.al-soon { text-align: center; padding: 48px 16px; color: var(--text-dim); }
