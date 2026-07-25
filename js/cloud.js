@@ -32,6 +32,9 @@ const CloudSave = (() => {
     'english_savior_typing_best',
     'english_savior_tutor',
     'english_savior_wizard',
+    'english_savior_rhythm',
+    'english_savior_alchemy',
+    'english_savior_order',
     'sound_enabled',
     'music_enabled',
   ];

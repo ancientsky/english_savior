@@ -13,7 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
     MinecraftGame, RobloxGame, YoutubeGame, SpellingGame, ListeningGame,
     EmpireGame, CandyGame, SlingGame, BuilderGame, SpeakGame, TowerGame,
     RpgGame, SkyGame, PetsGame, TypingGame, TutorGame, DetectiveGame, FishingGame,
-    WizardGame,
+    WizardGame, RhythmGame, AlchemyGame, OrderGame,
     DailyQuests, CloudSave, HubView,
   ].forEach(mod => {
     try {
@@ -36,6 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (zone === 'spelling') SpellingGame.onShow();
       if (zone === 'sky') SkyGame.onShow();
       if (zone === 'wizard') WizardGame.onShow();
+      if (zone === 'rhythm') RhythmGame.onShow();
     });
   });
 

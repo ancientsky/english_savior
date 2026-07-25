@@ -651,6 +651,48 @@ const GameEngine = (() => {
     checkAchievements();
   }
 
+  // ---- Rhythm Star (英語節奏星) ----
+  function recordRhythmSong() {
+    state.rhythmSongs = (state.rhythmSongs || 0) + 1;
+    state.dailyRhythm = (state.dailyRhythm || 0) + 1;
+    save();
+    checkAchievements();
+    checkDailyQuests();
+  }
+
+  // A song finished without a single MISS.
+  function recordRhythmFC() {
+    state.rhythmFC = (state.rhythmFC || 0) + 1;
+    save();
+    checkAchievements();
+  }
+
+  // ---- Word Alchemy (單字鍊金術) ----
+  function recordAlchemyWord() {
+    state.alchemyWords = (state.alchemyWords || 0) + 1;
+    state.dailyAlchemy = (state.dailyAlchemy || 0) + 1;
+    save();
+    checkAchievements();
+    checkDailyQuests();
+  }
+
+  // ---- Order Up! (英語餐廳大亂鬥) ----
+  function recordOrderServed() {
+    state.orderServed = (state.orderServed || 0) + 1;
+    state.dailyOrder = (state.dailyOrder || 0) + 1;
+    save();
+    checkAchievements();
+    checkDailyQuests();
+  }
+
+  function recordOrderShop(n) {
+    if (n > (state.orderShops || 0)) {
+      state.orderShops = n;
+      save();
+      checkAchievements();
+    }
+  }
+
   function recordPetCatch() {
     state.petCatches = (state.petCatches || 0) + 1;
     state.dailyPets = (state.dailyPets || 0) + 1;
@@ -1423,6 +1465,7 @@ const GameEngine = (() => {
     recordPetCatch, recordPetGym, recordTypingWord, recordTutorLesson, recordDetectiveCase, recordFishCatch,
     recordFishLegendary, recordFishDistinct,
     recordWizardCast, recordWizardLevel, recordWizardSolution,
+    recordRhythmSong, recordRhythmFC, recordAlchemyWord, recordOrderServed, recordOrderShop,
     recordBuilder, recordBuilderLandmark, recordSpeak,
     recordTowerWord, recordTowerBoss,
     recordRpgTalk, recordRpgChapter,

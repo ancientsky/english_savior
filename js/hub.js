@@ -168,6 +168,33 @@ const HubView = (() => {
       const stars = Object.values(cleared).reduce((a, b) => a + (Number(b) || 0), 0);
       setBadge('wizard', n > 0 ? `🪄 ${n}/${lvTotal} 關　⭐ ${stars}` : '');
     } catch { setBadge('wizard', ''); }
+
+    // ---- rhythm: english_savior_rhythm → cleared songs + best rank ----
+    try {
+      const rh = readJSON('english_savior_rhythm');
+      const best = rh && rh.best ? rh.best : {};
+      const n = Object.keys(best).length;
+      const total = (typeof RHYTHM_SONGS !== 'undefined' && Array.isArray(RHYTHM_SONGS)) ? RHYTHM_SONGS.length : 20;
+      const fc = Object.values(best).filter(b => b && b.fc).length;
+      setBadge('rhythm', n > 0 ? `🎵 ${n}/${total} 首${fc ? `　💯 ${fc}` : ''}` : '');
+    } catch { setBadge('rhythm', ''); }
+
+    // ---- alchemy: english_savior_alchemy → discovered words ----
+    try {
+      const al = readJSON('english_savior_alchemy');
+      const n = al && Array.isArray(al.found) ? al.found.length : 0;
+      const total = (typeof ALCHEMY_RECIPES !== 'undefined' && Array.isArray(ALCHEMY_RECIPES)) ? ALCHEMY_RECIPES.length : 120;
+      setBadge('alchemy', n > 0 ? `⚗️ ${n}/${total} 字` : '');
+    } catch { setBadge('alchemy', ''); }
+
+    // ---- order: english_savior_order → orders served + shops open ----
+    try {
+      const od = readJSON('english_savior_order');
+      const served = od && Number(od.served) > 0 ? Number(od.served) : 0;
+      const shops = od && Number(od.shops) > 0 ? Number(od.shops) : 1;
+      const total = (typeof ORDER_SHOPS !== 'undefined' && Array.isArray(ORDER_SHOPS)) ? ORDER_SHOPS.length : 5;
+      setBadge('order', served > 0 ? `🍜 ${served} 單　🏪 ${shops}/${total}` : '');
+    } catch { setBadge('order', ''); }
   }
 
   function refresh() {
