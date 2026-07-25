@@ -1,4 +1,461 @@
-.al-container { max-width: 1000px; margin: 0 auto; padding: 14px 14px 28px; }
-.al-header { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+/* ===== Word Alchemy (單字鍊金術) — al- prefix =====
+   Alchemist's workshop. The part colours ARE the mnemonic — prefix / root /
+   suffix keep the same hue everywhere (shelf, cauldron, dex), so a child can
+   see the shape of a word before reading it.
+*/
+
+.al-container {
+  max-width: 1060px;
+  margin: 0 auto;
+  padding: 14px 14px 28px;
+}
+
+.al-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
 .al-header h2 { margin: 0; }
-.al-soon { text-align: center; padding: 48px 16px; color: var(--text-dim); }
+
+#al-root {
+  --al-panel: #1e2436;
+  --al-ink: #eaf0ff;
+  --al-prefix: #ff9f6b;
+  --al-root: #7fd4ff;
+  --al-suffix: #b48cff;
+  --al-glow: #6ee7a0;
+}
+
+/* ---------- top bar ---------- */
+
+.al-topbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.al-chip {
+  background: var(--al-panel);
+  color: var(--al-ink);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.al-actions { display: flex; gap: 8px; margin-left: auto; }
+
+.al-btn {
+  background: rgba(255, 255, 255, .08);
+  color: var(--al-ink);
+  border: 2px solid rgba(255, 255, 255, .2);
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform .12s, filter .12s;
+}
+
+.al-btn:hover { transform: translateY(-1px); filter: brightness(1.15); }
+.al-btn:active { transform: translateY(1px); }
+.al-btn-main { background: linear-gradient(180deg, #7ef0b0, #3fc98a); border-color: #3fc98a; color: #06301d; }
+.al-btn-ghost { background: transparent; border-style: dashed; }
+.al-btn-big { font-size: 17px; padding: 12px 26px; }
+
+/* ---------- start screen ---------- */
+
+.al-screen {
+  padding: 22px 20px;
+  background: var(--al-panel);
+  color: var(--al-ink);
+  border-radius: 14px;
+  text-align: center;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .28);
+}
+
+.al-screen h3 { margin: 0 0 12px; font-size: 22px; }
+.al-screen p { margin: 8px 0; line-height: 1.8; }
+.al-screen p strong { color: var(--al-glow); }
+
+/* ---------- lab ---------- */
+
+.al-lab {
+  background: var(--al-panel);
+  color: var(--al-ink);
+  border-radius: 14px;
+  padding: 14px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .28);
+}
+
+.al-rule {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 10px 14px;
+  background: rgba(110, 231, 160, .1);
+  border: 1px solid rgba(110, 231, 160, .35);
+  border-radius: 10px;
+  margin-bottom: 12px;
+}
+
+.al-rule-e { font-size: 30px; line-height: 1; }
+.al-rule strong { font-size: 16px; }
+.al-rule p { margin: 4px 0 0; font-size: 13px; line-height: 1.7; opacity: .88; }
+
+.al-work {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+/* ---------- cauldron ---------- */
+
+.al-cauldron {
+  position: relative;
+  flex: 1 1 340px;
+  min-width: 300px;
+  padding: 14px;
+  background: rgba(0, 0, 0, .22);
+  border: 2px solid rgba(110, 231, 160, .3);
+  border-radius: 14px;
+  text-align: center;
+}
+
+.al-cauldron.puff { animation: al-shake .45s; }
+@keyframes al-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-6px) rotate(-1deg); }
+  75% { transform: translateX(6px) rotate(1deg); }
+}
+
+.al-slots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.al-plus, .al-eq { font-size: 20px; opacity: .7; }
+
+.al-slot {
+  width: 108px;
+  min-height: 74px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  border-radius: 10px;
+  border: 2px dashed rgba(255, 255, 255, .3);
+  background: rgba(255, 255, 255, .05);
+  cursor: pointer;
+  padding: 6px 4px;
+}
+
+.al-slot.filled { border-style: solid; }
+.al-slot-hint { font-size: 12px; opacity: .55; }
+
+.al-preview {
+  min-width: 120px;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: var(--al-glow);
+}
+
+.al-pot { font-size: 46px; margin-top: 6px; }
+
+.al-fusion {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  text-align: left;
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: rgba(110, 231, 160, .14);
+  border: 1px solid rgba(110, 231, 160, .5);
+  border-radius: 10px;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity .2s, transform .2s;
+}
+
+.al-fusion.show { opacity: 1; transform: translateY(0); }
+.al-fusion-e { font-size: 38px; }
+.al-fusion-w { font-size: 22px; font-weight: 800; letter-spacing: 1px; }
+.al-fusion-zh { font-size: 14px; opacity: .85; }
+.al-fusion-ex { font-size: 12px; opacity: .75; margin-top: 3px; }
+.al-fusion-tag { margin-left: auto; font-size: 12px; font-weight: 700; color: var(--al-glow); white-space: nowrap; }
+
+/* ---------- targets ---------- */
+
+.al-targets {
+  flex: 1 1 300px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 6px;
+  align-content: flex-start;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.al-target {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 8px 4px;
+  background: rgba(255, 255, 255, .05);
+  border: 2px dashed rgba(255, 255, 255, .16);
+  border-radius: 10px;
+  color: var(--al-ink);
+  cursor: default;
+  font-size: 12px;
+}
+
+.al-target.got {
+  border-style: solid;
+  border-color: rgba(110, 231, 160, .6);
+  background: rgba(110, 231, 160, .12);
+  cursor: pointer;
+}
+
+.al-target-e { font-size: 24px; }
+.al-target-w { font-weight: 800; font-size: 13px; }
+.al-target-zh { opacity: .75; }
+
+/* ---------- part shelf ---------- */
+
+.al-shelf {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-top: 12px;
+  padding: 12px;
+  background: rgba(0, 0, 0, .18);
+  border-radius: 12px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.al-shelf-head {
+  flex: 0 0 100%;
+  font-size: 12px;
+  font-weight: 800;
+  opacity: .6;
+  margin: 6px 0 2px;
+  letter-spacing: 1px;
+}
+
+.al-part {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 2px solid;
+  background: rgba(255, 255, 255, .06);
+  color: var(--al-ink);
+  cursor: pointer;
+  transition: transform .1s, filter .1s;
+}
+
+.al-part:hover { transform: translateY(-2px); filter: brightness(1.2); }
+.al-part.picked { opacity: .35; }
+.al-part-e { font-size: 18px; line-height: 1.2; }
+.al-part-t { font-size: 15px; font-weight: 800; letter-spacing: .5px; }
+.al-part-zh { font-size: 10px; opacity: .7; }
+
+.al-prefix { border-color: var(--al-prefix); }
+.al-prefix .al-part-t { color: var(--al-prefix); }
+.al-root { border-color: var(--al-root); }
+.al-root .al-part-t { color: var(--al-root); }
+.al-suffix { border-color: var(--al-suffix); }
+.al-suffix .al-part-t { color: var(--al-suffix); }
+
+/* ---------- flash line ---------- */
+
+.al-flash {
+  min-height: 22px;
+  margin-top: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  opacity: 0;
+  transition: opacity .2s;
+}
+
+.al-flash.show { opacity: 1; }
+.al-flash.ok { color: var(--al-glow); }
+.al-flash.bad { color: #ff9db1; }
+
+/* ---------- challenge bar ---------- */
+
+.al-chal-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  background: rgba(255, 159, 107, .14);
+  border: 1px solid rgba(255, 159, 107, .5);
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+.al-chal-q { font-size: 15px; }
+.al-chal-progress { opacity: .78; }
+.al-chal-time { margin-left: auto; font-weight: 800; color: var(--al-prefix); font-size: 16px; }
+.al-lab.challenge .al-targets { opacity: .25; pointer-events: none; }
+
+/* ---------- overlays ---------- */
+
+.al-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(8, 10, 20, .78);
+}
+
+.al-overlay.open { display: flex; }
+
+.al-panel {
+  width: min(880px, 100%);
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--al-panel);
+  color: var(--al-ink);
+  border: 3px solid rgba(110, 231, 160, .45);
+  border-radius: 16px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .55);
+  overflow: hidden;
+}
+
+.al-panel-narrow { width: min(520px, 100%); }
+
+.al-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, .05);
+  border-bottom: 2px solid rgba(110, 231, 160, .3);
+}
+
+.al-panel-head h3 { margin: 0; font-size: 19px; }
+.al-panel-sub { font-size: 13px; opacity: .75; }
+
+.al-close {
+  margin-left: auto;
+  background: none;
+  border: none;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--al-ink);
+}
+
+/* ---------- chapter list ---------- */
+
+.al-ch-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+  padding: 14px 16px 20px;
+  overflow-y: auto;
+}
+
+.al-ch {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px;
+  background: rgba(255, 255, 255, .06);
+  border: 2px solid rgba(255, 255, 255, .16);
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+  color: var(--al-ink);
+  font-size: 13px;
+}
+
+.al-ch:hover:not(.locked) { transform: translateY(-1px); filter: brightness(1.15); }
+.al-ch.locked { opacity: .42; cursor: not-allowed; }
+.al-ch.done { border-color: rgba(110, 231, 160, .6); }
+.al-ch-e { font-size: 26px; line-height: 1.2; }
+.al-ch-name { font-weight: 800; }
+.al-ch-progress { font-size: 12px; opacity: .72; }
+
+/* ---------- dex ---------- */
+
+.al-dex-body { padding: 14px 16px 20px; overflow-y: auto; }
+.al-dex-sec { margin-bottom: 18px; }
+.al-dex-sec h4 { margin: 0 0 8px; font-size: 15px; }
+.al-dex-sec h4 span { font-weight: 600; opacity: .65; font-size: 13px; }
+
+.al-dex-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(116px, 1fr));
+  gap: 6px;
+}
+
+.al-dex-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 8px 4px;
+  background: rgba(255, 255, 255, .06);
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 10px;
+  color: var(--al-ink);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.al-dex-card.locked { opacity: .35; cursor: default; }
+.al-dex-e { font-size: 22px; }
+.al-dex-w { font-weight: 800; font-size: 13px; }
+.al-dex-zh { opacity: .75; }
+.al-dex-ex { font-size: 10px; opacity: .6; }
+
+/* ---------- chapter complete ---------- */
+
+.al-done-body { padding: 22px 20px; text-align: center; }
+.al-done-e { font-size: 52px; }
+.al-done-body h3 { margin: 8px 0 12px; font-size: 20px; }
+.al-done-rule { font-size: 13px; line-height: 1.8; opacity: .85; }
+.al-done-reward { font-weight: 800; color: var(--al-glow); margin: 12px 0; }
+.al-done-row { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+
+/* ---------- maximized ---------- */
+
+body.game-max #zone-alchemy .al-container { max-width: none; padding: 8px; }
+
+/* ---------- small screens ---------- */
+
+@media (max-width: 640px) {
+  .al-container { padding: 10px 8px 22px; }
+  .al-lab { padding: 10px; }
+  .al-slot { width: 92px; min-height: 66px; }
+  .al-preview { min-width: 90px; font-size: 17px; }
+  .al-targets { max-height: 210px; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); }
+  .al-shelf { max-height: 200px; }
+  .al-btn { padding: 7px 11px; font-size: 13px; }
+  .al-fusion-tag { margin-left: 0; flex: 0 0 100%; }
+}
