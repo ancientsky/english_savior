@@ -1,4 +1,417 @@
-.od-container { max-width: 1000px; margin: 0 auto; padding: 14px 14px 28px; }
-.od-header { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+/* ===== Order Up! (英語餐廳大亂鬥) — od- prefix =====
+   Warm diner look. The tray is the centre of the screen because building the
+   order IS the answer — everything else is support.
+*/
+
+.od-container {
+  max-width: 1060px;
+  margin: 0 auto;
+  padding: 14px 14px 28px;
+}
+
+.od-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
 .od-header h2 { margin: 0; }
-.od-soon { text-align: center; padding: 48px 16px; color: var(--text-dim); }
+
+#od-root {
+  --od-panel: #2a1f1a;
+  --od-ink: #fdf4e6;
+  --od-warm: #ffb347;
+  --od-ok: #7ee0a0;
+  --od-bad: #ff9db1;
+}
+
+.od-btn {
+  background: rgba(255, 255, 255, .1);
+  color: var(--od-ink);
+  border: 2px solid rgba(255, 255, 255, .24);
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform .12s, filter .12s;
+}
+
+.od-btn:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.15); }
+.od-btn:active { transform: translateY(1px); }
+.od-btn:disabled { opacity: .4; cursor: not-allowed; }
+.od-btn-main { background: linear-gradient(180deg, #ffc978, #ff9f2e); border-color: #ff9f2e; color: #3a1e00; }
+.od-btn-big { font-size: 17px; padding: 12px 26px; }
+
+/* ---------- start screen ---------- */
+
+.od-screen {
+  padding: 22px 20px;
+  background: var(--od-panel);
+  color: var(--od-ink);
+  border-radius: 14px;
+  text-align: center;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .3);
+}
+
+.od-screen h3 { margin: 0 0 12px; font-size: 22px; }
+.od-screen p { margin: 8px 0; line-height: 1.9; }
+.od-screen p strong { color: var(--od-warm); }
+
+.od-diff {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 16px 0;
+  padding: 0 16px;
+}
+
+.od-diff-btn {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 200px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, .08);
+  color: var(--od-ink);
+  border: 2px solid rgba(255, 255, 255, .2);
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 12px;
+  text-align: left;
+}
+
+.od-diff-btn strong { font-size: 15px; }
+.od-diff-btn span { opacity: .75; line-height: 1.5; }
+.od-diff-btn.active {
+  background: linear-gradient(180deg, #ffc978, #ff9f2e);
+  border-color: #ff9f2e;
+  color: #3a1e00;
+}
+.od-diff-btn.active span { opacity: .85; }
+
+/* ---------- the floor ---------- */
+
+.od-floor {
+  background: var(--od-panel);
+  color: var(--od-ink);
+  border-radius: 14px;
+  padding: 14px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .3);
+}
+
+.od-counter {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: rgba(255, 179, 71, .12);
+  border: 2px solid rgba(255, 179, 71, .4);
+  border-radius: 12px;
+}
+
+.od-customer { font-size: 46px; line-height: 1; }
+
+.od-bubble {
+  flex: 1 1 240px;
+  min-width: 0;
+  background: rgba(255, 255, 255, .1);
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.od-say.hidden { opacity: .6; font-style: italic; }
+
+.od-counter-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.od-progress { font-size: 12px; opacity: .78; }
+
+/* ---------- feedback ---------- */
+
+.od-result:empty { display: none; }
+
+.od-result > div {
+  margin: 10px 0;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.od-result .ok, .od-result.ok > div { }
+.od-result .bad { background: rgba(255, 157, 177, .14); border: 1px solid rgba(255, 157, 177, .5); }
+.od-result .ok  { background: rgba(126, 224, 160, .14); border: 1px solid rgba(126, 224, 160, .5); }
+.od-result ul { margin: 6px 0 6px 18px; padding: 0; }
+.od-result li { margin: 3px 0; }
+.od-result p { margin: 6px 0 0; }
+.od-sentence-reveal { font-family: ui-monospace, monospace; opacity: .85; font-size: 13px; }
+
+/* ---------- tray ---------- */
+
+.od-tray-wrap { margin-top: 12px; }
+.od-tray-wrap h4 { margin: 0 0 8px; font-size: 15px; }
+
+.od-tray {
+  min-height: 70px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  background: rgba(0, 0, 0, .22);
+  border: 2px dashed rgba(255, 255, 255, .18);
+  border-radius: 12px;
+}
+
+.od-tray-empty { margin: 12px 0; text-align: center; opacity: .6; font-size: 13px; }
+
+.od-line {
+  background: rgba(255, 255, 255, .06);
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+
+.od-line-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.od-line-e { font-size: 26px; }
+.od-line-w { font-weight: 800; font-size: 15px; display: flex; flex-direction: column; line-height: 1.2; }
+.od-line-w small { font-weight: 500; font-size: 11px; opacity: .7; }
+
+.od-qty { display: inline-flex; align-items: center; gap: 4px; }
+.od-qty button {
+  width: 26px; height: 26px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, .3);
+  background: rgba(255, 255, 255, .1);
+  color: var(--od-ink);
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.od-qty b { min-width: 18px; text-align: center; }
+
+.od-size { display: inline-flex; gap: 4px; }
+.od-size button {
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, .3);
+  background: rgba(255, 255, 255, .07);
+  color: var(--od-ink);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.od-size button.on { background: var(--od-warm); border-color: var(--od-warm); color: #3a1e00; }
+
+.od-line-x {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--od-bad);
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.od-ings { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+
+.od-ing {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px dashed rgba(255, 255, 255, .3);
+  background: transparent;
+  color: var(--od-ink);
+  font-size: 12px;
+  cursor: pointer;
+  opacity: .65;
+}
+
+.od-ing small { font-size: 10px; opacity: .75; }
+.od-ing.on {
+  border-style: solid;
+  background: rgba(126, 224, 160, .18);
+  border-color: rgba(126, 224, 160, .6);
+  opacity: 1;
+  font-weight: 700;
+}
+
+.od-serve-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 10px; }
+
+.od-flash {
+  min-height: 20px;
+  margin-top: 8px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+  opacity: 0;
+  transition: opacity .2s;
+}
+.od-flash.show { opacity: 1; }
+.od-flash.ok { color: var(--od-ok); }
+.od-flash.bad { color: var(--od-bad); }
+
+/* ---------- menu ---------- */
+
+.od-menu {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: stretch;
+  margin-top: 12px;
+  padding: 12px;
+  background: rgba(0, 0, 0, .18);
+  border-radius: 12px;
+}
+
+.od-menu-head {
+  flex: 0 0 100%;
+  font-size: 12px;
+  font-weight: 800;
+  opacity: .62;
+  margin: 6px 0 2px;
+  letter-spacing: 1px;
+}
+
+.od-menu-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-width: 88px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 2px solid rgba(255, 179, 71, .45);
+  background: rgba(255, 179, 71, .1);
+  color: var(--od-ink);
+  cursor: pointer;
+  transition: transform .1s, filter .1s;
+}
+
+.od-menu-item:hover { transform: translateY(-2px); filter: brightness(1.2); }
+.od-mi-e { font-size: 26px; line-height: 1.1; }
+.od-mi-w { font-size: 13px; font-weight: 800; }
+.od-mi-zh { font-size: 11px; opacity: .72; }
+
+/* ---------- overlays ---------- */
+
+.od-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(16, 10, 6, .8);
+}
+
+.od-overlay.open { display: flex; }
+
+.od-panel {
+  width: min(820px, 100%);
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--od-panel);
+  color: var(--od-ink);
+  border: 3px solid rgba(255, 179, 71, .5);
+  border-radius: 16px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .6);
+  overflow: hidden;
+}
+
+.od-panel-narrow { width: min(520px, 100%); }
+
+.od-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, .05);
+  border-bottom: 2px solid rgba(255, 179, 71, .35);
+}
+
+.od-panel-head h3 { margin: 0; font-size: 19px; }
+.od-panel-sub { font-size: 13px; opacity: .75; }
+
+.od-close {
+  margin-left: auto;
+  background: none;
+  border: none;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--od-ink);
+}
+
+.od-shop-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 8px;
+  padding: 6px 16px 20px;
+  overflow-y: auto;
+}
+
+.od-shop {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px;
+  background: rgba(255, 255, 255, .06);
+  border: 2px solid rgba(255, 255, 255, .16);
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+  color: var(--od-ink);
+  font-size: 13px;
+}
+
+.od-shop:hover:not(.locked) { transform: translateY(-1px); filter: brightness(1.15); }
+.od-shop.locked { opacity: .45; cursor: not-allowed; }
+.od-shop-e { font-size: 28px; line-height: 1.2; }
+.od-shop-name { font-weight: 800; }
+.od-shop-meta { font-size: 12px; opacity: .72; }
+
+/* ---------- shift complete ---------- */
+
+.od-done-body { padding: 22px 20px; text-align: center; }
+.od-done-e { font-size: 52px; }
+.od-done-body h3 { margin: 8px 0 12px; font-size: 20px; }
+.od-done-line { font-size: 14px; margin: 6px 0; line-height: 1.7; }
+.od-done-reward { font-weight: 800; color: var(--od-ok); margin: 10px 0; }
+.od-done-tip { font-size: 13px; opacity: .82; margin: 10px 0; }
+.od-done-row { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+
+/* ---------- maximized ---------- */
+
+body.game-max #zone-order .od-container { max-width: none; padding: 8px; }
+
+/* ---------- small screens ---------- */
+
+@media (max-width: 640px) {
+  .od-container { padding: 10px 8px 22px; }
+  .od-floor { padding: 10px; }
+  .od-customer { font-size: 34px; }
+  .od-bubble { font-size: 14px; padding: 8px 10px; }
+  .od-diff-btn { min-width: 100%; }
+  .od-btn { padding: 7px 11px; font-size: 13px; }
+  .od-menu-item { min-width: 74px; padding: 6px 8px; }
+  .od-mi-e { font-size: 22px; }
+  .od-line-head { gap: 6px; }
+}
