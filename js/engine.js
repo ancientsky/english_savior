@@ -626,6 +626,31 @@ const GameEngine = (() => {
     checkDailyQuests();
   }
 
+  // ---- Word Wizard (單字魔法師) ----
+  // A successful summon: the player spelled the word correctly and the object
+  // dropped into the scene.
+  function recordWizardCast() {
+    state.wizardCasts = (state.wizardCasts || 0) + 1;
+    state.dailyWizard = (state.dailyWizard || 0) + 1;
+    save();
+    checkAchievements();
+    checkDailyQuests();
+  }
+
+  // A level cleared for the first time.
+  function recordWizardLevel() {
+    state.wizardLevels = (state.wizardLevels || 0) + 1;
+    save();
+    checkAchievements();
+  }
+
+  // A *new* way of solving a level (one distinct solution tag on that level).
+  function recordWizardSolution() {
+    state.wizardSolutions = (state.wizardSolutions || 0) + 1;
+    save();
+    checkAchievements();
+  }
+
   function recordPetCatch() {
     state.petCatches = (state.petCatches || 0) + 1;
     state.dailyPets = (state.dailyPets || 0) + 1;
@@ -1397,6 +1422,7 @@ const GameEngine = (() => {
     recordEmpire, recordEmpireAge, recordCandy, recordSling,
     recordPetCatch, recordPetGym, recordTypingWord, recordTutorLesson, recordDetectiveCase, recordFishCatch,
     recordFishLegendary, recordFishDistinct,
+    recordWizardCast, recordWizardLevel, recordWizardSolution,
     recordBuilder, recordBuilderLandmark, recordSpeak,
     recordTowerWord, recordTowerBoss,
     recordRpgTalk, recordRpgChapter,

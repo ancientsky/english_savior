@@ -1,0 +1,20 @@
+/* ===== Word Wizard (單字魔法師) — wz- prefix ===== */
+
+.wz-container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.wz-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.wz-soon {
+  text-align: center;
+  padding: 48px 16px;
+  color: var(--text-dim);
+}
