@@ -9,13 +9,13 @@
 
 ## 📖 專案簡介 | Project Overview
 
-**English Savior** 將英語學習融入孩子們最喜愛的遊戲世界中！21 款不同玩法的學習遊戲——從挖礦拼字、3D 城堡防禦、開放世界冒險、Undertale 式對話 RPG 到「拼出單字就能召喚它」的一題多解解謎——讓學習英語變得有趣且充滿動力。內容對齊台灣十二年國教課綱（2,000 字表與國中基礎文法句構）。
+**English Savior** 將英語學習融入孩子們最喜愛的遊戲世界中！24 款不同玩法的學習遊戲——從挖礦拼字、3D 城堡防禦、開放世界冒險、Undertale 式對話 RPG、「拼出單字就能召喚它」的一題多解解謎，到音節節奏、字首字根合成與整句聽力出餐——讓學習英語變得有趣且充滿動力。內容對齊台灣十二年國教課綱（2,000 字表與國中基礎文法句構）。
 
 **English Savior** transforms English learning into an engaging adventure! Nineteen game modes — mining, match-3, tower-defense, open-world 3D, conversation RPG, pet battles, typing defense and more — make English fun and motivating, aligned with Taiwan's national curriculum.
 
 ## ✨ 特色功能 | Features
 
-### 🎮 21 款學習遊戲 | Twenty-one Game Modes
+### 🎮 24 款學習遊戲 | Twenty-four Game Modes
 
 | 遊戲 | 玩法 | 學習重點 |
 |------|------|----------|
@@ -38,6 +38,9 @@
 | 🕵️ 英語偵探社 | 48 件案件（進階 8 題含時間線/不在場證明）、怪盜連續劇主線 | 閱讀推理 |
 | 🎣 悠閒釣魚塘 | 沉浸式場內拋竿/張力戰、鏡頭拉近＋聽音辨字，29 池 305 種魚 | 聽力 |
 | 🪄 單字魔法師 | 塗鴉冒險家式召喚解謎：拼出單字召喚該物體，用它的能力破關，30 關每關多解 | 單字拼寫/字彙廣度 |
+| 🎵 英語節奏星 | 太鼓達人式音節節奏，重音敲上排輕音敲下排，20 首 160 字 | 發音/音節重音 |
+| 🔤 單字鍊金術 | 字首＋字根丟進坩堝合成新單字，8 章 121 個字＋限時挑戰 | 構詞規則 |
+| 🍜 英語餐廳大亂鬥 | 聽客人整句英文點餐，親手加料/拿掉/調數量做出來，5 家店 | 聽力理解 |
 | 📋 每日任務 | 每天 3 個任務保持動力 | 習慣養成 |
 | 🏠 基地 | 商店/背包/成就/雲端存檔 | — |
 
@@ -120,12 +123,15 @@ english_savior/
 - **RPG 章節**：`js/data/rpg.js` 系列 → `RPG_CHAPTERS`——13×9 ASCII 地圖支援解謎字元：`K` 鑰匙、`D` 鎖門、`S` 機關、`G` 閘門、`P/Q` 傳送門對、`H` 脆牆、`!` 寶箱；引擎自動解讀，無需改程式
 - **天空之城任務**：`js/data/sky.js` → `SKY_QUESTS`（12 種任務型別）
 - **魔法師單字/關卡**：`js/data/wizard.js` → `WIZARD_WORDS`（12 種能力標籤）與 `WIZARD_LEVELS`（關卡只列障礙，解法由障礙的標籤決定）
+- **節奏星曲目**：`js/data/rhythm.js` → `RHYTHM_SONGS`（音節切分＋重音位置）
+- **鍊金配方**：`js/data/alchemy.js` → `ALCHEMY_PARTS` 與 `ALCHEMY_RECIPES`（只收純串接的組合）
+- **餐廳菜單**：`js/data/order.js` → `ORDER_SHOPS`（`def` 預設配料、`ex` 可加料、`pl`/`art` 管文法）
 - **成就/任務/商店**：`js/data/game.js`
 
 ## 📊 遊戲數據 | Game Data
 
 - 存檔：等級/XP/寶石/連續天數/已學單字/成就/道具/每日任務/各遊戲進度
-- 成就：75 個（10/20/40 點三檔，共 1,500 點；點數門檻贈專屬稱號/造型/主題）
+- 成就：84 個（10/20/40 點三檔，共 1,650 點；點數門檻贈專屬稱號/造型/主題）
 - 雲端備份：一鍵匯出/匯入 JSON；設定 GOOGLE_CLIENT_ID 後可用 Google Drive 同步
 
 ## 🤝 貢獻指南 | Contributing
