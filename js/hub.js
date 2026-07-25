@@ -158,6 +158,16 @@ const HubView = (() => {
       const caseTotal = (typeof DETECTIVE_CASES !== 'undefined' && Array.isArray(DETECTIVE_CASES)) ? DETECTIVE_CASES.length : 24;
       setBadge('detective', n > 0 ? `🔍 ${n}/${caseTotal} 案` : '');
     } catch { setBadge('detective', ''); }
+
+    // ---- wizard: english_savior_wizard → cleared levels (and total stars) ----
+    try {
+      const wizard = readJSON('english_savior_wizard');
+      const cleared = wizard && wizard.cleared ? wizard.cleared : {};
+      const n = Object.keys(cleared).length;
+      const lvTotal = (typeof WIZARD_LEVELS !== 'undefined' && Array.isArray(WIZARD_LEVELS)) ? WIZARD_LEVELS.length : 30;
+      const stars = Object.values(cleared).reduce((a, b) => a + (Number(b) || 0), 0);
+      setBadge('wizard', n > 0 ? `🪄 ${n}/${lvTotal} 關　⭐ ${stars}` : '');
+    } catch { setBadge('wizard', ''); }
   }
 
   function refresh() {

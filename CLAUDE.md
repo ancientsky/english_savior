@@ -18,18 +18,18 @@ Pure frontend (HTML/CSS/JS): no build step, no dependencies, no backend. Serve s
 - `js/engine.js` — GameEngine + SoundManager: XP/levels/gems/inventory/achievements/shop/buffs/daily rewards/save
 - `js/music.js` — MusicManager: synthesized Web Audio BGM, per-zone playlists (`ZONE_TRACKS`, rotated in app.js switchZone)
 - `js/tts.js` — TTSManager (Web Speech API); `js/daily.js` — daily quests; `js/cloud.js` — CloudSave file export/import + optional Google Drive sync
-- Game modules (one file each in `js/`): minecraft (vocabulary crafting), roblox (grammar), youtube (video quizzes), spelling (canvas runner), listening, empire (Three.js castle defense), candy (match-3; `FOOD_THEMES` inline: 20 themes × 6 foods = 120 words; special-candy merges + special×special combos), sling (canvas slingshot physics), builder (sentence builder, 33 landmarks), speak (speech recognition with honor-mode fallback), tower (orb-spelling boss battle), rpg (Undertale-style engine that interprets RPG_CHAPTERS — no code changes for new chapters), pets (collect-and-battle, 90 pets/15 gyms), typing (typing defense), tutor (20-lesson touch-typing camp), detective (48 escape-room cases), fishing (TTS listening quiz, 305 fish/29 ponds), sky (Three.js open world, 84 quests)
-- `js/data/` — vocab.js+vocab2.js (`VOCAB_DATA`, 3,080 words, easy/medium/hard), grammar.js+grammar2.js (`GRAMMAR_DATA`, 1,480), video.js (`VIDEO_LESSONS`, 42), empire.js+empire2.js (`EMPIRE_DIALOGUES` 1,260 / `EMPIRE_LIFE` 856), rpg.js+rpg2-4.js (`RPG_CHAPTERS`, 36), sky.js (`SKY_*` world data), pets.js (`PET_SPECIES` ×90), detective.js+detective2-4.js (`DETECTIVE_CASES` ×48), fishing.js (`FISH_SPECIES` ×305), game.js (`ACHIEVEMENTS`/quests/items/shop/`ACH_POINT_REWARDS`/`LEVEL_MILESTONES`/`CHARM_PERKS`/`SELL_PRICES`)
+- Game modules (one file each in `js/`): minecraft (vocabulary crafting), roblox (grammar), youtube (video quizzes), spelling (canvas runner), listening, empire (Three.js castle defense), candy (match-3; `FOOD_THEMES` inline: 20 themes × 6 foods = 120 words; special-candy merges + special×special combos), sling (canvas slingshot physics), builder (sentence builder, 33 landmarks), speak (speech recognition with honor-mode fallback), tower (orb-spelling boss battle), rpg (Undertale-style engine that interprets RPG_CHAPTERS — no code changes for new chapters), pets (collect-and-battle, 90 pets/15 gyms), typing (typing defense), tutor (20-lesson touch-typing camp), detective (48 escape-room cases), fishing (TTS listening quiz, 305 fish/29 ponds), sky (Three.js open world, 84 quests), wizard (Scribblenauts-style summon puzzle — spell a word to summon it, its ability tags clear the blocker; 30 levels, every level multi-solution)
+- `js/data/` — vocab.js+vocab2.js (`VOCAB_DATA`, 3,080 words, easy/medium/hard), grammar.js+grammar2.js (`GRAMMAR_DATA`, 1,480), video.js (`VIDEO_LESSONS`, 42), empire.js+empire2.js (`EMPIRE_DIALOGUES` 1,260 / `EMPIRE_LIFE` 856), rpg.js+rpg2-4.js (`RPG_CHAPTERS`, 36), sky.js (`SKY_*` world data), pets.js (`PET_SPECIES` ×90), detective.js+detective2-4.js (`DETECTIVE_CASES` ×48), fishing.js (`FISH_SPECIES` ×305), wizard.js (`WIZARD_TAGS`/`WIZARD_OBSTACLES`/`WIZARD_WORDS` ×137/`WIZARD_CHAPTERS`/`WIZARD_LEVELS` ×30/`WIZARD_UNLOCK`), game.js (`ACHIEVEMENTS`/quests/items/shop/`ACH_POINT_REWARDS`/`LEVEL_MILESTONES`/`CHARM_PERKS`/`SELL_PRICES`)
 
 Expansion packs (`*2.js`, `*3.js`, `*4.js`) push into their base arrays and must load after the base file (script order in index.html).
 
 ### Module Pattern
 
-Every game module is an IIFE exposing a single PascalCase global with `{ init }`; app.js calls all `.init()` on DOMContentLoaded. `EmpireGame`, `SlingGame`, `SpellingGame` and `SkyGame` additionally export `onShow()`, called by app.js when their zone becomes visible to resume paused render loops.
+Every game module is an IIFE exposing a single PascalCase global with `{ init }`; app.js calls all `.init()` on DOMContentLoaded. `EmpireGame`, `SlingGame`, `SpellingGame`, `SkyGame` and `WizardGame` additionally export `onShow()`, called by app.js when their zone becomes visible to resume paused render loops.
 
 ## Naming Conventions
 
-- CSS classes: kebab-case with a short per-game prefix (`mc-`, `rb-`, `yt-`, `cd-`, `fh-`, `aw-` sky, `hb-` hub, …)
+- CSS classes: kebab-case with a short per-game prefix (`mc-`, `rb-`, `yt-`, `cd-`, `fh-`, `aw-` sky, `wz-` wizard, `hb-` hub, …)
 - JS: camelCase functions/variables, PascalCase module globals, UPPER_SNAKE_CASE data constants, kebab-case DOM IDs
 
 ## Adding Content
@@ -40,6 +40,7 @@ Every game module is an IIFE exposing a single PascalCase global with `{ init }`
 - **Empire dialogues** (`EMPIRE_DIALOGUES`, easy/medium/hard): `q`, `qZh`, `a`, `wrong` (3 distractors). **Life scenes** (`EMPIRE_LIFE`): `scene` (Chinese scenario), `q`, `a`, `wrong`. Empire also reuses VOCAB_DATA/GRAMMAR_DATA.
 - **RPG chapters** (`RPG_CHAPTERS`): `id`, `title`, `theme`, `icon`, tile emoji (`wall`/`deco`) and colours (`floor`/`path`), 13×9 ASCII `map`, `spawn`, `npcs` (each with a `talk` script of say/ask entries), `boss`. Map tiles: `#` wall, `*` deco, `=` path, `.` floor, `K` key, `D` locked door, `S` switch, `G` gate, `P`/`Q` portal pair, `H` cracked wall, `!` chest. Run `node validate_rpg_chapters.js` (scratchpad) before shipping new chapters — checks schema, 10-asks rule and BFS puzzle solvability.
 - **Sky quests** (`SKY_QUESTS`): `id`, `island`, `type` (`chest`/`gate`/`npc`/`listen`/`pillars`/`runes`/`arena`/`bridge`/`race`/`boss`/`order`/`maze`), `name`, `diff` (easy/medium/hard/boss — sets reward tier), `n`, `dx`/`dz`, `intro`, optional `npc`/`mob`/`time`/`lock`. New islands go in `SKY_ISLANDS` (id/name/type/pos/r/seed), decorated procedurally by type; bosses are parameterized via BOSS_DEFS in js/sky.js. Quests with `hidden: true` are masked as ??? and excluded from `totalCleared()` lock math.
+- **Wizard words** (`WIZARD_WORDS`): `w` (lowercase a-z only — it is compared against the child's spelling), `zh`, `e` (emoji), `tags` (from `WIZARD_TAGS`), `lv` (spellbook page 1-5, unlocked per `WIZARD_UNLOCK`). **Levels** (`WIZARD_LEVELS`): `id`, `ch`, `name`, `intro`, `obs` (obstacle ids, left to right), optional `boss`. A level never names an answer — each obstacle in `WIZARD_OBSTACLES` carries every tag that beats it, so adding a tag there adds a solution to every level using that obstacle. Run `node validate_wizard.js` (scratchpad) before shipping: it checks that at the point a child first reaches level N, every solution tag of every obstacle has ≥2 already-unlocked words, so no level can dead-end and 3★ stays reachable.
 - **Achievements/quests/items/shop**: edit `js/data/game.js`
 
 ## Key Systems (behavioral contracts)
@@ -52,7 +53,7 @@ Every game module is an IIFE exposing a single PascalCase global with `{ init }`
 - **Shop**: `unlock`-flagged items are never purchasable (granted by milestones/points/collection). **Themes**: body[data-theme] overrides :root CSS vars; applyTheme() on load/equip
 - **Sky title perks**: js/sky.js computePerks() maps every equipped shop title to an in-world ability; recomputed on adventure start and re-equip
 - **Audio**: all sound and music is synthesized via Web Audio (no audio files); music playback starts only after the first user gesture (autoplay policy); 🎵 toggle persisted as `music_enabled`
-- **Storage** (localStorage, JSON): `english_savior_save` (engine), `_empire`, `_candy`, `_builder`, `_tower`, `_rpg`, `_sky`, `_pets`, `_detective`, `_fishing`, `_typing_best`, `_tutor` (same prefix), plus `music_enabled`. js/cloud.js exports all keys as a v1 payload.
+- **Storage** (localStorage, JSON): `english_savior_save` (engine), `_empire`, `_candy`, `_builder`, `_tower`, `_rpg`, `_sky`, `_pets`, `_detective`, `_fishing`, `_typing_best`, `_tutor`, `_wizard` (same prefix), plus `music_enabled`. js/cloud.js exports all keys as a v1 payload.
 
 ### Reward Scaling by Difficulty
 
@@ -64,8 +65,9 @@ Every game module is an IIFE exposing a single PascalCase global with `{ init }`
 | Word slingshot | 12 XP + 1 gem/hit, +10 gems | 16 XP + 1 gem, +15 | 20 XP + 1 gem, +20 |
 | Sentence builder | 15 XP + 1 gem/sentence, +10 gems | 20 XP + 1 gem, +15 | 25 XP + 1 gem, +20 |
 | Spell academy | 12 XP + 1 gem/monster, +10 gems | 16 XP + 1 gem, +15 | 20 XP + 1 gem, +20 (honor mode halves) |
+| Word wizard (per successful summon) | 10 XP + 1 gem | 14 XP + 1 gem | 18 XP + 2 gems |
 
-Tier-based instead of difficulty-based: **RPG** — 10 XP + 1 gem per first-try answer (5 XP retry, no gem); chapter N clear = 40+15×(N-1) XP, 10+2×(N-1) gems, 1-3 stars. **Tower** (floors 1-9/10-19/20+): boss 30/45/60 XP + 5/8/11 gems; quest-word spell 10 XP + 1 gem. **Empire** (by age): 10/15/20/25 XP + 1 gem per kill, +5/10/15/20 gems wave bonus. **Candy** (levels 1-9/10-19/20+): clear 30/45/60 XP + 5/8/11 gems; magic-star quiz first try 15 XP + 1 gem. **Sky** (by quest diff): 8/12/16 XP + 1 gem per first-try answer, first clears 30/50/80 XP + 5/8/12 gems (boss 150 XP + 25 gems), replays half XP. Daily quests: 10 XP each; all done = one-time 50 gems + random item per day.
+Tier-based instead of difficulty-based: **RPG** — 10 XP + 1 gem per first-try answer (5 XP retry, no gem); chapter N clear = 40+15×(N-1) XP, 10+2×(N-1) gems, 1-3 stars. **Tower** (floors 1-9/10-19/20+): boss 30/45/60 XP + 5/8/11 gems; quest-word spell 10 XP + 1 gem. **Empire** (by age): 10/15/20/25 XP + 1 gem per kill, +5/10/15/20 gems wave bonus. **Candy** (levels 1-9/10-19/20+): clear 30/45/60 XP + 5/8/11 gems; magic-star quiz first try 15 XP + 1 gem. **Sky** (by quest diff): 8/12/16 XP + 1 gem per first-try answer, first clears 30/50/80 XP + 5/8/12 gems (boss 150 XP + 25 gems), replays half XP. **Wizard** (levels 1-9/10-19/20+): first clear 30/45/60 XP + 5/8/11 gems, replays half XP and no gems; each *newly discovered* solution tag on a level +15 XP + 2 gems; a hint or a wrong spelling halves that summon's XP and drops its gem. Daily quests: 10 XP each; all done = one-time 50 gems + random item per day.
 
 ## Development
 
@@ -73,7 +75,7 @@ No build step. Run locally with any static server (`python3 -m http.server 8000`
 
 ### Cache busting
 
-All CSS/JS references in index.html carry a `?v=N` query string. GitHub Pages caches assets for 10 minutes, so a freshly deployed index.html can otherwise pair with stale cached JS/CSS. **Bump the version on every release that changes JS or CSS** (single `sed -i 's/?v=49/?v=50/g' index.html`-style edit).
+All CSS/JS references in index.html carry a `?v=N` query string. GitHub Pages caches assets for 10 minutes, so a freshly deployed index.html can otherwise pair with stale cached JS/CSS. **Bump the version on every release that changes JS or CSS** (single `sed -i 's/?v=50/?v=51/g' index.html`-style edit).
 
 ### Testing
 

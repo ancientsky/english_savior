@@ -89,26 +89,27 @@
   </script>
 
   <title>English Savior — 英語救星</title>
-  <link rel="stylesheet" href="css/style.css?v=49">
-  <link rel="stylesheet" href="css/hub.css?v=49">
-  <link rel="stylesheet" href="css/minecraft.css?v=49">
-  <link rel="stylesheet" href="css/roblox.css?v=49">
-  <link rel="stylesheet" href="css/youtube.css?v=49">
-  <link rel="stylesheet" href="css/spelling.css?v=49">
-  <link rel="stylesheet" href="css/listening.css?v=49">
-  <link rel="stylesheet" href="css/pets.css?v=49">
-  <link rel="stylesheet" href="css/typing.css?v=49">
-  <link rel="stylesheet" href="css/tutor.css?v=49">
-  <link rel="stylesheet" href="css/detective.css?v=49">
-  <link rel="stylesheet" href="css/fishing.css?v=49">
-  <link rel="stylesheet" href="css/empire.css?v=49">
-  <link rel="stylesheet" href="css/candy.css?v=49">
-  <link rel="stylesheet" href="css/sling.css?v=49">
-  <link rel="stylesheet" href="css/builder.css?v=49">
-  <link rel="stylesheet" href="css/speak.css?v=49">
-  <link rel="stylesheet" href="css/tower.css?v=49">
-  <link rel="stylesheet" href="css/rpg.css?v=49">
-  <link rel="stylesheet" href="css/sky.css?v=49">
+  <link rel="stylesheet" href="css/style.css?v=50">
+  <link rel="stylesheet" href="css/hub.css?v=50">
+  <link rel="stylesheet" href="css/minecraft.css?v=50">
+  <link rel="stylesheet" href="css/roblox.css?v=50">
+  <link rel="stylesheet" href="css/youtube.css?v=50">
+  <link rel="stylesheet" href="css/spelling.css?v=50">
+  <link rel="stylesheet" href="css/listening.css?v=50">
+  <link rel="stylesheet" href="css/pets.css?v=50">
+  <link rel="stylesheet" href="css/typing.css?v=50">
+  <link rel="stylesheet" href="css/tutor.css?v=50">
+  <link rel="stylesheet" href="css/detective.css?v=50">
+  <link rel="stylesheet" href="css/fishing.css?v=50">
+  <link rel="stylesheet" href="css/empire.css?v=50">
+  <link rel="stylesheet" href="css/candy.css?v=50">
+  <link rel="stylesheet" href="css/sling.css?v=50">
+  <link rel="stylesheet" href="css/builder.css?v=50">
+  <link rel="stylesheet" href="css/speak.css?v=50">
+  <link rel="stylesheet" href="css/tower.css?v=50">
+  <link rel="stylesheet" href="css/rpg.css?v=50">
+  <link rel="stylesheet" href="css/sky.css?v=50">
+  <link rel="stylesheet" href="css/wizard.css?v=50">
 </head>
 <body>
   <!-- Top HUD Bar -->
@@ -198,6 +199,9 @@
     </button>
     <button class="nav-tab" data-zone="fishing">
       <span class="nav-icon">🎣</span><span class="nav-label">悠閒釣魚塘</span>
+    </button>
+    <button class="nav-tab" data-zone="wizard">
+      <span class="nav-icon">🪄</span><span class="nav-label">單字魔法師</span>
     </button>
     <button class="nav-tab" data-zone="daily">
       <span class="nav-icon">📋</span><span class="nav-label">每日任務</span>
@@ -379,6 +383,13 @@
               <p class="hb-card-desc">拋竿釣魚聽音辨字，收集魚兒打造水族箱！</p>
               <span class="hb-skill-tag">聽力</span>
               <span class="hb-badge" data-badge="fishing"></span>
+            </div>
+            <div class="hb-card" data-zone="wizard" data-region="pink">
+              <div class="hb-medallion"><span>🪄</span></div>
+              <h3 class="hb-card-name">單字魔法師</h3>
+              <p class="hb-card-desc">拼出單字召喚東西，想辦法解開難關！</p>
+              <span class="hb-skill-tag">拼字</span>
+              <span class="hb-badge" data-badge="wizard"></span>
             </div>
           </div>
         </section>
@@ -1157,6 +1168,16 @@
     </div>
   </main>
 
+  <main id="zone-wizard" class="zone">
+    <div class="wz-container">
+      <div class="wz-header">
+        <h2>🪄 單字魔法師</h2>
+        <button class="zone-fs-btn" title="遊戲畫面最大化">⛶</button>
+      </div>
+      <div id="wz-root"><!-- built by js/wizard.js --></div>
+    </div>
+  </main>
+
   <main id="zone-daily" class="zone">
     <div class="daily-container">
       <h2>📋 每日任務</h2>
@@ -1422,6 +1443,19 @@
           </ul>
         </div>
         <div class="help-section">
+          <h3>🪄 單字魔法師</h3>
+          <p>小巫師被困住了！拼出英文單字就能「召喚」那個東西出來，用它想辦法讓小巫師走到 ⭐。</p>
+          <ul>
+            <li>點 📖 魔法書挑一張單字卡（有圖案和中文），拼對英文才召喚得出來</li>
+            <li>召喚出來的東西會掉下來，並且有真實的特性：船會浮在水上、石頭會沉下去填坑、梯子可以爬、氣球會帶你飛、冰塊會把水凍起來</li>
+            <li>召喚對了，小巫師就會自己往前走；召喚錯了也不會扣分，那個東西掉在旁邊，再想別的辦法就好</li>
+            <li>不知道英文怎麼拼？按 💡 提示會告訴你（獎勵減半）；第一次點的新咒語會先教你唸一次</li>
+            <li><strong>每一關都有好幾種解法！</strong>找到愈多種，星星愈多（1★ 過關、2★ 兩種解法、3★ 全部解法）</li>
+            <li>簡單：點字母方塊拼字｜中等：用鍵盤打字（給第一個字母）｜困難：用鍵盤打字（沒有提示）</li>
+            <li>共 30 關 5 個章節：森林 → 洞窟 → 城堡 → 天空 → 實驗室，每章最後一關是雙重難關！</li>
+          </ul>
+        </div>
+        <div class="help-section">
           <h3>🎯 獎勵系統</h3>
           <p><strong>經驗值 (XP)</strong> - 完成任務獲得；每升一級 +10💎＋隨機收藏品</p>
           <p><strong>等級里程碑 🏁</strong> - 每 5 級有大獎（寶石、收藏品、專屬主題/稱號/皮膚，一路到 Lv.50）</p>
@@ -1471,50 +1505,52 @@
   <!-- Toast notifications -->
   <div id="toast-container"></div>
 
-  <script src="js/vendor/three.min.js?v=49"></script>
-  <script src="js/tts.js?v=49"></script>
-  <script src="js/data/vocab.js?v=49"></script>
-  <script src="js/data/vocab2.js?v=49"></script>
-  <script src="js/data/grammar.js?v=49"></script>
-  <script src="js/data/grammar2.js?v=49"></script>
-  <script src="js/data/video.js?v=49"></script>
-  <script src="js/data/game.js?v=49"></script>
-  <script src="js/data/empire.js?v=49"></script>
-  <script src="js/data/empire2.js?v=49"></script>
-  <script src="js/data/rpg.js?v=49"></script>
-  <script src="js/data/rpg2.js?v=49"></script>
-  <script src="js/data/rpg3.js?v=49"></script>
-  <script src="js/data/rpg4.js?v=49"></script>
-  <script src="js/data/sky.js?v=49"></script>
-  <script src="js/data/pets.js?v=49"></script>
-  <script src="js/data/detective.js?v=49"></script>
-  <script src="js/data/detective2.js?v=49"></script>
-  <script src="js/data/detective3.js?v=49"></script>
-  <script src="js/data/detective4.js?v=49"></script>
-  <script src="js/data/fishing.js?v=49"></script>
-  <script src="js/engine.js?v=49"></script>
-  <script src="js/music.js?v=49"></script>
-  <script src="js/minecraft.js?v=49"></script>
-  <script src="js/roblox.js?v=49"></script>
-  <script src="js/youtube.js?v=49"></script>
-  <script src="js/spelling.js?v=49"></script>
-  <script src="js/listening.js?v=49"></script>
-  <script src="js/empire.js?v=49"></script>
-  <script src="js/candy.js?v=49"></script>
-  <script src="js/sling.js?v=49"></script>
-  <script src="js/builder.js?v=49"></script>
-  <script src="js/speak.js?v=49"></script>
-  <script src="js/tower.js?v=49"></script>
-  <script src="js/rpg.js?v=49"></script>
-  <script src="js/sky.js?v=49"></script>
-  <script src="js/pets.js?v=49"></script>
-  <script src="js/typing.js?v=49"></script>
-  <script src="js/tutor.js?v=49"></script>
-  <script src="js/detective.js?v=49"></script>
-  <script src="js/fishing.js?v=49"></script>
-  <script src="js/cloud.js?v=49"></script>
-  <script src="js/daily.js?v=49"></script>
-  <script src="js/hub.js?v=49"></script>
-  <script src="js/app.js?v=49"></script>
+  <script src="js/vendor/three.min.js?v=50"></script>
+  <script src="js/tts.js?v=50"></script>
+  <script src="js/data/vocab.js?v=50"></script>
+  <script src="js/data/vocab2.js?v=50"></script>
+  <script src="js/data/grammar.js?v=50"></script>
+  <script src="js/data/grammar2.js?v=50"></script>
+  <script src="js/data/video.js?v=50"></script>
+  <script src="js/data/game.js?v=50"></script>
+  <script src="js/data/empire.js?v=50"></script>
+  <script src="js/data/empire2.js?v=50"></script>
+  <script src="js/data/rpg.js?v=50"></script>
+  <script src="js/data/rpg2.js?v=50"></script>
+  <script src="js/data/rpg3.js?v=50"></script>
+  <script src="js/data/rpg4.js?v=50"></script>
+  <script src="js/data/sky.js?v=50"></script>
+  <script src="js/data/pets.js?v=50"></script>
+  <script src="js/data/detective.js?v=50"></script>
+  <script src="js/data/detective2.js?v=50"></script>
+  <script src="js/data/detective3.js?v=50"></script>
+  <script src="js/data/detective4.js?v=50"></script>
+  <script src="js/data/fishing.js?v=50"></script>
+  <script src="js/data/wizard.js?v=50"></script>
+  <script src="js/engine.js?v=50"></script>
+  <script src="js/music.js?v=50"></script>
+  <script src="js/minecraft.js?v=50"></script>
+  <script src="js/roblox.js?v=50"></script>
+  <script src="js/youtube.js?v=50"></script>
+  <script src="js/spelling.js?v=50"></script>
+  <script src="js/listening.js?v=50"></script>
+  <script src="js/empire.js?v=50"></script>
+  <script src="js/candy.js?v=50"></script>
+  <script src="js/sling.js?v=50"></script>
+  <script src="js/builder.js?v=50"></script>
+  <script src="js/speak.js?v=50"></script>
+  <script src="js/tower.js?v=50"></script>
+  <script src="js/rpg.js?v=50"></script>
+  <script src="js/sky.js?v=50"></script>
+  <script src="js/pets.js?v=50"></script>
+  <script src="js/typing.js?v=50"></script>
+  <script src="js/tutor.js?v=50"></script>
+  <script src="js/detective.js?v=50"></script>
+  <script src="js/fishing.js?v=50"></script>
+  <script src="js/wizard.js?v=50"></script>
+  <script src="js/cloud.js?v=50"></script>
+  <script src="js/daily.js?v=50"></script>
+  <script src="js/hub.js?v=50"></script>
+  <script src="js/app.js?v=50"></script>
 </body>
 </html>

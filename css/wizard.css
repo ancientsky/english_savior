@@ -1,0 +1,472 @@
+/* ===== Word Wizard (單字魔法師) — wz- prefix =====
+   Spellbook / parchment look: warm paper panels on a deep violet stage.
+*/
+
+.wz-container {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 14px 14px 28px;
+}
+
+.wz-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.wz-header h2 { margin: 0; }
+
+#wz-root {
+  --wz-paper: #f6ecd8;
+  --wz-ink: #3b2a1a;
+  --wz-violet: #2c1f4a;
+  --wz-gold: #ffd166;
+  position: relative;
+}
+
+/* ---------- stage ---------- */
+
+.wz-stage {
+  position: relative;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 8px 26px rgba(0, 0, 0, .32);
+  background: var(--wz-violet);
+  line-height: 0;
+}
+
+#wz-canvas {
+  width: 100%;
+  height: auto;
+  display: block;
+  touch-action: manipulation;
+}
+
+.wz-hud {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  line-height: 1.3;
+  pointer-events: none;
+}
+
+.wz-chip {
+  background: rgba(20, 12, 40, .68);
+  color: #fff;
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  backdrop-filter: blur(3px);
+}
+
+/* Sits under the HUD chips, not over the play area — the ground band is where
+   everything actually happens. */
+.wz-toast {
+  position: absolute;
+  left: 50%;
+  top: 44px;
+  transform: translate(-50%, -14px);
+  max-width: 88%;
+  background: rgba(20, 12, 40, .88);
+  color: #fff;
+  border: 2px solid var(--wz-gold);
+  border-radius: 12px;
+  padding: 8px 16px;
+  text-align: center;
+  line-height: 1.5;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .22s, transform .22s;
+}
+
+.wz-toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+.wz-toast strong { display: block; font-size: 15px; color: var(--wz-gold); }
+.wz-toast span { display: block; font-size: 13px; }
+
+/* ---------- task bar ---------- */
+
+.wz-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 10px 14px;
+  background: var(--wz-paper);
+  color: var(--wz-ink);
+  border-radius: 12px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .22);
+}
+
+.wz-task {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.wz-task-icon { font-size: 30px; line-height: 1; }
+.wz-task-name { font-weight: 800; font-size: 15px; }
+.wz-task-tip { font-size: 13px; opacity: .78; line-height: 1.5; }
+
+.wz-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.wz-btn {
+  background: #e3d3b3;
+  color: var(--wz-ink);
+  border: 2px solid #c9b58c;
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform .12s, filter .12s;
+}
+
+.wz-btn:hover { transform: translateY(-1px); filter: brightness(1.05); }
+.wz-btn:active { transform: translateY(1px); }
+
+.wz-btn-main {
+  background: linear-gradient(180deg, #ffd98a, #f4b942);
+  border-color: #d99b2c;
+}
+
+.wz-btn-ghost { background: transparent; border-style: dashed; }
+.wz-btn-big { font-size: 17px; padding: 12px 26px; }
+
+/* ---------- start screen ---------- */
+
+.wz-screen {
+  margin-top: 12px;
+  padding: 20px;
+  background: var(--wz-paper);
+  color: var(--wz-ink);
+  border-radius: 14px;
+  text-align: center;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .22);
+}
+
+.wz-screen h3 { margin: 0 0 12px; font-size: 22px; }
+.wz-screen p { margin: 6px 0; line-height: 1.7; }
+
+.wz-diff {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 16px 0;
+}
+
+.wz-diff-btn {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 150px;
+  padding: 10px 14px;
+  background: #e3d3b3;
+  color: var(--wz-ink);
+  border: 2px solid #c9b58c;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.wz-diff-btn strong { font-size: 15px; }
+.wz-diff-btn span { opacity: .75; }
+.wz-diff-btn.active {
+  background: linear-gradient(180deg, #ffd98a, #f4b942);
+  border-color: #d99b2c;
+}
+
+/* ---------- overlays ---------- */
+
+/* Above the HUD (100) and the item bar (60), but below the site's own modals
+   (200) and reward toasts (300) so level-up popups still land on top. */
+.wz-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(12, 8, 24, .72);
+}
+
+.wz-overlay.open { display: flex; }
+
+.wz-panel {
+  width: min(880px, 100%);
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--wz-paper);
+  color: var(--wz-ink);
+  border: 3px solid #c9a86a;
+  border-radius: 16px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .5);
+  overflow: hidden;
+}
+
+.wz-panel-narrow { width: min(520px, 100%); }
+
+.wz-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: #e8d8b8;
+  border-bottom: 2px solid #c9a86a;
+}
+
+.wz-panel-head h3 { margin: 0; font-size: 19px; }
+.wz-panel-sub { font-size: 13px; opacity: .75; }
+
+.wz-close {
+  margin-left: auto;
+  background: none;
+  border: none;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--wz-ink);
+}
+
+/* ---------- level map ---------- */
+
+.wz-levels-body { padding: 14px 16px 20px; overflow-y: auto; }
+
+.wz-chapter { margin-bottom: 18px; }
+.wz-chapter h4 { margin: 0 0 8px; font-size: 16px; }
+
+.wz-level-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 8px;
+}
+
+.wz-level {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px;
+  background: #fff8e8;
+  border: 2px solid #d3bd93;
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+  color: var(--wz-ink);
+  font-size: 13px;
+}
+
+.wz-level:hover:not(.locked) { filter: brightness(1.04); transform: translateY(-1px); }
+.wz-level.locked { opacity: .45; cursor: not-allowed; }
+.wz-level.boss { border-color: #c8862a; background: #fff1d4; }
+.wz-level-no { font-weight: 800; font-size: 15px; }
+.wz-level-name { opacity: .82; }
+.wz-level-stars { letter-spacing: 1px; }
+
+/* ---------- spellbook ---------- */
+
+.wz-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 16px;
+  border-bottom: 2px dashed #d3bd93;
+}
+
+.wz-filter {
+  background: #efe0c2;
+  border: 2px solid #d3bd93;
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  color: var(--wz-ink);
+}
+
+.wz-filter.active {
+  background: linear-gradient(180deg, #ffd98a, #f4b942);
+  border-color: #d99b2c;
+}
+
+.wz-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+  padding: 14px 16px 20px;
+  overflow-y: auto;
+}
+
+.wz-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 6px;
+  background: #fff8e8;
+  border: 2px solid #d3bd93;
+  border-radius: 12px;
+  cursor: pointer;
+  color: var(--wz-ink);
+}
+
+.wz-card:hover { transform: translateY(-2px); filter: brightness(1.05); }
+.wz-card.fresh { border-style: dashed; border-color: #c8862a; }
+.wz-card-e { font-size: 30px; line-height: 1.1; }
+.wz-card-zh { font-size: 13px; font-weight: 700; }
+.wz-card-dots { font-size: 9px; letter-spacing: 2px; opacity: .55; }
+.wz-card-tags { font-size: 12px; }
+.wz-empty { padding: 30px; text-align: center; opacity: .7; }
+
+/* ---------- spelling ---------- */
+
+.wz-spell-body { padding: 16px; }
+
+.wz-spell-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.wz-spell-e { font-size: 46px; line-height: 1; }
+.wz-spell-zh { font-size: 20px; font-weight: 800; }
+.wz-spell-meta { font-size: 12px; opacity: .7; }
+
+.wz-slots {
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.wz-slot {
+  width: 38px;
+  height: 46px;
+  background: #fff8e8;
+  border: 2px dashed #c9a86a;
+  border-radius: 8px;
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--wz-ink);
+  cursor: pointer;
+}
+
+.wz-slot.filled { border-style: solid; background: #ffe9b8; }
+
+.wz-tiles {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.wz-tile {
+  width: 42px;
+  height: 46px;
+  background: linear-gradient(180deg, #ffd98a, #f4b942);
+  border: 2px solid #d99b2c;
+  border-radius: 8px;
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--wz-ink);
+  cursor: pointer;
+}
+
+.wz-tile.used { opacity: .28; cursor: default; }
+
+.wz-type { display: flex; gap: 8px; }
+
+.wz-type input {
+  flex: 1;
+  padding: 12px 14px;
+  font-size: 22px;
+  letter-spacing: 2px;
+  border: 2px solid #c9a86a;
+  border-radius: 10px;
+  background: #fff8e8;
+  color: var(--wz-ink);
+}
+
+.wz-spell-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.wz-spell-msg { font-size: 14px; font-weight: 700; }
+.wz-spell-msg.bad { color: #c0392b; }
+.wz-spell-msg.hint { color: #1f7a4d; font-size: 20px; letter-spacing: 2px; }
+
+.shake { animation: wz-shake .34s; }
+@keyframes wz-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-7px); }
+  75% { transform: translateX(7px); }
+}
+
+/* ---------- teach card ---------- */
+
+.wz-teach { text-align: center; }
+.wz-teach-e { font-size: 60px; line-height: 1.1; }
+.wz-teach-word { font-size: 34px; font-weight: 800; letter-spacing: 3px; }
+.wz-teach-zh { font-size: 18px; opacity: .8; }
+.wz-teach-note { font-size: 13px; opacity: .72; margin: 10px 0 16px; }
+.wz-teach-row { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; }
+
+/* ---------- level complete ---------- */
+
+.wz-done-body { padding: 22px 20px; text-align: center; }
+.wz-done-stars { font-size: 36px; letter-spacing: 4px; }
+.wz-done-body h3 { margin: 6px 0 10px; font-size: 21px; }
+.wz-done-reward { font-weight: 800; color: #1f7a4d; }
+.wz-done-found, .wz-done-hint { font-size: 14px; line-height: 1.9; margin: 10px 0; }
+
+.wz-done-tag {
+  display: inline-block;
+  margin: 0 3px;
+  padding: 2px 9px;
+  background: #ffe9b8;
+  border: 1px solid #d99b2c;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.wz-done-tag.dim { background: #efe6d2; border-color: #c9b58c; opacity: .8; }
+.wz-done-row { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+
+/* ---------- maximized (game-max) ---------- */
+
+body.game-max #zone-wizard .wz-container { max-width: none; padding: 0; }
+body.game-max #zone-wizard .wz-stage { border-radius: 0; }
+body.game-max #zone-wizard .wz-screen { max-width: 720px; margin: 12px auto; }
+
+/* ---------- small screens ---------- */
+
+@media (max-width: 640px) {
+  .wz-container { padding: 10px 8px 22px; }
+  .wz-bar { padding: 8px 10px; }
+  .wz-task-icon { font-size: 24px; }
+  .wz-task-name { font-size: 14px; }
+  .wz-task-tip { font-size: 12px; }
+  .wz-btn { padding: 7px 11px; font-size: 13px; }
+  .wz-cards { grid-template-columns: repeat(auto-fill, minmax(82px, 1fr)); }
+  .wz-card-e { font-size: 26px; }
+  .wz-tile, .wz-slot { width: 36px; height: 42px; font-size: 19px; }
+  .wz-level-grid { grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); }
+}

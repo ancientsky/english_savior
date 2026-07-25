@@ -71,6 +71,10 @@ const ACHIEVEMENTS = [
   { id: 'sky_raid_guard', name: '空襲守護者', desc: '擊退 3 次風暴隼空襲', icon: '🛡️', pts: 20, hidden: true, condition: s => (s.skyRaids || 0) >= 3 },
   { id: 'sky_puzzle_master', name: '解謎大師', desc: '完成 6 個天空之城解謎任務', icon: '🧩', pts: 20, condition: s => (s.skyPuzzles || 0) >= 6 },
   { id: 'sky_gadgeteer', name: '道具達人', desc: '在天空之城使用 5 次主動道具', icon: '🧰', pts: 10, condition: s => (s.skyItemUses || 0) >= 5 },
+  { id: 'wizard_first', name: '初級魔法師', desc: '在單字魔法師召喚出第一個東西', icon: '🪄', pts: 10, condition: s => (s.wizardCasts || 0) >= 1 },
+  { id: 'wizard_solver', name: '解謎魔法師', desc: '在單字魔法師通過 10 個關卡', icon: '🔮', pts: 20, condition: s => (s.wizardLevels || 0) >= 10 },
+  { id: 'wizard_master', name: '大魔法師', desc: '在單字魔法師通過全部 30 個關卡', icon: '🧙‍♀️', pts: 20, condition: s => (s.wizardLevels || 0) >= 30 },
+  { id: 'wizard_polymath', name: '萬用咒語', desc: '在單字魔法師找出 40 種不同的解法', icon: '📜', pts: 40, hidden: true, condition: s => (s.wizardSolutions || 0) >= 40 },
 ];
 
 const DAILY_QUESTS = [
@@ -90,6 +94,7 @@ const DAILY_QUESTS = [
   { id: 'dq_detective', name: '今日破案', desc: '在英語偵探社偵破 1 件案件', icon: '🕵️', target: 1, key: 'dailyDetective' },
   { id: 'dq_fishing', name: '悠閒釣客', desc: '在悠閒釣魚塘釣到 3 條魚', icon: '🎣', target: 3, key: 'dailyFishing' },
   { id: 'dq_sky', name: '空島探險家', desc: '在天空之城答對 5 題', icon: '🏝️', target: 5, key: 'dailySky' },
+  { id: 'dq_wizard', name: '今日召喚', desc: '在單字魔法師召喚 5 個東西', icon: '🪄', target: 5, key: 'dailyWizard' },
 ];
 
 const INVENTORY_ITEMS = [
