@@ -52,6 +52,56 @@ const OrderGame = (() => {
 
   const itemOf = w => shop.menu.find(m => m.w === w);
   const extraOf = w => ORDER_EXTRAS[w] || { zh: w, e: '•' };
+
+  /* ================= choice axes =================
+     A "choice" is a word the customer attaches to ONE item to say which kind
+     they want: hot/iced, one-way/round-trip, a medium shirt, in blue, for two
+     nights. They are all the same shape, so they live in one table instead of
+     four near-identical code paths through lineText/checkOrder/renderTray.
+
+     `slot` orders the words around the noun: < 5 goes in front (adjectives, in
+     English order: size 1, colour 2, kind 3), >= 5 goes behind (phrases). The
+     noun itself sits at 5. That is what makes "a medium blue t-shirt" and
+     "a large iced tea" both come out right with no special cases.
+
+     `field` says where the answer is stored on a line. `temp` keeps its own
+     literal `line.temp` — the game's tests read it by name, and one documented
+     special case is far cheaper than migrating them. Everything else lives in
+     `line.ch`.
+
+     `sizes` is deliberately NOT in here. It looks similar but behaves
+     differently in four ways (tray default 'small', a DIFFS switch, counted by
+     factsOf, stripped by trimToBudget), and folding it in would buy nothing.
+     A garment size is a `fit` choice instead, which is the more accurate model:
+     an unheard "large coffee" means the child didn't care, an unheard "medium
+     shirt" means they missed it — so one wants a default and the other must not
+     have one.
+  */
+  const ORDER_CHOICES = {
+    temp: {
+      slot: 3, feat: 'temps', field: 'temp', noun: '冷熱', ask: '冰的還是熱的？',
+      cls: 'od-temp', attr: 'data-temp',
+      opts: [{ w: 'hot', zh: '熱的', btn: '熱', e: '🔥' },
+             { w: 'iced', zh: '冰的', btn: '冰', e: '🧊' }],
+    },
+  };
+
+  const chAxis = id => ORDER_CHOICES[id];
+  const chGet = (line, id) =>
+    (ORDER_CHOICES[id].field ? line[ORDER_CHOICES[id].field] : (line.ch || {})[id]) || null;
+  function chSet(line, id, v) {
+    const f = ORDER_CHOICES[id].field;
+    if (f) line[f] = v;
+    else { line.ch = line.ch || {}; if (v == null) delete line.ch[id]; else line.ch[id] = v; }
+  }
+  const chOpt = (id, w) => ORDER_CHOICES[id].opts.find(o => o.w === w) || { w, zh: w };
+  // Which axes this item actually offers, in slot order. An axis only counts if
+  // the region has switched its feature on — same rule as every other pattern.
+  const choicesOf = item => {
+    const ids = item.choices ? item.choices.slice() : (item.temps ? ['temp'] : []);
+    return ids.filter(id => ORDER_CHOICES[id] && hasFeature(ORDER_CHOICES[id].feat))
+      .sort((a, b) => ORDER_CHOICES[a].slot - ORDER_CHOICES[b].slot);
+  };
   const regionOf = s => ORDER_REGIONS.find(r => r.id === s.region) || ORDER_REGIONS[0];
 
   // Sentence patterns are INHERITED: a shop gets its own region's pattern plus
@@ -63,9 +113,17 @@ const OrderGame = (() => {
       if (r.teaches) on.add(r.teaches);
       if (r.id === s.region) break;
     }
-    ['togo', 'temps', 'amt'].forEach(f => { if (s[f]) on.add(f); });
+    PATTERN_FEATURES().forEach(f => { if (s[f]) on.add(f); });
     return on;
   }
+
+  // Every pattern flag a shop may switch on early. Derived from the choice
+  // registry so adding an axis never needs this list edited — forgetting it is
+  // silent (the axis simply never appears) and that is the worst kind of bug.
+  const PATTERN_FEATURES = () => [...new Set([
+    'togo', 'amt',
+    ...Object.values(ORDER_CHOICES).map(a => a.feat),
+  ])];
 
   /* ================= save ================= */
 
@@ -134,12 +192,13 @@ const OrderGame = (() => {
       // Quantity only where "two ___" is real English (the data marks those)
       const qty = cfg.qty && item.pl && Math.random() < 0.45 ? 2 + rand(2) : 1;
       const size = cfg.size && item.sizes && Math.random() < 0.6 ? pick(['small', 'large']) : null;
-      // Temperature has no DIFFS switch on purpose: a shop with `temps` items IS
-      // the shop that teaches hot/iced, and its EASY mode — one item, no add-ons,
+      // Choices have no DIFFS switch on purpose: a shop with `temps` items IS the
+      // shop that teaches hot/iced, and its EASY mode — one item, no add-ons,
       // sentence on screen — is the ideal first meeting with the word. Gating it
       // by difficulty would introduce "iced" for the first time in medium, where
       // the sentence is hidden.
-      const temp = item.temps && hasFeature('temps') ? pick(['hot', 'iced']) : null;
+      const line = { w: item.w, qty, size, temp: null, ch: {} };
+      choicesOf(item).forEach(id => chSet(line, id, pick(ORDER_CHOICES[id].opts).w));
 
       let take = forceLevel ? 1 : (budget > 0 ? rand(Math.min(budget, 2) + 1) : 0);
       budget -= take;
@@ -177,7 +236,7 @@ const OrderGame = (() => {
         else budget++;   // nothing left to modify on this item — give it back
       }
       const ing = (item.def || []).filter(x => !dropped.includes(x)).concat(added);
-      return { w: item.w, qty, size, temp, ing, added, dropped, lv };
+      return Object.assign(line, { ing, added, dropped, lv });
     }));
   }
 
@@ -265,13 +324,24 @@ const OrderGame = (() => {
 
   function lineText(line) {
     const item = itemOf(line.w);
-    // size then temperature — "two large iced teas", never "iced large tea"
-    const adj = [line.size, line.temp].filter(Boolean);
     const noun = line.qty === 1 ? item.w : (item.pl || item.w);
+    // Everything the customer said about this item, sorted around the noun by
+    // slot: "two large iced teas" (size 1 … kind 3, noun 5) and "a room for two
+    // nights" (phrase at 9). `size` is not a choice axis but occupies slot 1.
+    const parts = [];
+    if (line.size) parts.push({ slot: 1, w: line.size });
+    choicesOf(item).forEach(id => {
+      const v = chGet(line, id);
+      if (v) parts.push({ slot: ORDER_CHOICES[id].slot, w: v });
+    });
+    parts.push({ slot: 5, w: noun });
+    parts.sort((a, b) => a.slot - b.slot);
+    const words = parts.map(p => p.w);
+    const first = words[0];
     let head;
-    if (line.qty > 1) head = `${NUM[line.qty]} ${[...adj, noun].join(' ')}`;
-    else if (item.art === 'some') head = `some ${[...adj, noun].join(' ')}`;
-    else head = `${articleFor(adj[0] || noun)} ${[...adj, noun].join(' ')}`;
+    if (line.qty > 1) head = `${NUM[line.qty]} ${words.join(' ')}`;
+    else if (item.art === 'some') head = `some ${words.join(' ')}`;
+    else head = `${articleFor(first)} ${words.join(' ')}`;
     let s = head;
     // Plain add-ons first, adjusted ones last, each modifier hugging its own
     // noun: "with extra pearls and honey" leaves a listener unable to tell
@@ -383,7 +453,7 @@ const OrderGame = (() => {
     // size defaults to small because "didn't say" means "doesn't mind", but temp
     // has NO default: pre-selecting 'hot' would silently pass every order whose
     // "hot" the child never heard.
-    else tray.push({ w, qty: 1, size: item.sizes ? 'small' : null, temp: null, ing: (item.def || []).slice() });
+    else tray.push({ w, qty: 1, size: item.sizes ? 'small' : null, temp: null, ch: {}, ing: (item.def || []).slice() });
     renderTray();
   }
 
@@ -402,10 +472,11 @@ const OrderGame = (() => {
     if (line) { line.size = size; renderTray(); }
   }
 
-  function setTemp(w, temp) {
+  function setChoice(w, id, v) {
     const line = tray.find(t => t.w === w);
-    if (line) { line.temp = temp; renderTray(); }
+    if (line && ORDER_CHOICES[id]) { chSet(line, id, v); renderTray(); }
   }
+  const setTemp = (w, temp) => setChoice(w, 'temp', temp);
 
   function toggleIng(w, ing) {
     const line = tray.find(t => t.w === w);
@@ -460,11 +531,14 @@ const OrderGame = (() => {
         add(RANK.size, `${item.zh} 的大小錯了：要 ${o.size === 'large' ? '大杯 large' : '小杯 small'}`);
       }
       // only compared when the customer actually said one
-      if (o.temp && o.temp !== t.temp) {
-        add(RANK.temp, t.temp
-          ? `${item.zh} 的冷熱錯了：客人說 ${o.temp}（${o.temp === 'hot' ? '熱的' : '冰的'}）`
-          : `${item.zh} 還沒選冷熱：客人說 ${o.temp}（${o.temp === 'hot' ? '熱的' : '冰的'}）`);
-      }
+      choicesOf(item).forEach(id => {
+        const want = chGet(o, id), got = chGet(t, id);
+        if (!want || want === got) return;
+        const ax = ORDER_CHOICES[id], opt = chOpt(id, want);
+        add(RANK.temp, got
+          ? `${item.zh} 的${ax.noun}錯了：客人說 ${want}（${opt.zh}）`
+          : `${item.zh} 還沒選${ax.noun}：客人說 ${want}（${opt.zh}）`);
+      });
       const want = [...o.ing].sort(), got = [...t.ing].sort();
       const missing = want.filter(x => !got.includes(x));
       const surplus = got.filter(x => !want.includes(x));
@@ -678,10 +752,15 @@ const OrderGame = (() => {
             <button data-size="small" class="${t.size === 'small' ? 'on' : ''}">small 小</button>
             <button data-size="large" class="${t.size === 'large' ? 'on' : ''}">large 大</button>
           </span>` : ''}
-          ${item.temps && hasFeature('temps') ? `<span class="od-size od-temp">
-            <button data-temp="hot" class="${t.temp === 'hot' ? 'on' : ''}">🔥 hot 熱</button>
-            <button data-temp="iced" class="${t.temp === 'iced' ? 'on' : ''}">🧊 iced 冰</button>
-          </span>` : ''}
+          ${choicesOf(item).map(id => {
+            const ax = ORDER_CHOICES[id];
+            // `cls` keeps the original per-axis hook (.od-temp) so the DOM
+            // contract the tests were written against does not move.
+            return `<span class="od-size od-ch od-ch-${id}${ax.cls ? ' ' + ax.cls : ''}">
+            ${ax.opts.map(o => `<button data-ch="${id}" data-ch-v="${o.w}"${ax.attr ? ` ${ax.attr}="${o.w}"` : ''}
+              class="${chGet(t, id) === o.w ? 'on' : ''}">${o.e ? o.e + ' ' : ''}${o.w}${o.btn ? ' ' + o.btn : ''}</button>`).join('')}
+          </span>`;
+          }).join('')}
           <button class="od-line-x" data-act="del">✕</button>
         </div>
         <div class="od-ings">
@@ -702,7 +781,8 @@ const OrderGame = (() => {
         else removeLine(t.w);
       }));
       line.querySelectorAll('[data-size]').forEach(b => b.addEventListener('click', () => setSize(t.w, b.dataset.size)));
-      line.querySelectorAll('[data-temp]').forEach(b => b.addEventListener('click', () => setTemp(t.w, b.dataset.temp)));
+      line.querySelectorAll('[data-ch]').forEach(b =>
+        b.addEventListener('click', () => setChoice(t.w, b.dataset.ch, b.dataset.chV)));
       line.querySelectorAll('[data-ing]').forEach(b => b.addEventListener('click', () => toggleIng(t.w, b.dataset.ing)));
       line.querySelectorAll('[data-lv]').forEach(b =>
         b.addEventListener('click', () => setLevel(t.w, b.dataset.lvIng, b.dataset.lv)));
@@ -879,6 +959,7 @@ const OrderGame = (() => {
     const c = { ...l };
     ['ing', 'added', 'dropped'].forEach(k => { if (Array.isArray(l[k])) c[k] = l[k].slice(); });
     if (l.lv) c.lv = { ...l.lv };
+    if (l.ch) c.ch = { ...l.ch };
     return c;
   }
 
@@ -897,7 +978,8 @@ const OrderGame = (() => {
     const added = (l.added || []).slice();
     const dropped = (l.dropped || []).slice();
     return {
-      w: l.w, qty: l.qty || 1, size: l.size || null, temp: l.temp || null,
+      w: l.w, qty: l.qty || 1, size: l.size || null,
+      temp: l.temp || null, ch: { ...(l.ch || {}) },
       ing: l.ing ? l.ing.slice() : (item.def || []).filter(x => !dropped.includes(x)).concat(added),
       added, dropped, lv: { ...(l.lv || {}) },
     };
@@ -951,6 +1033,7 @@ const OrderGame = (() => {
         w: o.w, qty: o.qty,
         size: o.size || (itemOf(o.w).sizes ? 'small' : null),
         temp: o.temp || null,
+        ch: { ...(o.ch || {}) },
         ing: o.ing.slice(),
         lv: { ...(o.lv || {}) },
       }));
