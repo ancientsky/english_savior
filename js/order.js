@@ -122,12 +122,29 @@ const OrderGame = (() => {
 
   const NUM = ['zero', 'one', 'two', 'three', 'four'];
 
+  // a/an is decided by the first word actually SPOKEN, not by the noun: an
+  // adjective can sit in between ("an iced tea" but "a hot tea"), so the data
+  // cannot hard-code it. This vocabulary is small and closed, so an explicit
+  // exception set beats a clever heuristic.
+  const AN_EXCEPTIONS = new Set(['hour', 'honest', 'honor', 'herb', 'herbal']);
+  const A_EXCEPTIONS = /^(uni|use|usu|eu|one)/;   // vowel letter, consonant sound
+
+  function articleFor(word) {
+    const w = String(word || '').toLowerCase();
+    if (AN_EXCEPTIONS.has(w)) return 'an';
+    if (A_EXCEPTIONS.test(w)) return 'a';
+    return /^[aeiou]/.test(w) ? 'an' : 'a';
+  }
+
   function lineText(line) {
     const item = itemOf(line.w);
-    const size = line.size ? line.size + ' ' : '';
+    // size then temperature — "two large iced teas", never "iced large tea"
+    const adj = [line.size, line.temp].filter(Boolean);
+    const noun = line.qty === 1 ? item.w : (item.pl || item.w);
     let head;
-    if (line.qty === 1) head = `${item.art || 'a'} ${size}${item.w}`;
-    else head = `${NUM[line.qty]} ${size}${item.pl || item.w}`;
+    if (line.qty > 1) head = `${NUM[line.qty]} ${[...adj, noun].join(' ')}`;
+    else if (item.art === 'some') head = `some ${[...adj, noun].join(' ')}`;
+    else head = `${articleFor(adj[0] || noun)} ${[...adj, noun].join(' ')}`;
     let s = head;
     if (line.added.length) s += ` with ${listWords(line.added)}`;
     if (line.dropped.length) s += `, no ${line.dropped.join(' or ')}`;
@@ -142,7 +159,11 @@ const OrderGame = (() => {
     if (parts.length === 1) body = parts[0];
     else if (parts.length === 2) body = `${parts[0]}, and ${parts[1]}`;
     else body = `${parts.slice(0, -1).join(', ')}, and ${parts[parts.length - 1]}`;
-    return `${pick(ORDER_OPENERS)} ${body}, please.`;
+    const opener = pick(ORDER_OPENERS);
+    // "Can I have ... please." is a question wearing a full stop, and easy mode
+    // shows the sentence on screen, so the punctuation is being taught too.
+    const end = /^(Can|Could|May)\b/.test(opener) ? '?' : '.';
+    return `${opener} ${body}, please${end}`;
   }
 
   /* ================= shift flow ================= */
@@ -167,7 +188,7 @@ const OrderGame = (() => {
     if (customer >= SHIFT_LEN) { finishShift(); return; }
     order = makeOrder();
     sentence = buildSentence(order);
-    tray = [];
+    resetTray();
     retried = false;
     replaysLeft = DIFFS[difficulty].replays;
     renderAll();
@@ -187,6 +208,13 @@ const OrderGame = (() => {
 
   /* ================= tray editing ================= */
 
+  // One place to clear everything the child has answered. Order-level answers
+  // (內用/外帶) live outside `tray`, so three scattered `tray = []` would leave
+  // the previous customer's answer sitting there for the next one.
+  function resetTray() {
+    tray = [];
+  }
+
   function addToTray(w) {
     if (!running) return;
     const item = itemOf(w);
@@ -201,7 +229,8 @@ const OrderGame = (() => {
   function bumpQty(w, d) {
     const line = tray.find(t => t.w === w);
     if (!line) return;
-    line.qty += d;
+    // clamped like addToTray — NUM only goes up to four
+    line.qty = Math.min(4, line.qty + d);
     if (line.qty <= 0) removeLine(w); else renderTray();
   }
 
@@ -235,7 +264,12 @@ const OrderGame = (() => {
       }
       const want = [...o.ing].sort(), got = [...t.ing].sort();
       want.filter(x => !got.includes(x)).forEach(x => problems.push(`${item.zh} 少加了 ${extraOf(x).e} ${extraOf(x).zh}（${x}）`));
-      got.filter(x => !want.includes(x)).forEach(x => problems.push(`${item.zh} 多了 ${extraOf(x).e} ${extraOf(x).zh}（${x}）— 客人說 no ${x}`));
+      // Two different mistakes, two different lessons: the customer refusing an
+      // ingredient is not the same as the child adding one nobody asked for.
+      // Saying 「客人說 no X」 for both taught the child to mishear the order.
+      got.filter(x => !want.includes(x)).forEach(x => problems.push(o.dropped.includes(x)
+        ? `${item.zh} 多了 ${extraOf(x).e} ${extraOf(x).zh}（${x}）— 客人說 no ${x}，要拿掉`
+        : `${item.zh} 多了 ${extraOf(x).e} ${extraOf(x).zh}（${x}）— 客人沒有說要加這個`));
     });
     tray.forEach(t => {
       if (!order.find(o => o.w === t.w)) {
@@ -303,14 +337,16 @@ const OrderGame = (() => {
     const best = save.best[shop.id] || 0;
     if (correctCount > best) { save.best[shop.id] = correctCount; persist(); }
 
-    const nextShop = ORDER_SHOPS[shopIndex + 1];
+    // the next shop still to open — not shopIndex+1, which makes the hint vanish
+    // as soon as the child goes back to replay an earlier shop
+    const nextShop = ORDER_SHOPS.find(s => save.served < s.unlockAt);
     els.doneBody.innerHTML = `
       <div class="od-done-e">${shop.e}</div>
       <h3>${shop.name} today 打烊囉！</h3>
       <p class="od-done-line">一次做對 <strong>${correctCount} / ${SHIFT_LEN}</strong> 位客人${perfect ? '　🏆 全對！' : ''}</p>
       <p class="od-done-reward">班別獎金 +${gems} 💎</p>
       <p class="od-done-line">累積出餐 <strong>${save.served}</strong> 份　營業中 ${save.shops} / ${ORDER_SHOPS.length} 家店</p>
-      ${nextShop && save.served < nextShop.unlockAt
+      ${nextShop
         ? `<p class="od-done-tip">🔒 再出 ${nextShop.unlockAt - save.served} 份餐就能開 ${nextShop.e} ${nextShop.name}！</p>` : ''}
       <div class="od-done-row">
         <button class="od-btn" id="od-again">🔄 再開一班</button>
@@ -338,15 +374,22 @@ const OrderGame = (() => {
     els.replay.disabled = replaysLeft <= 0;
   }
 
+  const KIND_HEADS = { food: '🍽️ 餐點', drink: '🥤 飲料', side: '🍟 附餐', dessert: '🍰 甜點' };
+
   function renderMenu() {
     if (!els.menu) return;
     els.menu.innerHTML = '';
-    ['food', 'drink'].forEach(kind => {
+    // Derived from the data, not a hard-coded pair: a kind the list forgot used
+    // to be invisible on the menu while makeOrder happily still ordered it, so
+    // the customer asked for something the child physically could not make.
+    const rank = k => { const i = Object.keys(KIND_HEADS).indexOf(k); return i < 0 ? 99 : i; };
+    const kinds = [...new Set(shop.menu.map(m => m.kind))].sort((a, b) => rank(a) - rank(b));
+    kinds.forEach(kind => {
       const list = shop.menu.filter(m => m.kind === kind);
       if (!list.length) return;
       const head = document.createElement('div');
       head.className = 'od-menu-head';
-      head.textContent = kind === 'food' ? '🍽️ 餐點' : '🥤 飲料';
+      head.textContent = KIND_HEADS[kind] || `🍴 ${kind}`;
       els.menu.appendChild(head);
       list.forEach(m => {
         const b = document.createElement('button');
@@ -538,7 +581,7 @@ const OrderGame = (() => {
     root.querySelector('#od-shops-btn').addEventListener('click', openShops);
     root.querySelector('#od-replay').addEventListener('click', replay);
     root.querySelector('#od-serve').addEventListener('click', serve);
-    root.querySelector('#od-clear').addEventListener('click', () => { tray = []; renderTray(); });
+    root.querySelector('#od-clear').addEventListener('click', () => { resetTray(); renderTray(); });
     return true;
   }
 
