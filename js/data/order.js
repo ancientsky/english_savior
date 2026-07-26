@@ -55,9 +55,36 @@ const ORDER_EXTRAS = {
   sesame:   { zh: '芝麻',   e: '🟤' },
 };
 
+/* Regions are the chapters of the game: five shops each, and each region brings
+   ONE new sentence pattern with it. `teaches` is inherited cumulatively — a shop
+   gets its own region's pattern plus every earlier region's — so the learning
+   path reads top to bottom here and it is structurally impossible for a later
+   region to forget an earlier pattern.
+
+   `teaches` values are the per-item / per-shop flags in js/order.js:
+     togo   — the customer says "for here" or "to go"
+     temps  — drinks come "hot" or "iced"
+     amt    — an ingredient can be "extra X" or "less X"
+
+   Shops must stay grouped by region in ORDER_SHOPS order, and unlockAt must be
+   strictly ascending across the WHOLE array (see 2c in js/order.js shopsOpen).
+*/
+const ORDER_REGIONS = [
+  { id: 'court', name: '學校美食街', e: '🏫', teaches: null,
+    tip: '基本功：with（加）、no（不要）、two（幾份）、large/small（大小杯）。' },
+  { id: 'night', name: '熱鬧夜市', e: '🎡', teaches: 'togo',
+    tip: '這一區的客人會多說一句 for here（內用）或 to go（外帶）——別忘了按！' },
+  { id: 'mall', name: '百貨美食層', e: '🏬', teaches: 'temps',
+    tip: '這一區的飲料要聽 hot（熱的）還是 iced（冰的）。' },
+  { id: 'world', name: '跨國料理街', e: '🌏', teaches: 'amt',
+    tip: '這一區的客人會說 extra（多一點）或 less（少一點）某種配料。' },
+  { id: 'chef', name: '神級餐廳', e: '⭐', teaches: null,
+    tip: '全部句型一起來，訂單也最長。你已經是主廚了！' },
+];
+
 const ORDER_SHOPS = [
   {
-    id: 'breakfast', name: '晨光早餐店', e: '🥪', unlockAt: 0,
+    id: 'breakfast', name: '晨光早餐店', e: '🥪', unlockAt: 0, region: 'court',
     intro: '第一天上班！客人會用英文跟你點餐，聽清楚他要什麼再做給他。',
     menu: [
       { w: 'sandwich', zh: '三明治', e: '🥪', kind: 'food', pl: 'sandwiches',
@@ -77,7 +104,7 @@ const ORDER_SHOPS = [
     ],
   },
   {
-    id: 'burger', name: '大口漢堡店', e: '🍔', unlockAt: 12,
+    id: 'burger', name: '大口漢堡店', e: '🍔', unlockAt: 12, region: 'court',
     intro: '升級到漢堡店了！這裡的客人很愛加料，也很常說「不要放……」。',
     menu: [
       { w: 'hamburger', zh: '漢堡',   e: '🍔', kind: 'food', pl: 'hamburgers',
@@ -99,7 +126,7 @@ const ORDER_SHOPS = [
     ],
   },
   {
-    id: 'drinks', name: '珍奶手搖店', e: '🧋', unlockAt: 28,
+    id: 'drinks', name: '珍奶手搖店', e: '🧋', unlockAt: 28, region: 'court',
     intro: '手搖飲最難的是「加料」和「大小杯」——每個字都要聽清楚！',
     menu: [
       { w: 'bubble tea', zh: '珍珠奶茶', e: '🧋', kind: 'drink', sizes: true,
@@ -117,7 +144,7 @@ const ORDER_SHOPS = [
     ],
   },
   {
-    id: 'hotpot', name: '暖呼呼火鍋店', e: '🍲', unlockAt: 48,
+    id: 'hotpot', name: '暖呼呼火鍋店', e: '🍲', unlockAt: 48, region: 'court',
     intro: '火鍋店客人一次點好幾樣，要邊聽邊記下來！',
     menu: [
       { w: 'beef',     zh: '牛肉',   e: '🥩', kind: 'food', art: 'some', def: [], ex: ['garlic', 'chili'] },
@@ -133,7 +160,7 @@ const ORDER_SHOPS = [
     ],
   },
   {
-    id: 'sushi', name: '海之味壽司店', e: '🍣', unlockAt: 72,
+    id: 'sushi', name: '海之味壽司店', e: '🍣', unlockAt: 72, region: 'court',
     intro: '最後一家店！客人點得又快又多，你已經是資深店員了。',
     menu: [
       { w: 'salmon',   zh: '鮭魚',     e: '🍣', kind: 'food', art: 'some', def: [], ex: ['wasabi', 'soy sauce'] },

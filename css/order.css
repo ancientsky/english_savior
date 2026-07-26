@@ -158,6 +158,9 @@
    problems only feels fair when you can see the rest of the tray is fine. */
 .od-right { color: var(--od-ok); font-weight: 700; }
 .od-more { opacity: .8; font-size: 13px; }
+/* the once-per-pattern teaching card shown on first entry to a region */
+.od-teach { border-color: var(--od-warm) !important; }
+.od-teach strong { color: var(--od-warm); }
 .od-sentence-reveal { font-family: ui-monospace, monospace; opacity: .85; font-size: 13px; }
 
 /* ---------- tray ---------- */
@@ -365,12 +368,25 @@
   color: var(--od-ink);
 }
 
-.od-shop-list {
+.od-shop-list { padding: 6px 16px 20px; overflow-y: auto; }
+
+/* One section per region: five shops and the sentence pattern that region
+   introduces, so the whole learning path is readable in the picker. */
+.od-region { margin-bottom: 16px; }
+.od-region.locked { opacity: .6; }
+.od-region h4 {
+  display: flex; align-items: baseline; gap: 8px;
+  margin: 0 0 2px;
+  font-size: 15px;
+  border-bottom: 1px solid rgba(255, 255, 255, .16);
+  padding-bottom: 4px;
+}
+.od-region h4 small { margin-left: auto; font-size: 12px; opacity: .7; font-weight: 400; }
+.od-region-tip { margin: 0 0 8px; font-size: 12px; opacity: .78; line-height: 1.6; }
+.od-region-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
   gap: 8px;
-  padding: 6px 16px 20px;
-  overflow-y: auto;
 }
 
 .od-shop {

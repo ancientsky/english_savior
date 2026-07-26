@@ -32,7 +32,7 @@ const OrderGame = (() => {
   };
 
   let els = {};
-  let save = { served: 0, shops: 1, shop: 0, best: {}, diff: 'easy' };
+  let save = { served: 0, shops: 1, shop: 0, best: {}, diff: 'easy', taught: {} };
   let difficulty = 'easy';
 
   // ---- current shift ----
@@ -47,6 +47,20 @@ const OrderGame = (() => {
 
   const itemOf = w => shop.menu.find(m => m.w === w);
   const extraOf = w => ORDER_EXTRAS[w] || { zh: w, e: '•' };
+  const regionOf = s => ORDER_REGIONS.find(r => r.id === s.region) || ORDER_REGIONS[0];
+
+  // Sentence patterns are INHERITED: a shop gets its own region's pattern plus
+  // every earlier region's, so a later region can never silently drop one. A
+  // shop may still opt in early with its own flag.
+  function featuresOf(s) {
+    const on = new Set();
+    for (const r of ORDER_REGIONS) {
+      if (r.teaches) on.add(r.teaches);
+      if (r.id === s.region) break;
+    }
+    ['togo', 'temps', 'amt'].forEach(f => { if (s[f]) on.add(f); });
+    return on;
+  }
 
   /* ================= save ================= */
 
@@ -60,6 +74,8 @@ const OrderGame = (() => {
           shop: Number(d.shop) || 0,
           best: d.best && typeof d.best === 'object' ? d.best : {},
           diff: DIFFS[d.diff] ? d.diff : 'easy',
+          // which sentence patterns the child has already been shown a card for
+          taught: d.taught && typeof d.taught === 'object' ? d.taught : {},
         };
       }
     } catch { /* first run */ }
@@ -217,6 +233,20 @@ const OrderGame = (() => {
     els.start.style.display = 'none';
     els.floor.style.display = '';
     nextCustomer();
+    teachRegion();
+  }
+
+  // A brand-new sentence pattern used to appear with no explanation whatsoever.
+  // The region's `tip` is shown once, the first time the child works a shop that
+  // introduces it, and remembered in save.taught.
+  function teachRegion() {
+    const r = regionOf(shop);
+    if (!r.teaches || save.taught[r.teaches]) return;
+    save.taught[r.teaches] = 1;
+    persist();
+    els.result.innerHTML =
+      `<div class="od-result ok od-teach"><strong>${r.e} ${r.name}：新句型！</strong>
+        <p>${r.tip}</p></div>`;
   }
 
   function nextCustomer() {
@@ -518,18 +548,33 @@ const OrderGame = (() => {
     els.shopSub.textContent = `累積出餐 ${save.served} 份　營業中 ${shopsOpen()} / ${ORDER_SHOPS.length} 家`;
     renderDiffRow(els.diffRow2);
     els.shopList.innerHTML = '';
-    ORDER_SHOPS.forEach((s, i) => {
-      const open = save.served >= s.unlockAt;
-      const b = document.createElement('button');
-      b.className = 'od-shop' + (open ? '' : ' locked');
-      b.disabled = !open;
-      b.innerHTML = open
-        ? `<span class="od-shop-e">${s.e}</span><span class="od-shop-name">${s.name}</span>
-           <span class="od-shop-meta">${s.menu.length} 種餐點${save.best[s.id] ? `　最佳 ${save.best[s.id]}/${SHIFT_LEN}` : ''}</span>`
-        : `<span class="od-shop-e">🔒</span><span class="od-shop-name">${s.name}</span>
-           <span class="od-shop-meta">出滿 ${s.unlockAt} 份餐才開張（還差 ${s.unlockAt - save.served}）</span>`;
-      if (open) b.addEventListener('click', () => startShift(i));
-      els.shopList.appendChild(b);
+    // grouped by region, like the wizard's openLevels() groups by chapter — the
+    // region heading is where the new sentence pattern gets announced
+    ORDER_REGIONS.forEach(r => {
+      const shops = ORDER_SHOPS.map((s, i) => ({ s, i })).filter(({ s }) => s.region === r.id);
+      if (!shops.length) return;
+      const openCount = shops.filter(({ s }) => save.served >= s.unlockAt).length;
+      const sec = document.createElement('div');
+      sec.className = 'od-region' + (openCount ? '' : ' locked');
+      sec.innerHTML = `<h4>${r.e} ${r.name}<small>${openCount} / ${shops.length} 家</small></h4>
+        <p class="od-region-tip">${r.tip}</p>`;
+      const grid = document.createElement('div');
+      grid.className = 'od-region-grid';
+      shops.forEach(({ s, i }) => {
+        const open = save.served >= s.unlockAt;
+        const b = document.createElement('button');
+        b.className = 'od-shop' + (open ? '' : ' locked');
+        b.disabled = !open;
+        b.innerHTML = open
+          ? `<span class="od-shop-e">${s.e}</span><span class="od-shop-name">${s.name}</span>
+             <span class="od-shop-meta">${s.menu.length} 種餐點${save.best[s.id] ? `　最佳 ${save.best[s.id]}/${SHIFT_LEN}` : ''}</span>`
+          : `<span class="od-shop-e">🔒</span><span class="od-shop-name">${s.name}</span>
+             <span class="od-shop-meta">出滿 ${s.unlockAt} 份餐才開張（還差 ${s.unlockAt - save.served}）</span>`;
+        if (open) b.addEventListener('click', () => startShift(i));
+        grid.appendChild(b);
+      });
+      sec.appendChild(grid);
+      els.shopList.appendChild(sec);
     });
     els.shops.classList.add('open');
   }
@@ -686,6 +731,8 @@ const OrderGame = (() => {
     pure: {
       shops: () => ORDER_SHOPS,
       diffs: () => DIFFS,
+      // which sentence patterns a shop actually has switched on (2a inheritance)
+      features: i => [...featuresOf(ORDER_SHOPS[i])],
       // n generated orders for one (shop, difficulty) — the fuzzing entry point
       sample: (i, diff, n) => withShop(i, diff, () => {
         const out = [];
