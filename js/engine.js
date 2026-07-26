@@ -303,22 +303,15 @@ const GameEngine = (() => {
     }
     // Reset daily if new day
     if (state.dailyDate !== today) {
-      state.dailyWords = 0;
-      state.dailyGrammar = 0;
-      state.dailyVideos = 0;
-      state.dailyListening = 0;
-      state.dailyEmpire = 0;
-      state.dailyCandy = 0;
-      state.dailySling = 0;
-      state.dailyPets = 0;
-      state.dailyTyping = 0;
-      state.dailyDetective = 0;
-      state.dailyFishing = 0;
-      state.dailyBuilder = 0;
-      state.dailySpeak = 0;
-      state.dailyTower = 0;
-      state.dailyRpg = 0;
-      state.dailySky = 0;
+      // Derived from DAILY_QUESTS, not hand-listed. The hand-written list fell
+      // four counters behind (dailyOrder/dailyAlchemy/dailyRhythm/dailyWizard),
+      // and the symptom is invisible: those four quests simply showed up already
+      // complete every morning, so the child collected the reward for doing
+      // nothing and the quest never worked again.
+      const keys = (typeof DAILY_QUESTS !== 'undefined' && Array.isArray(DAILY_QUESTS))
+        ? DAILY_QUESTS.map(q => q.key)
+        : Object.keys(state).filter(k => /^daily[A-Z]/.test(k));
+      keys.forEach(k => { state[k] = 0; });
       state.dailyClaimed = [];
       state.dailyBonusClaimed = false;
       state.dailyDate = today;
@@ -690,7 +683,7 @@ const GameEngine = (() => {
     checkDailyQuests();
   }
 
-  // ---- Order Up! (英語餐廳大亂鬥) ----
+  // ---- Order Up! (英語打工大亂鬥) ----
   function recordOrderServed() {
     state.orderServed = (state.orderServed || 0) + 1;
     state.dailyOrder = (state.dailyOrder || 0) + 1;

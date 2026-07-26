@@ -7,6 +7,15 @@ All notable changes to the English Savior project will be documented in this fil
 ## [Unreleased]
 
 ### 新增 | Added
+- **🍜 英語餐廳大亂鬥 → 🛎️ 英語打工大亂鬥：同一個分頁裡開出第二個世界，🏪 生活服務 20 個櫃台** — 分頁維持 24 個（手機上已經兩排），生活服務用開場／換場景畫面的世界切換鈕進入：
+  - **🏪 生活小舖**（郵局、影印店、花店、照相館、銀行）數量與 with／no 的基本功，順便把 `three copies` 交付掉 → **🚉 出門辦事**（火車站、客運站、電影院、叫車、美髮）時間 `today`／`tomorrow`／`at three o'clock` ＋ 車票的 `one-way`／`round-trip` → **👕 挑選與試穿**（服飾、眼鏡、手機配件、文具背包、寵物用品）尺寸 ＋ 顏色 → **🛎️ 服務與等待**（民宿、單車租借、KTV、運動中心、停車場）期間 `for two nights`／`for two hours`，並集大成前三區。共 100 個品項、39 種新配料
+  - **自己一條進度**：獨立的 `english_savior_life` 存檔與 `served` 計數，從 0 開始。第 25 家餐廳要出滿 248 份，接在後面會把郵局埋在四分之一千個漢堡後面
+  - **題材刻意避開站上已有的**：`EMPIRE_LIFE` 已經有 856 個生活情境、RPG 有 14 個生活服務章節——但全都是四選一。這 20 個櫃台押在沒被覆蓋的場景（銀行、理髮、計程車、電影院、眼鏡行、照相館、花店、單車租借），也押在「聽 → 動手做」這個沒有別的分頁在做的機制
+  - **三個場景被刪掉而不是硬湊**：加油站的真正說法是 *Fill it up, please*（固定片語）、洗衣店要用過去分詞、修理店／獸醫是動詞開頭的句子。骨架表達不了就會生出小孩永遠不會聽到的句子——寧可交 20 個都是真的櫃檯英文
+  - 三個新成就：櫃台新手／街頭達人（50 位客人）／打工帝王（20 個場景全開）→ **93 個成就、1,890 點**。`orderServed` 兩個世界共用（這個分頁本來就包含兩個世界），但場景數分開記——「商圈名廚：開遍 25 家店」不能發給一個從沒看過餐廳的小孩
+  - 引擎一般化：`ORDER_CHOICES`（選項軸，slot 決定在名詞前還是名詞後）與 `ORDER_ASKS`（訂單層級的提問，逗號由資料決定）。前兩個 commit 是**純重構**，成功的定義就是五個既有測試與 validate_order 一個字都不改就全過
+  - `validate_order.js` 擴充成 45 場景 × 3 難度 × 500 = 67,500 句模糊測試，跨兩個世界
+
 - **🍜 英語餐廳大亂鬥 5 家店 → 5 個區域 25 家店，每個區域分階段引進一種新句型** — 整款遊戲原本只有 `with X`／`no X`／`two`／`small/large` 四種變化，全開之後就沒有新東西了。這次不只是換單字：
   - **🏫 學校美食街**（原本的 5 家）基本功 → **🎡 熱鬧夜市** `for here`／`to go` → **🏬 百貨美食層** `hot`／`iced` → **🌏 跨國料理街** `extra`／`less` → **⭐ 神級餐廳** 四種一起來。共 169 個餐點、53 種配料
   - **句型用累積繼承**：某店啟用的句型 = 該區與其之前所有區的聯集，所以第 4 區結構性地不可能忘記第 2 區教過的東西
@@ -16,6 +25,11 @@ All notable changes to the English Savior project will be documented in this fil
   - 新的 `validate_order.js` 驗證腳本：在 Node 裡 eval 真正的 `js/order.js` 呼叫真正的 `buildSentence`（驗證腳本不必自己重寫一份文法，兩邊也就不會漂移），schema ＋ 25 × 3 × 400 = 30,000 句模糊測試
 
 ### 修正 | Fixed
+- **每日任務有四個計數器從來不會歸零** — `js/data/game.js` 的 20 個每日任務用到 20 個 `dailyXxx` 計數器，但 `js/engine.js` 的換日重置區塊是手寫的，只列了 16 個：`dailyOrder`／`dailyAlchemy`／`dailyRhythm`／`dailyWizard`（四款最新的遊戲）不在裡面。症狀是隱形的——第二天起這四個任務一開啟就已經是完成狀態，小孩什麼都沒做就領獎，等於這四個每日任務永久失效。改成直接從 `DAILY_QUESTS` 推導要歸零的鍵，手寫清單就不可能再落後
+- **朗讀覆核抓到的五個英文問題**（模糊測試全綠，但機器讀不出這些）：`no a wash`（`def` 配料只會被拒絕，自帶冠詞就唸成這樣）、`with seats` → `with reserved seats`、`a luggage tag with stamps` 語意不通、`some shampoo` 是架上那瓶洗髮精不是櫃台賣的服務 → `a blow dry`、一日券不是劃位
+- **一個新句型上線時整列沒有樣式** — ask 那一列的 CSS 掛在 `.od-place` 上，所以第二種 ask（時間）上線時邊框、內距、圓角全都沒有，實測 `padding: 0px`／`border: none`，畫面上只剩瀏覽器預設按鈕。改掛在每一列都有的 `.od-ask` 上
+- **場景限定的選項會外洩到別的店** — `ORDER_ASKS` 的選項預設「全部都能用」，所以服飾店只要沒宣告 `askOpts`，就繼承了電影院的台詞，賣背包賣成 *a small blue backpack, for the four o'clock show*。改成 `only` 旗標：場景限定的選項預設不在名單裡，要用得指名
+- **驗證腳本自己抄了一份句型清單** — `validate_order.js` 寫死 `['togo','temps','amt']`，新句型一上線就被判成「不是已知句型」；區域繼承檢查又用了會固定指向餐飲世界的扁平存取器。兩者都改成跟模組要（`pure.patterns()`／`pure.world(id).features()`）——這正是 `PATTERN_FEATURES` 當初要根治的同一個錯誤
 - **英語餐廳的九個既有錯誤，其中三個是遊戲正在教錯的英文**（25 家店會把每一個都放大五倍）：
   - 「a large fries」「a misosoup」——補上 `art: 'some'`
   - 「Can I have a hamburger, please.」——疑問句配句號，而簡單模式是看得到句子的。開場句是 Can/Could/May 時改成 `?`
