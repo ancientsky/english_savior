@@ -3,12 +3,19 @@
    order, not pick an answer. That turns listening into action, and it puts the
    weight on exactly the words Taiwanese kids skip: with / no / two / large.
 
+   `w`   is the identifier, the label AND the TTS script, so multi-word items are
+         spelled with a real space (`miso soup`, not `misosoup`) — otherwise the
+         customer's voice says something no English speaker would recognise.
    `def` are ingredients the item arrives with — that is what makes "no tomato"
    a real instruction (you must take it off) instead of a freebie.
    `ex`  are optional add-ons the customer can ask for with "with ...".
    `pl`  is only set on items where "two ___" is natural English; items without
          it are never ordered in quantity, so no sentence can come out wrong.
-   `art` overrides the article when the word starts with a vowel sound.
+   `art: 'some'` marks the uncountables. That is the ONLY legal value — a/an is
+         computed by articleFor() in js/order.js from whichever word is actually
+         spoken first, because "large" / "hot" / "iced" can come between the
+         article and the noun ("an iced tea", but "a hot tea").
+         art:'some' and `pl` are mutually exclusive ("two some beef").
 
    ORDER_EXTRAS is global (ingredients repeat across shops); menu emoji are
    unique *within* a shop, which is all that matters since one shop is on
@@ -42,15 +49,42 @@ const ORDER_EXTRAS = {
   cream:    { zh: '鮮奶油', e: '☁️' },
   garlic:   { zh: '蒜頭',   e: '🧄' },
   chili:    { zh: '辣椒',   e: '🌶️' },
-  soysauce: { zh: '醬油',   e: '🍶' },
+  'soy sauce': { zh: '醬油', e: '🍶' },
   wasabi:   { zh: '哇沙米', e: '🟢' },
   ginger:   { zh: '薑',     e: '🫚' },
   sesame:   { zh: '芝麻',   e: '🟤' },
 };
 
+/* Regions are the chapters of the game: five shops each, and each region brings
+   ONE new sentence pattern with it. `teaches` is inherited cumulatively — a shop
+   gets its own region's pattern plus every earlier region's — so the learning
+   path reads top to bottom here and it is structurally impossible for a later
+   region to forget an earlier pattern.
+
+   `teaches` values are the per-item / per-shop flags in js/order.js:
+     togo   — the customer says "for here" or "to go"
+     temps  — drinks come "hot" or "iced"
+     amt    — an ingredient can be "extra X" or "less X"
+
+   Shops must stay grouped by region in ORDER_SHOPS order, and unlockAt must be
+   strictly ascending across the WHOLE array (see 2c in js/order.js shopsOpen).
+*/
+const ORDER_REGIONS = [
+  { id: 'court', name: '學校美食街', e: '🏫', teaches: null,
+    tip: '基本功：with（加）、no（不要）、two（幾份）、large/small（大小杯）。' },
+  { id: 'night', name: '熱鬧夜市', e: '🎡', teaches: 'togo',
+    tip: '這一區的客人會多說一句 for here（內用）或 to go（外帶）——別忘了按！' },
+  { id: 'mall', name: '百貨美食層', e: '🏬', teaches: 'temps',
+    tip: '這一區的飲料要聽 hot（熱的）還是 iced（冰的）。' },
+  { id: 'world', name: '跨國料理街', e: '🌏', teaches: 'amt',
+    tip: '這一區的客人會說 extra（多一點）或 less（少一點）某種配料。' },
+  { id: 'chef', name: '神級餐廳', e: '⭐', teaches: null,
+    tip: '全部句型一起來，訂單也最長。你已經是主廚了！' },
+];
+
 const ORDER_SHOPS = [
   {
-    id: 'breakfast', name: '晨光早餐店', e: '🥪', unlockAt: 0,
+    id: 'breakfast', name: '晨光早餐店', e: '🥪', unlockAt: 0, region: 'court',
     intro: '第一天上班！客人會用英文跟你點餐，聽清楚他要什麼再做給他。',
     menu: [
       { w: 'sandwich', zh: '三明治', e: '🥪', kind: 'food', pl: 'sandwiches',
@@ -59,25 +93,25 @@ const ORDER_SHOPS = [
         def: ['butter'], ex: ['jam', 'cheese', 'egg'] },
       { w: 'pancake',  zh: '鬆餅',   e: '🥞', kind: 'food', pl: 'pancakes',
         def: ['syrup'], ex: ['butter', 'egg'] },
-      { w: 'omelet',   zh: '蛋餅',   e: '🍳', kind: 'food', art: 'an', pl: 'omelets',
+      { w: 'omelet',   zh: '蛋餅',   e: '🍳', kind: 'food', pl: 'omelets',
         def: ['cheese'], ex: ['ham', 'corn'] },
       { w: 'bagel',    zh: '貝果',   e: '🥯', kind: 'food', pl: 'bagels',
         def: [], ex: ['butter', 'jam', 'cheese'] },
       { w: 'milk',     zh: '牛奶',   e: '🥛', kind: 'drink', sizes: true, def: [], ex: ['sugar'] },
       { w: 'tea',      zh: '紅茶',   e: '🍵', kind: 'drink', sizes: true, def: [], ex: ['milk', 'sugar', 'lemon'] },
-      { w: 'juice',    zh: '果汁',   e: '🧃', kind: 'drink', sizes: true, art: 'a', def: [], ex: ['ice'] },
-      { w: 'soymilk',  zh: '豆漿',   e: '🫘', kind: 'drink', sizes: true, def: [], ex: ['sugar'] },
+      { w: 'juice',    zh: '果汁',   e: '🧃', kind: 'drink', sizes: true, def: [], ex: ['ice'] },
+      { w: 'soy milk', zh: '豆漿',   e: '🫘', kind: 'drink', sizes: true, def: [], ex: ['sugar'] },
     ],
   },
   {
-    id: 'burger', name: '大口漢堡店', e: '🍔', unlockAt: 12,
+    id: 'burger', name: '大口漢堡店', e: '🍔', unlockAt: 12, region: 'court',
     intro: '升級到漢堡店了！這裡的客人很愛加料，也很常說「不要放……」。',
     menu: [
       { w: 'hamburger', zh: '漢堡',   e: '🍔', kind: 'food', pl: 'hamburgers',
         def: ['lettuce', 'onion'], ex: ['cheese', 'bacon', 'pickle', 'tomato'] },
-      { w: 'hotdog',    zh: '熱狗',   e: '🌭', kind: 'food', pl: 'hotdogs',
+      { w: 'hot dog',   zh: '熱狗',   e: '🌭', kind: 'food', pl: 'hot dogs',
         def: ['ketchup'], ex: ['cheese', 'onion', 'mustard'] },
-      { w: 'fries',     zh: '薯條',   e: '🍟', kind: 'food', sizes: true,
+      { w: 'fries',     zh: '薯條',   e: '🍟', kind: 'food', sizes: true, art: 'some',
         def: ['salt'], ex: ['cheese', 'ketchup'] },
       { w: 'nuggets',   zh: '雞塊',   e: '🍗', kind: 'food', art: 'some',
         def: [], ex: ['ketchup', 'mustard'] },
@@ -92,14 +126,14 @@ const ORDER_SHOPS = [
     ],
   },
   {
-    id: 'drinks', name: '珍奶手搖店', e: '🧋', unlockAt: 28,
+    id: 'drinks', name: '珍奶手搖店', e: '🧋', unlockAt: 28, region: 'court',
     intro: '手搖飲最難的是「加料」和「大小杯」——每個字都要聽清楚！',
     menu: [
-      { w: 'bubbletea', zh: '珍珠奶茶', e: '🧋', kind: 'drink', sizes: true,
+      { w: 'bubble tea', zh: '珍珠奶茶', e: '🧋', kind: 'drink', sizes: true,
         def: ['pearls'], ex: ['pudding', 'jelly', 'ice'] },
-      { w: 'milktea',   zh: '奶茶',     e: '🥤', kind: 'drink', sizes: true,
+      { w: 'milk tea',  zh: '奶茶',     e: '🥤', kind: 'drink', sizes: true,
         def: ['ice'], ex: ['pearls', 'pudding', 'sugar'] },
-      { w: 'greentea',  zh: '綠茶',     e: '🍵', kind: 'drink', sizes: true,
+      { w: 'green tea', zh: '綠茶',     e: '🍵', kind: 'drink', sizes: true,
         def: [], ex: ['lemon', 'honey', 'ice'] },
       { w: 'coffee',    zh: '咖啡',     e: '☕', kind: 'drink', sizes: true,
         def: ['sugar'], ex: ['milk', 'cream'] },
@@ -110,33 +144,33 @@ const ORDER_SHOPS = [
     ],
   },
   {
-    id: 'hotpot', name: '暖呼呼火鍋店', e: '🍲', unlockAt: 48,
+    id: 'hotpot', name: '暖呼呼火鍋店', e: '🍲', unlockAt: 48, region: 'court',
     intro: '火鍋店客人一次點好幾樣，要邊聽邊記下來！',
     menu: [
       { w: 'beef',     zh: '牛肉',   e: '🥩', kind: 'food', art: 'some', def: [], ex: ['garlic', 'chili'] },
-      { w: 'pork',     zh: '豬肉',   e: '🍖', kind: 'food', art: 'some', def: [], ex: ['garlic', 'soysauce'] },
+      { w: 'pork',     zh: '豬肉',   e: '🍖', kind: 'food', art: 'some', def: [], ex: ['garlic', 'soy sauce'] },
       { w: 'shrimp',   zh: '蝦子',   e: '🍤', kind: 'food', art: 'some', def: [], ex: ['garlic', 'chili'] },
-      { w: 'tofu',     zh: '豆腐',   e: '🧈', kind: 'food', art: 'some', def: [], ex: ['soysauce', 'chili'] },
+      { w: 'tofu',     zh: '豆腐',   e: '🧈', kind: 'food', art: 'some', def: [], ex: ['soy sauce', 'chili'] },
       { w: 'mushroom', zh: '香菇',   e: '🍄', kind: 'food', pl: 'mushrooms', def: [], ex: ['garlic'] },
       { w: 'cabbage',  zh: '高麗菜', e: '🥬', kind: 'food', art: 'some', def: [], ex: ['garlic'] },
       { w: 'noodles',  zh: '麵',     e: '🍜', kind: 'food', art: 'some', def: [], ex: ['egg', 'chili'] },
-      { w: 'dumpling', zh: '水餃',   e: '🥟', kind: 'food', pl: 'dumplings', def: [], ex: ['soysauce', 'chili'] },
+      { w: 'dumpling', zh: '水餃',   e: '🥟', kind: 'food', pl: 'dumplings', def: [], ex: ['soy sauce', 'chili'] },
       { w: 'tea',      zh: '茶',     e: '🍵', kind: 'drink', sizes: true, def: [], ex: ['lemon'] },
       { w: 'soda',     zh: '汽水',   e: '🥤', kind: 'drink', sizes: true, pl: 'sodas', def: ['ice'], ex: [] },
     ],
   },
   {
-    id: 'sushi', name: '海之味壽司店', e: '🍣', unlockAt: 72,
+    id: 'sushi', name: '海之味壽司店', e: '🍣', unlockAt: 72, region: 'court',
     intro: '最後一家店！客人點得又快又多，你已經是資深店員了。',
     menu: [
-      { w: 'salmon',   zh: '鮭魚',     e: '🍣', kind: 'food', art: 'some', def: [], ex: ['wasabi', 'soysauce'] },
+      { w: 'salmon',   zh: '鮭魚',     e: '🍣', kind: 'food', art: 'some', def: [], ex: ['wasabi', 'soy sauce'] },
       { w: 'tuna',     zh: '鮪魚',     e: '🐟', kind: 'food', art: 'some', def: [], ex: ['wasabi', 'ginger'] },
-      { w: 'shrimp',   zh: '甜蝦',     e: '🍤', kind: 'food', art: 'some', def: [], ex: ['wasabi', 'soysauce'] },
-      { w: 'egg',      zh: '玉子燒',   e: '🍳', kind: 'food', art: 'an', def: [], ex: ['sesame'] },
-      { w: 'riceball', zh: '飯糰',     e: '🍙', kind: 'food', pl: 'riceballs', def: ['seaweed'], ex: ['sesame', 'tuna'] },
-      { w: 'ramen',    zh: '拉麵',     e: '🍜', kind: 'food', art: 'some', def: ['egg'], ex: ['corn', 'chili'] },
-      { w: 'misosoup', zh: '味噌湯',   e: '🥣', kind: 'food', def: [], ex: ['tofu', 'seaweed'] },
-      { w: 'greentea', zh: '綠茶',     e: '🍵', kind: 'drink', sizes: true, def: [], ex: ['honey'] },
+      { w: 'shrimp',   zh: '甜蝦',     e: '🍤', kind: 'food', art: 'some', def: [], ex: ['wasabi', 'soy sauce'] },
+      { w: 'egg',       zh: '玉子燒',   e: '🍳', kind: 'food', def: [], ex: ['sesame'] },
+      { w: 'rice ball', zh: '飯糰',     e: '🍙', kind: 'food', pl: 'rice balls', def: ['seaweed'], ex: ['sesame', 'tuna'] },
+      { w: 'ramen',     zh: '拉麵',     e: '🍜', kind: 'food', art: 'some', def: ['egg'], ex: ['corn', 'chili'] },
+      { w: 'miso soup', zh: '味噌湯',   e: '🥣', kind: 'food', art: 'some', def: [], ex: ['tofu', 'seaweed'] },
+      { w: 'green tea', zh: '綠茶',     e: '🍵', kind: 'drink', sizes: true, def: [], ex: ['honey'] },
       { w: 'water',    zh: '水',       e: '💧', kind: 'drink', sizes: true, def: ['ice'], ex: [] },
     ],
   },
@@ -147,7 +181,9 @@ ORDER_EXTRAS.seaweed = { zh: '海苔', e: '🌿' };
 ORDER_EXTRAS.tofu = { zh: '豆腐', e: '🧈' };
 ORDER_EXTRAS.tuna = { zh: '鮪魚', e: '🐟' };
 
-// Sentence openers the customers use, so the same order never sounds identical
+// Sentence openers the customers use, so the same order never sounds identical.
+// The Can/Could/May ones are questions and buildSentence() ends them with "?".
 const ORDER_OPENERS = [
-  'I want', 'I would like', "I'd like", 'Can I have', 'Could I get', 'May I have',
+  'I want', 'I would like', "I'd like", "I'll have",
+  'Can I have', 'Could I get', 'May I have',
 ];

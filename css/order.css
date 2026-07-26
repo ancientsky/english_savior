@@ -153,6 +153,14 @@
 .od-result ul { margin: 6px 0 6px 18px; padding: 0; }
 .od-result li { margin: 3px 0; }
 .od-result p { margin: 6px 0 0; }
+
+/* What the child already got right, above the mistakes — a capped list of
+   problems only feels fair when you can see the rest of the tray is fine. */
+.od-right { color: var(--od-ok); font-weight: 700; }
+.od-more { opacity: .8; font-size: 13px; }
+/* the once-per-pattern teaching card shown on first entry to a region */
+.od-teach { border-color: var(--od-warm) !important; }
+.od-teach strong { color: var(--od-warm); }
 .od-sentence-reveal { font-family: ui-monospace, monospace; opacity: .85; font-size: 13px; }
 
 /* ---------- tray ---------- */
@@ -204,6 +212,31 @@
 }
 .od-qty b { min-width: 18px; text-align: center; }
 
+/* 內用 / 外帶 — an order-level answer, so it gets its own row above the items.
+   Neither starts selected: "not answered yet" is an honest state, and defaulting
+   to 內用 would let every missed "to go" pass silently. */
+.od-place {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+  margin-bottom: 8px; padding: 8px 10px;
+  background: rgba(255, 255, 255, .05);
+  border: 1px dashed rgba(255, 255, 255, .28);
+  border-radius: 10px;
+}
+.od-place-label { font-size: 13px; font-weight: 700; margin-right: 4px; }
+.od-place button {
+  display: inline-flex; align-items: baseline; gap: 5px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, .3);
+  background: rgba(255, 255, 255, .07);
+  color: var(--od-ink);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.od-place button small { font-size: 11px; opacity: .8; font-weight: 400; }
+.od-place button.on { background: var(--od-warm); border-color: var(--od-warm); color: #3a1e00; }
+
 .od-size { display: inline-flex; gap: 4px; }
 .od-size button {
   padding: 4px 9px;
@@ -227,6 +260,13 @@
 }
 
 .od-ings { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+
+/* extra / less — the amount IS the ingredient's size, so it reuses .od-size
+   exactly: two independent toggles, at most one lit, one click between any two
+   of the three states. That is the interaction the child already knows from
+   small/large, which is why it needs almost no new styling. */
+.od-ing-wrap { display: inline-flex; align-items: center; gap: 4px; }
+.od-lv button { font-size: 10px; padding: 3px 7px; }
 
 .od-ing {
   display: inline-flex;
@@ -360,12 +400,25 @@
   color: var(--od-ink);
 }
 
-.od-shop-list {
+.od-shop-list { padding: 6px 16px 20px; overflow-y: auto; }
+
+/* One section per region: five shops and the sentence pattern that region
+   introduces, so the whole learning path is readable in the picker. */
+.od-region { margin-bottom: 16px; }
+.od-region.locked { opacity: .6; }
+.od-region h4 {
+  display: flex; align-items: baseline; gap: 8px;
+  margin: 0 0 2px;
+  font-size: 15px;
+  border-bottom: 1px solid rgba(255, 255, 255, .16);
+  padding-bottom: 4px;
+}
+.od-region h4 small { margin-left: auto; font-size: 12px; opacity: .7; font-weight: 400; }
+.od-region-tip { margin: 0 0 8px; font-size: 12px; opacity: .78; line-height: 1.6; }
+.od-region-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
   gap: 8px;
-  padding: 6px 16px 20px;
-  overflow-y: auto;
 }
 
 .od-shop {
