@@ -384,7 +384,7 @@ const MusicManager = (() => {
     typing: ['battle2', 'battle3', 'race'],
     tutor: ['story', 'playful', 'story2'],
     detective: ['mystic', 'story2', 'dream'],
-    fishing: ['lake', 'lullaby', 'dream'],
+    fishing: ['lake', 'mystic', 'dream'],
     wizard: ['mystic', 'dream', 'story2'],
     rhythm: ['playful2', 'carnival', 'race'],
     alchemy: ['mystic', 'story', 'dream'],
@@ -548,6 +548,9 @@ const MusicManager = (() => {
 
   // ---------- scheduler (one bar of lookahead) ----------
   function scheduleBar(track, t) {
+    // Nothing owns the bus right now (the track was stopped between ticks) —
+    // silently drop the bar instead of throwing on connect(null).
+    if (!trackGain) return;
     const bar = track.bars[barIdx % track.bars.length];
     const beat = 60 / track.tempo;
     const chip = track.style === 'chip';
@@ -708,6 +711,11 @@ const MusicManager = (() => {
   function play(trackId) {
     if (!TRACKS[trackId]) return;
     if (currentId === trackId && schedTimer) return;
+    // A game-driven track owns trackGain and re-claims it every 90ms. Starting
+    // a zone playlist on top of one leaves both schedulers fighting over it,
+    // and whichever stops first nulls the gain node the other is still
+    // connecting voices to. Only one may be alive at a time.
+    stopGameTrack();
     currentId = trackId;
     if (!unlocked || !enabled) {
       pendingId = trackId;
@@ -736,6 +744,7 @@ const MusicManager = (() => {
   function stop() {
     currentId = null;
     pendingId = null;
+    stopGameTrack();
     stopScheduler();
   }
 
@@ -743,6 +752,7 @@ const MusicManager = (() => {
     enabled = value;
     localStorage.setItem(STORAGE_KEY, value ? '1' : '0');
     if (!value) {
+      stopGameTrack();
       stopScheduler();
     } else if (currentId || lastZone) {
       const id = currentId || (ZONE_TRACKS[lastZone] || ['home'])[0];

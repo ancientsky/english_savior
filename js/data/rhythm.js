@@ -108,7 +108,7 @@ const RHYTHM_SONGS = [
     { w: 'basketball', zh: '籃球',   e: '🏀', syl: ['bas', 'ket', 'ball'],   stress: 0 },
     { w: 'volleyball', zh: '排球',   e: '🏐', syl: ['vol', 'ley', 'ball'],   stress: 0 },
   ] },
-  { id: 'rs9', name: '天氣變奏', e: '🌦️', bpm: 92, groove: 'bossa', chords: [1,4,0,0],
+  { id: 'rs9', name: '天氣變奏', e: '🌦️', bpm: 92, groove: 'bossa', chords: [0,1,4,0],
     words: [
     { w: 'sunny',      zh: '晴朗的', e: '☀️', syl: ['sun', 'ny'],            stress: 0 },
     { w: 'rainy',      zh: '下雨的', e: '🌧️', syl: ['rai', 'ny'],            stress: 0 },
@@ -141,7 +141,7 @@ const RHYTHM_SONGS = [
     { w: 'apartment',  zh: '公寓',   e: '🏢', syl: ['a', 'part', 'ment'],    stress: 1 },
     { w: 'bathroom',   zh: '浴室',   e: '🛁', syl: ['bath', 'room'],         stress: 0 },
   ] },
-  { id: 'rs12', name: '穿搭節奏', e: '👕', bpm: 96, groove: 'pop', chords: [5,3,0,4],
+  { id: 'rs12', name: '穿搭節奏', e: '👕', bpm: 96, groove: 'pop', chords: [0,5,3,4],
     words: [
     { w: 'jacket',     zh: '外套',   e: '🧥', syl: ['jac', 'ket'],           stress: 0 },
     { w: 'sweater',    zh: '毛衣',   e: '🧶', syl: ['swea', 'ter'],          stress: 0 },
@@ -185,7 +185,7 @@ const RHYTHM_SONGS = [
     { w: 'amazing',    zh: '驚人的', e: '✨', syl: ['a', 'ma', 'zing'],      stress: 1 },
     { w: 'wonderful',  zh: '很棒的', e: '🎉', syl: ['won', 'der', 'ful'],    stress: 0 },
   ] },
-  { id: 'rs16', name: '世界地圖', e: '🌍', bpm: 94, groove: 'bossa', chords: [3,4,0,5],
+  { id: 'rs16', name: '世界地圖', e: '🌍', bpm: 94, groove: 'bossa', chords: [0,3,4,5],
     words: [
     { w: 'island',     zh: '島嶼',   e: '🏝️', syl: ['is', 'land'],           stress: 0 },
     { w: 'mountain',   zh: '高山',   e: '⛰️', syl: ['moun', 'tain'],         stress: 0 },
@@ -207,7 +207,7 @@ const RHYTHM_SONGS = [
     { w: 'holiday',    zh: '假日',   e: '🏖️', syl: ['ho', 'li', 'day'],      stress: 0 },
     { w: 'tomorrow',   zh: '明天',   e: '🔮', syl: ['to', 'mor', 'row'],     stress: 1 },
   ] },
-  { id: 'rs18', name: '冒險節拍', e: '🎮', bpm: 102, groove: 'chiptune', chords: [5,3,4,0],
+  { id: 'rs18', name: '冒險節拍', e: '🎮', bpm: 102, groove: 'chiptune', chords: [0,5,3,4],
     words: [
     { w: 'level',      zh: '關卡',   e: '🎯', syl: ['le', 'vel'],            stress: 0 },
     { w: 'player',     zh: '玩家',   e: '🎮', syl: ['pla', 'yer'],           stress: 0 },

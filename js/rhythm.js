@@ -21,7 +21,9 @@
    feel wrong. The chart's lead-in is bar-aligned so note 1 is a downbeat.
 
    Save: localStorage `english_savior_rhythm`
-     { best: { songId: { score, acc, rank, fc } }, diff }
+     { best: { songId: { score, acc, rank, gauge, fc } }, diff }
+   `gauge` was added with the momentum bar; older saves simply lack it and are
+   read back unchanged.
 */
 
 const RhythmGame = (() => {
@@ -433,6 +435,7 @@ const RhythmGame = (() => {
   // Momentum ran out. Nothing is written to the save and no bonus is paid, but
   // the XP already earned word-by-word stays — practice is never punished.
   function failSong() {
+    if (!song || !stats) return;
     playing = false;
     stopBand();
     GameEngine.setDeferLevelUp(false);
@@ -442,6 +445,7 @@ const RhythmGame = (() => {
   }
 
   function finishSong() {
+    if (!song || !stats) return;   // nothing in flight (e.g. a stale timer)
     playing = false;
     stopBand();
     const total = notes.length;
@@ -458,6 +462,7 @@ const RhythmGame = (() => {
     const first = clear && !prev;
     if (first) GameEngine.recordRhythmSong();
     if (fc && clear) GameEngine.recordRhythmFC();
+    if (clear && gauge >= 100) GameEngine.recordRhythmPerfectGauge();
 
     let gems = 0;
     if (first) { gems += cfg.bonus; }

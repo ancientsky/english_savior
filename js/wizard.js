@@ -38,6 +38,7 @@
 
    Save: localStorage `english_savior_wizard`
      { cleared: {levelId: stars}, found: {levelId: [tags]}, learned: [words], diff }
+   The shape is unchanged from the first version, so old saves load as they are.
 */
 
 const WizardGame = (() => {
@@ -686,6 +687,7 @@ const WizardGame = (() => {
     }
     // ⭐ measures THIS run; the record keeps the best run ever.
     const stars = runStars();
+    if (!runHintUsed && wastedCount() === 0 && mana > 0) GameEngine.recordWizardFlawless();
     save.cleared[level.id] = Math.max(save.cleared[level.id] || 0, stars);
     persist();
 
