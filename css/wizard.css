@@ -91,6 +91,38 @@
 .wz-toast.show { opacity: 1; transform: translate(-50%, 0); }
 
 .wz-toast strong { display: block; font-size: 15px; color: var(--wz-gold); }
+
+/* The "now pick a spot" strip, pinned to the bottom of the stage so it never
+   covers the ground band where the placement actually happens. */
+.wz-place {
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 94%;
+  padding: 7px 12px;
+  background: rgba(20, 12, 40, .9);
+  border: 2px solid var(--wz-gold);
+  border-radius: 999px;
+  color: #fff;
+  font-size: 13px;
+  white-space: nowrap;
+  animation: wz-place-in .2s ease;
+}
+
+@keyframes wz-place-in { from { opacity: 0; transform: translate(-50%, 8px); } }
+
+.wz-place-icon { font-size: 18px; }
+.wz-place-name { font-weight: 800; color: var(--wz-gold); }
+.wz-place-note { opacity: .8; }
+.wz-place .wz-btn { padding: 5px 12px; font-size: 13px; }
+
+@media (max-width: 640px) {
+  .wz-place-note { display: none; }
+}
 .wz-toast span { display: block; font-size: 13px; }
 
 /* ---------- task bar ---------- */

@@ -29,9 +29,12 @@
    advance, and every reaction tag is already one of that obstacle's own
    solutions — a chain can never make a level unsolvable.
 
-   Physics is deliberately not a rigid-body engine: summoned objects fall to a
-   resting spot chosen by what they solved. It reads as physical, is fully
-   deterministic, and can never wedge a child in an unwinnable scene.
+   Summoned things are boxes with real physics: they fall, land on whatever is
+   under them, stack, float or sink, and the PLAYER picks the drop point (and
+   can drag it again for free). Whether a gap is passable is then decided
+   GEOMETRICALLY — walk the surface from here to the ⭐ — not by a lookup
+   table. The tags stay the lesson: they are exactly what sets the box's size
+   and how it behaves in water.
 
    Save: localStorage `english_savior_wizard`
      { cleared: {levelId: stars}, found: {levelId: [tags]}, learned: [words], diff }
@@ -84,8 +87,15 @@ const WizardGame = (() => {
   // instead of a shopping trip through the spellbook.
   let mana = 0, manaMax = 0;
   let runHintUsed = false;  // ⭐⭐ requires clearing without opening a hint
-  let runWasted = 0;        // summons that solved nothing — blocks ⭐⭐⭐
   let hintShown = false;    // hint text currently revealed for this obstacle
+  // W4: a summon that has been spelled but not yet placed, and the thing the
+  // player is currently dragging.
+  let placing = null, aimX = 0, dragging = null;
+  // Every timer this game schedules is tied to the attempt that started it.
+  // Without this a pending "you ran out of magic" from the previous try fires
+  // in the middle of the next one and kills a perfectly good run.
+  let runId = 0;
+  function later(fn, ms) { const id = runId; setTimeout(() => { if (id === runId) fn(); }, ms); }
   let effects = [];         // transient puffs/sparkles
   let deco = [];            // background scenery positions for this level
 
@@ -150,10 +160,15 @@ const WizardGame = (() => {
   // which is the whole reason the obstacles list several solving tags.
   function starsFor(l) { return save.cleared[l.id] || 0; }
 
+  // Summons that never contributed anything. Counted from the objects still
+  // lying around rather than at drop time, because a thing dragged into a
+  // useful spot later did help after all.
+  function wastedCount() { return objects.filter(ob => ob.dropped && !ob.helped).length; }
+
   function runStars() {
-    if (runHintUsed) return 1;      // a hint was opened
-    if (runWasted > 0) return 2;    // cleared, no hints, but some summons missed
-    return mana > 0 ? 3 : 2;        // perfect line, with magic to spare
+    if (runHintUsed) return 1;        // a hint was opened
+    if (wastedCount() > 0) return 2;  // cleared, no hints, but some summons missed
+    return mana > 0 ? 3 : 2;          // perfect line, with magic to spare
   }
 
   function foundCount(l) { return (save.found[l.id] || []).length; }
@@ -206,9 +221,12 @@ const WizardGame = (() => {
   function layoutObstacles() {
     const n = obstacles.length;
     const span = W - 250;
-    const zw = Math.max(80, Math.min(140, span / n - 24));
+    const wide = Math.max(80, Math.min(140, span / n - 24));
     obstacles.forEach((o, i) => {
       o.cx = 130 + (span * (i + 0.5)) / n;
+      // Gaps are cut narrow enough that one summoned thing can genuinely span
+      // them — the geometry has to agree with what the obstacle promises.
+      const zw = (o.type === 'river' || o.type === 'pit') ? Math.min(GAP_W, wide) : wide;
       o.x0 = o.cx - zw / 2;
       o.x1 = o.cx + zw / 2;
     });
@@ -228,7 +246,9 @@ const WizardGame = (() => {
     manaMax = manaFor(level);
     mana = manaMax;
     runHintUsed = false;
-    runWasted = 0;
+    placing = null; dragging = null;
+    runId++;
+    if (els.placeBar) els.placeBar.style.display = 'none';
     hintShown = false;
 
     // Scenery: deterministic-ish scatter so the scene doesn't re-shuffle on redraw
@@ -253,31 +273,151 @@ const WizardGame = (() => {
 
   function currentObstacle() { return obstacles.find(o => !o.solved) || null; }
 
-  /* ================= summoning ================= */
+  /* ================= physics & terrain (W4) =================
+     Summoned things used to be teleported to a scripted pose picked from a
+     lookup table, so the sandbox never actually existed. Now they are boxes:
+     they fall, land on whatever is underneath, stack, float or sink — and the
+     PLAYER chooses where to drop them. Whether a gap is passable is then a
+     geometric question ("is there a surface I can walk along?") rather than a
+     flag someone set. The tags are still the whole lesson: they are exactly
+     what decides how big the box is and how it behaves in water.
+  */
+  const PIT_DEPTH = 52, RIVER_DEPTH = 74;   // deeper than a heavy box is tall
+  const PHYSICAL = new Set(['river', 'pit', 'wall']);   // terrain you build on
+  const STEP_UP = 28, CLIMB_UP = 150;
+  const GRAV = 1400;
 
-  // Where a summoned object comes to rest, and what it does to the scene.
-  function restingSpot(o, tag) {
-    if (!o) return { x: wizard.x + 70, y: GROUND_Y - 18, float: false };
-    if (tag === 'fly') return { x: o.cx, y: GROUND_Y - 120, float: true };
-    switch (o.type) {
-      case 'river':
-        if (tag === 'cold') return { x: o.cx, y: GROUND_Y - 14, float: false };
-        if (tag === 'float') return { x: o.cx, y: GROUND_Y - 4, float: true };
-        return { x: o.cx, y: GROUND_Y - 20, float: false };            // long → plank
-      case 'pit':
-        if (tag === 'heavy') return { x: o.cx, y: GROUND_Y + 40, float: false };
-        if (tag === 'climb') return { x: o.x0 + 8, y: GROUND_Y + 10, float: false };
-        return { x: o.cx, y: GROUND_Y - 20, float: false };
-      case 'wall':
-        if (tag === 'climb') return { x: o.x0 - 16, y: GROUND_Y - WALL_H / 2, float: false };
-        return { x: o.x0 - 20, y: GROUND_Y - WALL_H / 2 + 10, float: false };
-      case 'flame':   return { x: o.cx, y: GROUND_Y - 46, float: true };
-      case 'rope':    return { x: o.cx, y: GROUND_Y - 60, float: true };
-      case 'monster': return { x: o.cx - 34, y: GROUND_Y - 26, float: false };
-      case 'dark':    return { x: o.cx, y: GROUND_Y - 90, float: true };
-      case 'lock':    return { x: o.cx - 30, y: GROUND_Y - 40, float: false };
-      default:        return { x: o.cx, y: GROUND_Y - 20, float: false };
+  const GAP_W = 88;                       // how wide rivers and pits are cut
+
+  function bodyOf(word) {
+    const has = t => word.tags.includes(t);
+    const b = { floats: has('float'), heavy: has('heavy'), climb: has('climb'),
+                hover: has('fly'), spans: has('long') };
+    orientBody(b, false);
+    return b;
+  }
+
+  // A ladder, a rope, a fallen tree: long AND climbable at once. Which one it
+  // is depends on what it lands over — laid flat across a gap it is a bridge,
+  // stood against solid ground it is something to climb. That is what anyone
+  // would actually do with it, so it needs no explaining.
+  function orientBody(b, overGap) {
+    if (b.hover)                     { b.w = 66; b.h = 46; }            // never lands
+    else if (b.spans && (!b.climb || overGap)) { b.w = 138; b.h = 20; } // a plank
+    else if (b.climb)                { b.w = 38; b.h = 96; }            // stood up
+    else if (b.heavy)                { b.w = 80; b.h = PIT_DEPTH; }     // fills a pit flush
+    else if (b.floats)               { b.w = 76; b.h = 44; }            // sits in the water
+    else                             { b.w = 54; b.h = 44; }
+    return b;
+  }
+
+  function overGapAt(x) {
+    return obstacles.some(o => !o.frozen && (o.type === 'river' || o.type === 'pit') &&
+      x > o.x0 - 8 && x < o.x1 + 8);
+  }
+
+  // Solid ground profile at x, and the water surface if there is any.
+  function terrainAt(x) {
+    let top = GROUND_Y, water = null;
+    for (const o of obstacles) {
+      if (o.type === 'wall' && x >= o.cx - 24 && x <= o.cx + 24) top = Math.min(top, GROUND_Y - WALL_H);
+      else if (o.type === 'pit' && x >= o.x0 && x <= o.x1) top = GROUND_Y + PIT_DEPTH;
+      else if (o.type === 'river' && x >= o.x0 && x <= o.x1) {
+        if (o.frozen) top = GROUND_Y;                   // ice is just ground
+        else { top = GROUND_Y + RIVER_DEPTH; water = GROUND_Y; }
+      }
     }
+    return { top, water };
+  }
+
+  // Centre-y a box would settle at if it were dropped with its centre at x.
+  function restY(b, x, ignore) {
+    let top = Infinity;
+    const n = b.spans ? 11 : 3;
+    for (let i = 0; i < n; i++) {
+      const sx = x - b.w / 2 + (b.w * i) / (n - 1);
+      const t = terrainAt(sx);
+      // Buoyancy: something that floats sits half in the water; anything else
+      // goes to the bottom. That IS the float/heavy lesson, made physical.
+      top = Math.min(top, (t.water !== null && b.floats && !b.heavy) ? t.water + b.h / 2 : t.top);
+    }
+    objects.forEach(other => {
+      if (other === ignore || !other.landed || other.hover || other.merged) return;
+      if (x + b.w / 2 <= other.x - other.w / 2 || x - b.w / 2 >= other.x + other.w / 2) return;
+      top = Math.min(top, other.y - other.h / 2);
+    });
+    return top - b.h / 2;
+  }
+
+  // Highest surface you could stand on at x.
+  function walkSurfaceAt(x) {
+    let top = terrainAt(x).top;
+    objects.forEach(ob => {
+      // a small margin: things settle snugly against the sides of a gap, and a
+      // 2px sliver of open water is not something to fall down
+      if (!ob.landed || ob.hover || ob.merged) return;
+      if (x < ob.x - ob.w / 2 - 10 || x > ob.x + ob.w / 2 + 10) return;
+      top = Math.min(top, ob.y - ob.h / 2);
+    });
+    return top;
+  }
+
+  function climbAt(x) {
+    return objects.some(ob => ob.landed && ob.climb &&
+      x >= ob.x - ob.w / 2 - 32 && x <= ob.x + ob.w / 2 + 32);
+  }
+  function hoverAt(x) {
+    return objects.some(ob => ob.landed && ob.hover && x >= ob.x - 72 && x <= ob.x + 72);
+  }
+
+  // The geometric clear check: can the wizard get from fromX to toX on what is
+  // actually in the scene right now? No lookup tables, no special cases.
+  function walkable(fromX, toX) {
+    const STEP = 5;
+    let x = fromX, y = walkSurfaceAt(x);
+    let guard = 0;
+    while (x < toX && guard++ < 900) {
+      const nx = Math.min(toX, x + STEP);
+      if (hoverAt(nx)) { x = nx; y = GROUND_Y; continue; }   // being carried
+      const blocked = obstacles.some(o => !o.solved && !PHYSICAL.has(o.type) &&
+        nx >= o.x0 - 8 && nx <= o.x1 + 8);
+      if (blocked) return false;
+      const ny = walkSurfaceAt(nx);
+      if (ny > GROUND_Y + 4) return false;                   // that's a hole or open water
+      if (y - ny > (climbAt(nx) ? CLIMB_UP : STEP_UP)) return false;
+      x = nx; y = ny;
+    }
+    return true;
+  }
+
+  // Which physical property got the wizard across — for the 📖 collection.
+  // Every tag returned here is in that obstacle's own `solve` list.
+  function physicalTagFor(o) {
+    if (o.frozen) return 'cold';
+    const over = f => objects.some(ob => ob.landed && ob[f] &&
+      ob.x + ob.w / 2 > o.x0 && ob.x - ob.w / 2 < o.x1);
+    const near = f => objects.some(ob => ob.landed && ob[f] &&
+      ob.x + ob.w / 2 > o.x0 - 70 && ob.x - ob.w / 2 < o.x1 + 70);
+    if (o.type === 'river') return over('spans') ? 'long' : over('floats') ? 'float' : near('hover') ? 'fly' : 'float';
+    if (o.type === 'pit')   return over('spans') ? 'long' : over('heavy') ? 'heavy' : near('hover') ? 'fly' : 'heavy';
+    return near('climb') ? 'climb' : near('hover') ? 'fly' : 'long';   // wall
+  }
+
+  // Re-judge every physical obstacle against the current geometry. Called
+  // whenever anything settles or is dragged.
+  function evaluateScene(cause) {
+    const solved = [];
+    obstacles.forEach(o => {
+      if (o.solved || !PHYSICAL.has(o.type)) return;
+      if (!walkable(o.x0 - 26, o.x1 + 26)) return;
+      o.solved = true;
+      o.solveTag = physicalTagFor(o);
+      o.solveWord = cause && cause.word;
+      o.solveObj = cause || null;
+      o.anim = 0;
+      solved.push(o);
+    });
+    return solved;
   }
 
   // W3: what this summon puts INTO THE SCENE, not just at the obstacle in
@@ -312,12 +452,7 @@ const WizardGame = (() => {
         o.solveWord = word;
         o.anim = 0;
         o.chained = true;
-        o.solveObj = {
-          word, e: word.e, x: o.cx, y: -40, vy: 0,
-          targetY: restingSpot(o, r.tag).y, floaty: restingSpot(o, r.tag).float,
-          bob: Math.random() * Math.PI * 2, landed: false, solving: true,
-        };
-        objects.push(o.solveObj);
+        if (r.tag === 'cold' && o.type === 'river') o.frozen = true;   // ice is real terrain
         burst(o.cx, GROUND_Y - 60, 10);
         hit.push({ o, tag: r.tag, verb: r.verb });
         creditSolution(r.tag);
@@ -342,38 +477,18 @@ const WizardGame = (() => {
     return true;
   }
 
-  // Called once the player has spelled the word correctly.
+  /* ================= summoning ================= */
+
+  // Spelled correctly — now the child says WHERE. The magic is already spent
+  // at this point; aiming and re-dragging are free, so a placement mistake
+  // costs nothing but a moment. That is what makes it a sandbox rather than a
+  // multiple-choice question with a nice animation.
   function summon(word) {
-    const o = currentObstacle();
-    // A word can carry several abilities (ice = 冰 + 浮). Credit the one the
-    // player hasn't discovered on this level yet, otherwise a multi-tag word
-    // would keep re-scoring the same solution and never earn the next star.
-    const alreadyFound = save.found[level.id] || [];
-    const matches = o ? WIZARD_OBSTACLES[o.type].solve.filter(t => word.tags.includes(t)) : [];
-    const solveTag = matches.find(t => !alreadyFound.includes(t)) || matches[0] || null;
-    const spot = restingSpot(o, solveTag);
-
-    const obj = {
-      word, e: word.e,
-      x: spot.x + (solveTag ? 0 : (objects.length % 3 - 1) * 26),
-      y: -40, vy: 0,
-      targetY: solveTag ? spot.y : GROUND_Y - 18,
-      floaty: solveTag ? spot.float : false,
-      bob: Math.random() * Math.PI * 2,
-      landed: false,
-      solving: !!solveTag,
-    };
-    objects.push(obj);
-    // Cap the harmless clutter so the scene stays readable
-    const junk = objects.filter(x => !x.solving);
-    while (junk.length > 5) objects.splice(objects.indexOf(junk.shift()), 1);
-
     if (typeof TTSManager !== 'undefined') TTSManager.speak(word.w);
 
-    // Magic is spent whether or not the summon helps — that is what makes
-    // stopping to think worth more than trying the next card.
+    // Magic is spent per SUMMON, hit or miss — that is what makes stopping to
+    // think worth more than trying the next card.
     mana = Math.max(0, mana - 1);
-    if (!solveTag) runWasted++;
 
     // ---- spelling reward (the learning act, independent of whether it worked) ----
     const cfg = DIFFS[difficulty];
@@ -387,49 +502,120 @@ const WizardGame = (() => {
     if (!save.learned.includes(word.w)) { save.learned.push(word.w); }
     persist();
 
-    if (solveTag) {
-      SoundManager.playCorrect();
-      o.solved = true;
-      o.solveTag = solveTag;
-      o.solveWord = word;
-      o.solveObj = obj;
-      o.anim = 0;
-      hintShown = false;
-      burst(o.cx, GROUND_Y - 60, 14);
+    const o = currentObstacle();
+    placing = { word, body: bodyOf(word) };
+    aimX = o ? o.cx : wizard.x + 90;
+    els.placeBar.style.display = '';
+    els.placeName.textContent = `${word.e} ${word.w}（${word.zh}）`;
+    toast('👇 放在哪裡？', '在畫面上點一下決定位置——放錯了可以直接拖回來，不會再花魔力。', 3200);
+    renderHUD();
+    renderTask();
+    ensureLoop();
+  }
 
-      // ---- new way of solving this level? ----
-      const fresh = creditSolution(solveTag);
-      // ---- and what did it do to the REST of the scene? ----
-      const chained = applyChains(solveTag, o, word);
-      if (chained.length) {
-        SoundManager.playCorrect();
-        toast('🔗 連鎖！', `${word.e} ${word.w} 的力量傳了過去 — ` +
-          chained.map(c => `${WIZARD_OBSTACLES[c.o.type].icon} ${WIZARD_OBSTACLES[c.o.type].name}${c.verb}`).join('、') +
-          '！這一步等於省下一次召喚。', 3400);
-      } else if (fresh) {
-        toast('✨ 新解法！', `用「${WIZARD_TAGS[solveTag].name}」破解 — 這一關你已經找到 ${(save.found[level.id] || []).length}/${starTarget(level)} 種解法`, 2800);
-      } else {
-        toast(`${WIZARD_TAGS[solveTag].icon} 成功！`, `${word.e} ${word.w}（${word.zh}）${WIZARD_TAGS[solveTag].verb}`, 2400);
+  function dropAt(x) {
+    if (!placing) return;
+    const { word, body } = placing;
+    placing = null;
+    els.placeBar.style.display = 'none';
+    const px = Math.max(30, Math.min(W - 30, x));
+    orientBody(body, overGapAt(px));
+    const obj = {
+      word, e: word.e, ...body,
+      x: px,
+      y: body.hover ? GROUND_Y - 96 : -40,
+      vy: 0, bob: Math.random() * Math.PI * 2,
+      landed: !!body.hover, dropped: true, helped: false,
+    };
+    objects.push(obj);
+    // Cap the clutter so the scene stays readable
+    const junk = objects.filter(ob => !ob.helped);
+    while (junk.length > 6) objects.splice(objects.indexOf(junk.shift()), 1);
+    if (obj.landed) resolveScene(obj);
+    ensureLoop();
+  }
+
+  // Everything that happens once a dropped (or dragged) thing settles.
+  function resolveScene(cause) {
+    if (!level || finished) return;
+    const solvedNow = [];
+    // Cold landing in a river turns the terrain to ice, which the geometry
+    // below then simply reads as ordinary walkable ground.
+    obstacles.forEach(o => {
+      if (o.solved || o.type !== 'river' || !cause) return;
+      if (cause.x < o.x0 - 24 || cause.x > o.x1 + 24) return;
+      if (!cause.word.tags.includes('cold')) return;
+      o.frozen = true;
+      // The ice block becomes the ice — otherwise it would be left standing on
+      // top of the surface it just created, a 44px step out of nowhere.
+      cause.merged = true;
+      cause.y = GROUND_Y - 6;
+    });
+    // Effect blockers (fire/monster/lock/dark…) need the thing to be ON them.
+    obstacles.forEach(o => {
+      if (o.solved || PHYSICAL.has(o.type)) return;
+      if (!cause || cause.x < o.x0 - 46 || cause.x > o.x1 + 46) return;
+      const already = save.found[level.id] || [];
+      const matches = WIZARD_OBSTACLES[o.type].solve.filter(t => cause.word.tags.includes(t));
+      // Credit a tag the player hasn't discovered here yet, so a multi-ability
+      // word can't keep re-scoring the same solution.
+      const tag = matches.find(t => !already.includes(t)) || matches[0];
+      if (!tag) return;
+      o.solved = true; o.solveTag = tag; o.solveWord = cause.word; o.solveObj = cause; o.anim = 0;
+      solvedNow.push(o);
+    });
+    // Physical blockers: geometry decides, nothing else.
+    evaluateScene(cause).forEach(o => solvedNow.push(o));
+
+    if (!solvedNow.length) {
+      if (cause && cause.justDropped) {
+        SoundManager.playWrong();
+        const o = currentObstacle();
+        const info = o ? WIZARD_OBSTACLES[o.type] : null;
+        toast('🤔 還是過不去…', info
+          ? `${cause.e} ${cause.word.w} 放在那裡幫不上忙。${info.tip}　剩下 ${mana} 點魔力（可以拖它換個位置試試）。`
+          : `${cause.e} ${cause.word.w} 掉在地上了。`, 3600);
+        if (mana <= 0 && !finished) later(outOfMana, 900);
       }
-      renderHUD();
-      setTimeout(startWalk, chained.length ? 1000 : 720);
+      renderHUD(); renderTask();
+      return;
+    }
+
+    if (cause) cause.helped = true;
+    SoundManager.playCorrect();
+    hintShown = false;
+    solvedNow.forEach(o => burst(o.cx, GROUND_Y - 60, 12));
+
+    // credit each solution and let it act on the rest of the scene (W3)
+    let chained = [];
+    let fresh = false;
+    solvedNow.forEach(o => {
+      if (creditSolution(o.solveTag)) fresh = true;
+      chained = chained.concat(applyChains(o.solveTag, o, o.solveWord || (cause && cause.word)));
+    });
+    chained.forEach(c => { if (creditSolution(c.tag)) fresh = true; });
+
+    const first = solvedNow[0];
+    if (chained.length) {
+      toast('🔗 連鎖！', `${first.solveWord ? first.solveWord.e + ' ' + first.solveWord.w : '那股力量'} 傳了過去 — ` +
+        chained.map(c => `${WIZARD_OBSTACLES[c.o.type].icon} ${WIZARD_OBSTACLES[c.o.type].name}${c.verb}`).join('、') +
+        '！這一步等於省下一次召喚。', 3400);
+    } else if (solvedNow.length > 1) {
+      toast('🎉 一次解決兩關！', solvedNow.map(o => `${WIZARD_OBSTACLES[o.type].icon} ${WIZARD_OBSTACLES[o.type].name}`).join('、') + ' 都通了！', 3000);
+    } else if (fresh) {
+      toast('✨ 新解法！', `用「${WIZARD_TAGS[first.solveTag].name}」破解 — 這一關你已經找到 ${(save.found[level.id] || []).length}/${starTarget(level)} 種解法`, 2800);
     } else {
-      SoundManager.playWrong();
-      const info = o ? WIZARD_OBSTACLES[o.type] : null;
-      // Still no answer here — just the situation again, plus what it cost.
-      toast('🤔 沒有用…', info
-        ? `${word.e} ${word.w}（${word.zh}）幫不上忙。${info.tip}　剩下 ${mana} 點魔力。`
-        : `${word.e} ${word.w}（${word.zh}）掉出來了！`, 3200);
-      if (mana <= 0 && !finished) { setTimeout(outOfMana, 900); }
+      toast(`${WIZARD_TAGS[first.solveTag].icon} 成功！`, `${WIZARD_TAGS[first.solveTag].verb}`, 2400);
     }
     renderHUD();
     renderTask();
+    later(startWalk, chained.length ? 1000 : 720);
   }
 
   // W2: magic ran out with the path still blocked. Nothing already earned is
   // taken back — the level simply has to be started again.
   function outOfMana() {
-    if (finished || currentObstacle() === null) return;
+    if (finished || mana > 0 || placing || currentObstacle() === null) return;
     finished = true;
     wizard.state = 'idle';
     SoundManager.playWrong();
@@ -472,23 +658,14 @@ const WizardGame = (() => {
     ensureLoop();
   }
 
-  // Height the wizard is lifted at a given x — riding something that flies, or
-  // going over the top of a wall.
-  function liftAt(x) {
-    let lift = 0;
-    obstacles.forEach(o => {
-      if (!o.solved) return;
-      const a = o.x0 - 24, b = o.x1 + 24;
-      if (x < a || x > b) return;
-      let L = 0;
-      if (o.solveTag === 'fly') L = 130;
-      else if (o.type === 'wall') L = WALL_H + 26;
-      else if (o.type === 'rope') L = 0;
-      if (!L) return;
-      const u = (x - a) / (b - a);
-      lift = Math.max(lift, L * Math.sin(Math.PI * u));
-    });
-    return lift;
+  // The wizard walks on whatever the physics actually produced — the plank he
+  // is standing on, the boat bobbing in the river, the top of the wall. Sampled
+  // over a small window so he steps up a little early instead of popping.
+  function wizardY(x) {
+    if (hoverAt(x)) return GROUND_Y - 92;
+    let y = Infinity;
+    for (let d = -16; d <= 16; d += 8) y = Math.min(y, walkSurfaceAt(x + d));
+    return Math.min(y, GROUND_Y);
   }
 
   function finishLevel() {
@@ -514,7 +691,7 @@ const WizardGame = (() => {
 
     GameEngine.setDeferLevelUp(false);
     GameEngine.flushPendingLevelUps();
-    setTimeout(() => showDone(firstClear, reward, stars), 900);
+    later(() => showDone(firstClear, reward, stars), 900);
   }
 
   /* ================= effects ================= */
@@ -546,32 +723,32 @@ const WizardGame = (() => {
     ctx.fillRect(0, GROUND_Y, W, H - GROUND_Y);
     ctx.fillStyle = ch.deep;
     ctx.fillRect(0, GROUND_Y + 14, W, H - GROUND_Y - 14);
+    // Holes and water are drawn at their REAL depth — the same numbers the
+    // physics uses — so what you see is what a box will land on.
     obstacles.forEach(o => {
       if (o.type !== 'river' && o.type !== 'pit') return;
-      const filled = o.solved && (o.solveTag === 'heavy' || o.solveTag === 'cold');
       if (o.type === 'pit') {
         ctx.fillStyle = '#1b1b26';
-        ctx.fillRect(o.x0, GROUND_Y, o.x1 - o.x0, H - GROUND_Y);
-        if (filled) { ctx.fillStyle = ch.deep; ctx.fillRect(o.x0, GROUND_Y + 26, o.x1 - o.x0, H - GROUND_Y); }
+        ctx.fillRect(o.x0, GROUND_Y, o.x1 - o.x0, PIT_DEPTH);
+        ctx.fillStyle = ch.deep;
+        ctx.fillRect(o.x0, GROUND_Y + PIT_DEPTH, o.x1 - o.x0, H - GROUND_Y - PIT_DEPTH);
+      } else if (o.frozen) {
+        ctx.fillStyle = '#dff2ff';
+        ctx.fillRect(o.x0, GROUND_Y - 6, o.x1 - o.x0, RIVER_DEPTH + 6);
+        ctx.fillStyle = 'rgba(255,255,255,.6)';
+        for (let x = o.x0; x < o.x1; x += 22) ctx.fillRect(x + 3, GROUND_Y - 3, 12, 3);
       } else {
-        ctx.fillStyle = filled ? '#cfefff' : '#2f8fd6';
-        ctx.fillRect(o.x0, GROUND_Y, o.x1 - o.x0, H - GROUND_Y);
-        if (!filled) {
-          ctx.fillStyle = 'rgba(255,255,255,.35)';
-          for (let x = o.x0; x < o.x1; x += 18) ctx.fillRect(x + 2, GROUND_Y + 4, 10, 3);
-        }
+        ctx.fillStyle = '#2f8fd6';
+        ctx.fillRect(o.x0, GROUND_Y, o.x1 - o.x0, RIVER_DEPTH);
+        ctx.fillStyle = ch.deep;
+        ctx.fillRect(o.x0, GROUND_Y + RIVER_DEPTH, o.x1 - o.x0, H - GROUND_Y - RIVER_DEPTH);
+        ctx.fillStyle = 'rgba(255,255,255,.35)';
+        for (let x = o.x0; x < o.x1; x += 18) ctx.fillRect(x + 2, GROUND_Y + 4, 10, 3);
       }
     });
 
-    // ---- solved obstacles get a walkway so "you can cross now" is obvious ----
-    obstacles.forEach(o => {
-      if (!o.solved || o.solveTag === 'fly' || o.type === 'wall') return;
-      ctx.fillStyle = o.solveTag === 'cold' ? '#eaf8ff' : '#b5793f';
-      roundRect(o.x0 - 14, GROUND_Y - 8, o.x1 - o.x0 + 28, 9, 4);
-      ctx.fill();
-    });
-
-    objects.forEach(ob => drawEmoji(ob.e, ob.x, ob.y, 46));
+    objects.forEach(ob => drawBody(ob));
+    if (placing) drawGhost();
 
     obstacles.forEach(o => drawObstacle(o));
     obstacles.forEach(o => drawReactBadge(o));
@@ -593,6 +770,50 @@ const WizardGame = (() => {
       ctx.fill();
       ctx.restore();
     });
+  }
+
+  // Summoned things are boxes now, so they're drawn as boxes: a plank looks
+  // like a plank, a ladder like a ladder, and the emoji rides on top.
+  function drawBody(ob, alpha = 1) {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    if (ob.spans) {
+      ctx.fillStyle = '#a9713c';
+      roundRect(ob.x - ob.w / 2, ob.y - ob.h / 2, ob.w, ob.h, 5);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = 1.5; ctx.stroke();
+      drawEmoji(ob.e, ob.x, ob.y - ob.h / 2 - 15, 28, alpha);
+    } else if (ob.climb) {
+      ctx.strokeStyle = '#b98a4a'; ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.moveTo(ob.x - ob.w / 2 + 4, ob.y - ob.h / 2); ctx.lineTo(ob.x - ob.w / 2 + 4, ob.y + ob.h / 2);
+      ctx.moveTo(ob.x + ob.w / 2 - 4, ob.y - ob.h / 2); ctx.lineTo(ob.x + ob.w / 2 - 4, ob.y + ob.h / 2);
+      ctx.stroke();
+      ctx.lineWidth = 4;
+      for (let y = ob.y - ob.h / 2 + 12; y < ob.y + ob.h / 2; y += 20) {
+        ctx.beginPath(); ctx.moveTo(ob.x - ob.w / 2 + 4, y); ctx.lineTo(ob.x + ob.w / 2 - 4, y); ctx.stroke();
+      }
+      drawEmoji(ob.e, ob.x, ob.y - ob.h / 2 - 14, 28, alpha);
+    } else {
+      drawEmoji(ob.e, ob.x, ob.y, Math.min(52, ob.h + 8), alpha);
+    }
+    ctx.restore();
+  }
+
+  // While aiming: a see-through preview sitting exactly where it would land,
+  // so choosing a spot is a decision you can make with your eyes.
+  function drawGhost() {
+    const b = orientBody(placing.body, overGapAt(aimX));
+    const y = b.hover ? GROUND_Y - 96 : restY(b, aimX, null);
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,214,102,.75)';
+    ctx.setLineDash([6, 6]);
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(aimX, 8); ctx.lineTo(aimX, y - b.h / 2); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.strokeRect(aimX - b.w / 2, y - b.h / 2, b.w, b.h);
+    ctx.restore();
+    drawBody({ ...b, e: placing.word.e, x: aimX, y }, 0.55);
   }
 
   // A marker on every obstacle that reacts to something in the air, so a
@@ -679,18 +900,38 @@ const WizardGame = (() => {
   /* ================= loop ================= */
 
   function step(dt) {
+    // ---- W4: real falling, landing, stacking and bobbing ----
     objects.forEach(ob => {
+      if (ob === dragging || ob.merged) return;
+      if (ob.hover) {                    // balloons and birds never come down
+        ob.bob += dt * 1.6;
+        ob.y = (ob.restY ?? (ob.restY = ob.y)) + Math.sin(ob.bob) * 5;
+        return;
+      }
+      const rest = restY(ob, ob.x, ob);
       if (!ob.landed) {
-        ob.vy += 900 * dt;
+        ob.vy += GRAV * dt;
         ob.y += ob.vy * dt;
-        if (ob.y >= ob.targetY) {
-          ob.y = ob.targetY;
-          if (Math.abs(ob.vy) < 90) { ob.landed = true; ob.vy = 0; }
-          else ob.vy *= -0.34;
+        if (ob.y >= rest) {
+          ob.y = rest;
+          if (Math.abs(ob.vy) < 110) {
+            ob.vy = 0;
+            ob.landed = true;
+            ob.restY = rest;
+            const justDropped = !ob.settled;
+            ob.settled = true;
+            ob.justDropped = justDropped;
+            resolveScene(ob);
+            ob.justDropped = false;
+          } else ob.vy *= -0.3;          // one small bounce, then it settles
         }
-      } else if (ob.floaty) {
-        ob.bob += dt * 2.2;
-        ob.y = ob.targetY + Math.sin(ob.bob) * 4;
+      } else {
+        // the ground under it may have changed (something was dragged away)
+        if (rest > ob.y + 1) { ob.landed = false; ob.vy = 0; }
+        else if (ob.floats && !ob.heavy && terrainAt(ob.x).water !== null) {
+          ob.bob += dt * 2.2;
+          ob.y = rest + Math.sin(ob.bob) * 3;
+        } else ob.y = rest;
       }
     });
 
@@ -698,7 +939,7 @@ const WizardGame = (() => {
       walkAnim.t += dt;
       const u = Math.min(1, walkAnim.t / walkAnim.dur);
       wizard.x = walkAnim.fromX + (walkAnim.toX - walkAnim.fromX) * u;
-      wizard.y = GROUND_Y - liftAt(wizard.x);
+      wizard.y = wizardY(wizard.x);
       if (u >= 1) {
         walkAnim = null;
         wizard.state = 'idle';
@@ -706,16 +947,13 @@ const WizardGame = (() => {
         else renderTask();
       }
     } else if (wizard.state !== 'win') {
-      wizard.y = GROUND_Y - liftAt(wizard.x);
+      wizard.y = wizardY(wizard.x);
     }
 
-    // A flying mount carries the wizard across instead of hovering on its own
-    obstacles.forEach(o => {
-      if (!o.solved || o.solveTag !== 'fly' || !o.solveObj || !o.solveObj.landed) return;
-      if (wizard.x > o.x0 - 30 && wizard.x < o.x1 + 30) {
-        o.solveObj.x = wizard.x - 6;
-        o.solveObj.y = wizard.y - 6;
-      }
+    // A flying mount carries the wizard instead of hovering on its own
+    objects.forEach(ob => {
+      if (!ob.hover || !ob.landed) return;
+      if (Math.abs(wizard.x - ob.x) < 72) { ob.x = wizard.x; ob.y = wizard.y - 34; }
     });
 
     effects.forEach(p => {
@@ -764,6 +1002,12 @@ const WizardGame = (() => {
           <span class="wz-chip" id="wz-hud-book"></span>
         </div>
         <div class="wz-toast" id="wz-toast"></div>
+        <div class="wz-place" id="wz-place" style="display:none">
+          <span class="wz-place-icon">👇</span>
+          <span class="wz-place-name" id="wz-place-name"></span>
+          <span class="wz-place-note">在畫面上點一下決定放的位置</span>
+          <button class="wz-btn wz-btn-main" id="wz-place-front">放在正前方</button>
+        </div>
       </div>
 
       <div class="wz-bar">
@@ -791,6 +1035,8 @@ const WizardGame = (() => {
         <p>召喚出來的東西會影響<strong>整個場景</strong>，不是只有眼前那一關：🔥 火會把場上所有
           乾燥的東西（帶 🪵 記號）一起燒掉，🧊 冰會凍住所有的水（💧），💡 光會照亮所有黑暗（💡）。
           挑對一個，後面的難關就自己解決了。</p>
+        <p>拼完字之後，<strong>要自己決定放在哪裡</strong>：東西是真的會掉下來、疊上去、浮在水上或沉下去的。
+          放錯了直接用手拖回來，不會再花魔力。</p>
         <p>每一關的 🔮 <strong>魔力有限</strong>，召喚一次就用掉一點，用完就得重來——所以「一次解兩關」
           不只是帥，是真的省魔力。</p>
         <p>⭐ 看你這一次玩得多漂亮（沒看提示 ⭐⭐、每個難關都一次解掉又有魔力剩下 ⭐⭐⭐）；
@@ -846,6 +1092,8 @@ const WizardGame = (() => {
       hudFound: root.querySelector('#wz-hud-found'),
       hudBook: root.querySelector('#wz-hud-book'),
       toast: root.querySelector('#wz-toast'),
+      placeBar: root.querySelector('#wz-place'),
+      placeName: root.querySelector('#wz-place-name'),
       taskIcon: root.querySelector('#wz-task-icon'),
       taskName: root.querySelector('#wz-task-name'),
       taskTip: root.querySelector('#wz-task-tip'),
@@ -881,7 +1129,77 @@ const WizardGame = (() => {
     root.querySelector('#wz-book-btn').addEventListener('click', openBook);
     root.querySelector('#wz-retry-btn').addEventListener('click', () => { if (level) startLevel(levelIndex); });
     els.hintBtn.addEventListener('click', revealHint);
+    root.querySelector('#wz-place-front').addEventListener('click', () => {
+      const o = currentObstacle();
+      dropAt(o ? o.cx : wizard.x + 90);
+    });
+    bindSceneInput();
     return true;
+  }
+
+  /* ---------- W4: pointing at the scene ---------- */
+
+  function sceneX(e) {
+    const r = canvas.getBoundingClientRect();
+    const cx = e.touches ? e.touches[0].clientX : e.clientX;
+    return ((cx - r.left) / r.width) * W;
+  }
+  function sceneY(e) {
+    const r = canvas.getBoundingClientRect();
+    const cy = e.touches ? e.touches[0].clientY : e.clientY;
+    return ((cy - r.top) / r.height) * H;
+  }
+
+  function objectAt(x, y) {
+    // topmost first, and only things that haven't already done their job —
+    // dragging away a solution would have to un-solve the level behind it.
+    for (let i = objects.length - 1; i >= 0; i--) {
+      const ob = objects[i];
+      if (ob.helped) continue;
+      if (Math.abs(x - ob.x) <= ob.w / 2 + 8 && Math.abs(y - ob.y) <= ob.h / 2 + 10) return ob;
+    }
+    return null;
+  }
+
+  function bindSceneInput() {
+    const down = e => {
+      if (!level || finished) return;
+      const x = sceneX(e), y = sceneY(e);
+      if (placing) { e.preventDefault(); dropAt(x); return; }
+      const ob = objectAt(x, y);
+      if (ob) {
+        e.preventDefault();
+        dragging = ob;
+        ob.landed = false;
+        ob.vy = 0;
+        ob.grabDX = ob.x - x;
+        ob.grabDY = ob.y - y;
+        ensureLoop();
+      }
+    };
+    const move = e => {
+      if (placing) { aimX = sceneX(e); return; }
+      if (!dragging) return;
+      e.preventDefault();
+      dragging.x = Math.max(30, Math.min(W - 30, sceneX(e) + dragging.grabDX));
+      dragging.y = Math.max(20, Math.min(H - 20, sceneY(e) + dragging.grabDY));
+    };
+    const up = () => {
+      if (!dragging) return;
+      const ob = dragging;
+      dragging = null;
+      ob.vy = 0;
+      orientBody(ob, overGapAt(ob.x));
+      ob.landed = false;             // let it fall from wherever it was let go
+      ob.settled = false;
+      ensureLoop();
+    };
+    canvas.addEventListener('mousedown', down);
+    canvas.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+    canvas.addEventListener('touchstart', down, { passive: false });
+    canvas.addEventListener('touchmove', move, { passive: false });
+    window.addEventListener('touchend', up);
   }
 
   function showScreen(name) {
@@ -1236,7 +1554,7 @@ const WizardGame = (() => {
       <h3>${level.name} 完成！</h3>
       <p class="wz-done-why">${
         stars === 3 ? `一次到位、還剩 ${mana} 點魔力 — 滿星！`
-        : stars === 2 ? `${runWasted} 次召喚沒派上用場${mana ? '' : '、魔力也剛好用完'}，這次是 ⭐⭐`
+        : stars === 2 ? `${wastedCount()} 次召喚沒派上用場${mana ? '' : '、魔力也剛好用完'}，這次是 ⭐⭐`
         : '這次看了提示，所以是 ⭐（📖 解法收集照算）'}${
         best > stars ? `　最佳紀錄 ${'⭐'.repeat(best)}` : ''}</p>
       <p class="wz-done-reward">${firstClear
@@ -1287,12 +1605,13 @@ const WizardGame = (() => {
     window.__wizardTest = {
       state: () => ({
         levelId: level && level.id,
-        obstacles: obstacles.map(o => ({ type: o.type, solved: o.solved, tag: o.solveTag })),
+        obstacles: obstacles.map(o => ({ type: o.type, solved: o.solved, tag: o.solveTag,
+          cx: Math.round(o.cx), x0: Math.round(o.x0), x1: Math.round(o.x1), frozen: !!o.frozen })),
         wizardX: Math.round(wizard.x),
         finished,
         tier: bookTier(),
         cleared: clearedCount(),
-        mana, manaMax, hintUsed: runHintUsed, wasted: runWasted,
+        mana, manaMax, hintUsed: runHintUsed, wasted: wastedCount(), placing: !!placing,
         stars: level ? starsFor(level) : 0,
         runStars: level ? runStars() : 0,
         found: level ? foundCount(level) : 0,
@@ -1300,14 +1619,25 @@ const WizardGame = (() => {
       }),
       start: i => startLevel(i),
       hint: () => revealHint(),
-      cast: word => {
+      // W4: casting now needs a drop point. Omit x and it goes in front of the
+      // blocker the wizard is standing at, which is what the button does.
+      cast: (word, x) => {
         const entry = unlockedWords().find(w => w.w === word);
         if (!entry) return false;
         spellWord = entry; spellFlawed = false;
         summon(entry);
+        const o = currentObstacle();
+        dropAt(x !== undefined ? x : (o ? o.cx : wizard.x + 90));
         return true;
       },
-      settle: () => { while (walkAnim) step(0.05); },
+      drop: x => dropAt(x),
+      grab: (x, y) => objectAt(x, y),
+      objects: () => objects.map(ob => ({ w: ob.word.w, x: Math.round(ob.x), y: Math.round(ob.y),
+        bw: ob.w, bh: ob.h, landed: ob.landed, helped: ob.helped,
+        floats: !!ob.floats, heavy: !!ob.heavy, spans: !!ob.spans, climb: !!ob.climb, hover: !!ob.hover })),
+      surface: x => Math.round(walkSurfaceAt(x)),
+      walkable: (a, b) => walkable(a, b),
+      settle: () => { for (let i = 0; i < 400; i++) step(0.016); },
       save: () => JSON.parse(JSON.stringify(save)),
     };
   }

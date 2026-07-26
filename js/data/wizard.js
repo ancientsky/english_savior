@@ -70,10 +70,12 @@ const WIZARD_OBSTACLES = {
              freezable: true, badge: '💧',
              tip: '河水又深又急，小巫師不會游泳，一下水就會被沖走。',
              hint: '水上要有東西可以踩，或是架一座橋，不然就飛過去、把水凍起來！' },
+  // No `climb` here: with real physics a ladder is not wide enough to get
+  // anyone across a pit, and the game must not offer a solution it won't honour.
   pit:     { name: '深坑', icon: '🕳️', zh: '一個深不見底的大坑',
-             solve: ['heavy', 'long', 'fly', 'climb'],
+             solve: ['heavy', 'long', 'fly'],
              tip: '坑又深又黑，看不到底，跳過去一定跳不過。',
-             hint: '丟重的東西把坑填平，或架長長的東西跨過去，也可以飛過去、爬下去再爬上來。' },
+             hint: '丟很重的東西把坑填平，或架長長的東西跨過去，也可以直接飛過去。' },
   wall:    { name: '高牆', icon: '🧱', zh: '一面爬不上去的高牆',
              solve: ['climb', 'fly', 'long'],
              tip: '牆比小巫師高好幾倍，表面又滑又平，手抓不到任何東西。',
