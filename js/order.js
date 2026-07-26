@@ -37,9 +37,14 @@ const OrderGame = (() => {
 
   // ---- current shift ----
   let shop = null, shopIndex = 0;
-  let order = null;        // [{ w, qty, size, ing: [] }]
+  let order = null;        // [{ w, qty, size, temp, ing: [], added, dropped, lv }]
   let sentence = '';
-  let tray = [];           // [{ w, qty, size, ing: [] }]
+  let tray = [];           // [{ w, qty, size, temp, ing: [], lv }]
+  // 內用/外帶 is an ORDER-level answer, not a per-item one, so it lives beside
+  // `order`/`tray` rather than inside them: turning those into { lines, place }
+  // would touch a dozen order.forEach / tray.find call sites for no gain.
+  let orderPlace = null;   // 'for here' | 'to go' | null (this shop never asks)
+  let trayPlace = null;    // what the child picked — null means "not answered"
   let customer = 0, correctCount = 0, replaysLeft = 0, retried = false;
   let running = false;
 
@@ -112,6 +117,10 @@ const OrderGame = (() => {
     // an adult, and this is a listening game, not a memory test.
     let budget = cfg.mods;
 
+    // Decided here, before trimming, because 內用/外帶 is one more thing to
+    // remember and so has to compete for the same fact budget as everything else.
+    orderPlace = makePlace();
+
     return trimToBudget(chosen.map(item => {
       // Quantity only where "two ___" is real English (the data marks those)
       const qty = cfg.qty && item.pl && Math.random() < 0.45 ? 2 + rand(2) : 1;
@@ -130,7 +139,7 @@ const OrderGame = (() => {
       }
       const ing = (item.def || []).filter(x => !dropped.includes(x)).concat(added);
       return { w: item.w, qty, size, ing, added, dropped };
-    }));
+    }), orderPlace ? 1 : 0);
   }
 
   // Every separate thing the child has to hold in their head. qty / size / mods
@@ -150,9 +159,11 @@ const OrderGame = (() => {
 
   // Peel optional facts off, cheapest-to-lose first, until the order fits.
   // Quantity survives longest: it is the one the child is worst at hearing.
-  function trimToBudget(o) {
-    const cap = DIFFS[difficulty].facts;
-    if (!cap) return o;
+  // `extra` counts facts that live outside the lines (內用/外帶) and cannot be
+  // stripped, so they push the item-level detail down instead.
+  function trimToBudget(o, extra) {
+    const cap = DIFFS[difficulty].facts - (extra || 0);
+    if (!DIFFS[difficulty].facts) return o;
     const strip = [
       l => { if (l.size) { l.size = null; return true; } },
       l => { if (l.temp) { l.temp = null; return true; } },
@@ -164,6 +175,19 @@ const OrderGame = (() => {
     }
     return o;
   }
+
+  // Always asked in a `togo` shop, at every difficulty, 50/50 either way.
+  // Omitting it at random would teach the child to ignore it, and it would make
+  // "always press 外帶" a winning strategy (it passes every "to go" and every
+  // customer who didn't ask, and only fails "for here").
+  // Deliberately NOT part of the mods budget: it is always in the same slot,
+  // right before `please`, so the cost to the ear is close to nothing.
+  function makePlace() {
+    if (!featuresOf(shop).has('togo')) return null;
+    return Math.random() < 0.5 ? 'for here' : 'to go';
+  }
+
+  const PLACE_ZH = { 'for here': '內用', 'to go': '外帶' };
 
   function listWords(arr) {
     if (arr.length <= 1) return arr.map(x => x).join('');
@@ -204,7 +228,7 @@ const OrderGame = (() => {
 
   // Items are separated by commas with a final "and", because a line can itself
   // contain "with A and B" — joining every line with "and" runs them together.
-  function buildSentence(o) {
+  function buildSentence(o, place) {
     const parts = o.map(lineText);
     let body;
     if (parts.length === 1) body = parts[0];
@@ -214,7 +238,10 @@ const OrderGame = (() => {
     // "Can I have ... please." is a question wearing a full stop, and easy mode
     // shows the sentence on screen, so the punctuation is being taught too.
     const end = /^(Can|Could|May)\b/.test(opener) ? '?' : '.';
-    return `${opener} ${body}, please${end}`;
+    // The comma is load-bearing: it gives TTS a pause, which is the only way a
+    // child hears "for here" as one phrase instead of trailing off the last item.
+    const tail = place ? `, ${place}` : '';
+    return `${opener} ${body}${tail}, please${end}`;
   }
 
   /* ================= shift flow ================= */
@@ -251,9 +278,13 @@ const OrderGame = (() => {
 
   function nextCustomer() {
     if (customer >= SHIFT_LEN) { finishShift(); return; }
-    order = makeOrder();
-    sentence = buildSentence(order);
+    order = makeOrder();          // also sets orderPlace
+    sentence = buildSentence(order, orderPlace);
     resetTray();
+    // The previous customer's verdict used to stay on screen while the next one
+    // was already talking — and it kept the once-per-region teaching card alive
+    // for the whole shift.
+    if (els.result) els.result.innerHTML = '';
     retried = false;
     replaysLeft = DIFFS[difficulty].replays;
     renderAll();
@@ -278,6 +309,13 @@ const OrderGame = (() => {
   // the previous customer's answer sitting there for the next one.
   function resetTray() {
     tray = [];
+    trayPlace = null;   // null, not 'for here' — "not answered yet" is honest
+  }
+
+  function setPlace(p) {
+    if (!running) return;
+    trayPlace = p;
+    renderTray();
   }
 
   function addToTray(w) {
@@ -317,7 +355,9 @@ const OrderGame = (() => {
   // How much of the order a mistake ruins, worst first. Packaging comes last on
   // purpose: leading with 「內用還是外帶」 when the burger itself is wrong would
   // teach the child the wrong priority.
-  const RANK = { missing: 0, extra: 1, qty: 2, size: 3, temp: 4, ing: 5 };
+  // Packaging is last on purpose: leading with 「內用還是外帶」 while the burger
+  // itself is wrong would teach the child exactly the wrong priority.
+  const RANK = { missing: 0, extra: 1, qty: 2, size: 3, temp: 4, ing: 5, lv: 6, place: 7 };
   const SHOW_MAX = 3;      // lines the child reads
   const PER_ITEM_MAX = 2;  // …of which at most two may come from one item
 
@@ -353,6 +393,14 @@ const OrderGame = (() => {
         problems.push({ rank: RANK.extra, key: t.w, msg: `多做了 ${item.e} ${item.zh}（${t.w}），客人沒有點` });
       }
     });
+    if (orderPlace && trayPlace !== orderPlace) {
+      problems.push({
+        rank: RANK.place, key: '__place',
+        msg: trayPlace
+          ? `客人說 ${orderPlace}（${PLACE_ZH[orderPlace]}），你按成${PLACE_ZH[trayPlace]}了`
+          : `客人說 ${orderPlace}（${PLACE_ZH[orderPlace]}），你還沒選內用還是外帶`,
+      });
+    }
 
     // Worst first, but no single item may eat the whole quota — otherwise one
     // completely botched item hides the mistake on the next one entirely.
@@ -495,8 +543,21 @@ const OrderGame = (() => {
   function renderTray() {
     if (!els.tray) return;
     els.tray.innerHTML = '';
+    // The 內用/外帶 row belongs to the order, not to any one item, so it sits at
+    // the top of the tray and stays there even while the tray is still empty.
+    if (orderPlace) {
+      const row = document.createElement('div');
+      row.className = 'od-place';
+      row.innerHTML = `<span class="od-place-label">內用還是外帶？</span>
+        <button data-place="for here" class="${trayPlace === 'for here' ? 'on' : ''}">🍽️ for here<small>內用</small></button>
+        <button data-place="to go" class="${trayPlace === 'to go' ? 'on' : ''}">🥡 to go<small>外帶</small></button>`;
+      row.querySelectorAll('[data-place]').forEach(b =>
+        b.addEventListener('click', () => setPlace(b.dataset.place)));
+      els.tray.appendChild(row);
+    }
     if (!tray.length) {
-      els.tray.innerHTML = '<p class="od-tray-empty">點下面的菜單，把客人要的東西做出來 👇</p>';
+      els.tray.insertAdjacentHTML('beforeend',
+        '<p class="od-tray-empty">點下面的菜單，把客人要的東西做出來 👇</p>');
       return;
     }
     tray.forEach(t => {
@@ -708,11 +769,11 @@ const OrderGame = (() => {
 
   // Point the module at a shop without disturbing a shift that may be running.
   function withShop(i, diff, fn) {
-    const keep = { shop, shopIndex, difficulty, order, sentence };
+    const keep = { shop, shopIndex, difficulty, order, sentence, orderPlace };
     shopIndex = i;
     shop = ORDER_SHOPS[i];
     if (diff) difficulty = diff;
-    try { return fn(); } finally { ({ shop, shopIndex, difficulty, order, sentence } = keep); }
+    try { return fn(); } finally { ({ shop, shopIndex, difficulty, order, sentence, orderPlace } = keep); }
   }
 
   // Fill in whatever a test literal left out, the same way makeOrder() would.
@@ -737,20 +798,22 @@ const OrderGame = (() => {
       sample: (i, diff, n) => withShop(i, diff, () => {
         const out = [];
         for (let k = 0; k < n; k++) {
-          const o = makeOrder();
-          out.push({ shop: ORDER_SHOPS[i].id, diff, sentence: buildSentence(o), order: o.map(cloneLine) });
+          const o = makeOrder();     // also sets orderPlace
+          const place = orderPlace;
+          out.push({ shop: ORDER_SHOPS[i].id, diff, place, sentence: buildSentence(o, place), order: o.map(cloneLine) });
         }
         return out;
       }),
       // one hand-written order, so a specific phrasing can be asserted
-      sentenceFor: (i, lines) => withShop(i, null, () => buildSentence(lines.map(l => normalizeLine(i, l)))),
+      sentenceFor: (i, lines, place) =>
+        withShop(i, null, () => buildSentence(lines.map(l => normalizeLine(i, l)), place || null)),
     },
 
     state: () => ({
       shop: shop && shop.id,
       customer, correctCount, running,
       served: save.served, shops: save.shops,
-      difficulty, sentence,
+      difficulty, sentence, orderPlace, trayPlace,
       order: order && order.map(cloneLine),
       tray: tray.map(cloneLine),
     }),
@@ -759,20 +822,23 @@ const OrderGame = (() => {
     startShift: i => startShift(i),
     // Replace the customer's order outright — lets a test aim at one branch of
     // checkOrder() instead of waiting for the dice to produce it.
-    setOrder: lines => {
+    setOrder: (lines, place) => {
       order = lines.map(l => normalizeLine(shopIndex, l));
-      sentence = buildSentence(order);
+      if (place !== undefined) orderPlace = place;
+      sentence = buildSentence(order, orderPlace);
       renderAll();
     },
     // Build the tray exactly as the order asks — the "perfect employee" path.
     // Split from autoServe so a test can assert problems() without spending XP.
     autoTray: () => {
       tray = order.map(o => ({ w: o.w, qty: o.qty, size: o.size || (itemOf(o.w).sizes ? 'small' : null), ing: o.ing.slice() }));
+      trayPlace = orderPlace;
       renderTray();
     },
     autoServe: () => { TestHooks.autoTray(); serve(); },
     add: w => addToTray(w),
     setSize: (w, s) => setSize(w, s),
+    setPlace: p => setPlace(p),
     toggleIng: (w, x) => toggleIng(w, x),
     bumpQty: (w, d) => bumpQty(w, d),
     removeLine: w => removeLine(w),
