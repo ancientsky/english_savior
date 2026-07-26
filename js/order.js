@@ -130,6 +130,27 @@ const OrderGame = (() => {
              { w: 'blue', zh: '藍色', btn: '藍', e: '🟦' },
              { w: 'green', zh: '綠色', btn: '綠', e: '🟩' }],
     },
+    /* 🛎️ 服務與等待 — how long. Deliberately an ENUMERATED PHRASE at slot 9,
+       not a second number field. "a room for two nights" counts nights, not
+       rooms, so a second − 2 + stepper next to the quantity one would be two
+       identical-looking counters in front of a nine-year-old. Spelling the
+       options out also makes "for one nights" unconstructable — the singular is
+       guaranteed by the list rather than by a pluralisation rule this file would
+       otherwise have to invent, and get wrong.
+       Both axes share feat 'stay': one region teaches "how long", and each item
+       carries whichever unit is real for it. No item ever has both. */
+    nights: {
+      slot: 9, feat: 'stay', noun: '住幾晚',
+      opts: [{ w: 'for one night', zh: '一晚', btn: '1 晚', e: '🌙' },
+             { w: 'for two nights', zh: '兩晚', btn: '2 晚', e: '🌙' },
+             { w: 'for three nights', zh: '三晚', btn: '3 晚', e: '🌙' }],
+    },
+    hours: {
+      slot: 9, feat: 'stay', noun: '借幾小時',
+      opts: [{ w: 'for one hour', zh: '一小時', btn: '1 hr', e: '⏱️' },
+             { w: 'for two hours', zh: '兩小時', btn: '2 hr', e: '⏱️' },
+             { w: 'for three hours', zh: '三小時', btn: '3 hr', e: '⏱️' }],
+    },
   };
 
   const chAxis = id => ORDER_CHOICES[id];
@@ -286,6 +307,10 @@ const OrderGame = (() => {
       cs.filter(id => !mustCh.has(ORDER_CHOICES[id].feat)).forEach(id => {
         if (room > 0 && chLeft > 0 && Math.random() < 0.6) { setCh(id); room--; chLeft--; }
       });
+      // "two rooms for two nights" is two different numbers in one breath, and
+      // the second one does not count rooms. A duration wins: it is what this
+      // region is teaching, so the quantity drops back to one.
+      if (cs.some(id => ORDER_CHOICES[id].slot >= 5 && chGet(line, id))) line.qty = 1;
 
       let take = forceLevel ? 1 : (budget > 0 ? rand(Math.min(budget, 2) + 1) : 0);
       budget -= take;

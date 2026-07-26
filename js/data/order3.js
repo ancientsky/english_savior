@@ -63,9 +63,18 @@ Object.assign(ORDER_EXTRAS, {
   'a clip':         { zh: '扣環',   e: '🧷' },
   'a name tag':     { zh: '名牌',   e: '🏷️' },
   'a bell':         { zh: '鈴鐺',   e: '🔔' },
-  cable:            { zh: '充電線', e: '🔌' },
+  'a cable':        { zh: '充電線', e: '🔌' },
   padding:          { zh: '軟墊',   e: '🛋️' },
   'a hanger':       { zh: '衣架',   e: '🪝' },
+  // 🛎️ 服務與等待
+  towels:           { zh: '毛巾',   e: '🧻' },
+  breakfast:        { zh: '早餐',   e: '🍳' },
+  wifi:             { zh: '無線網路', e: '📶' },
+  rackets:          { zh: '球拍',   e: '🏸' },
+  paddles:          { zh: '桌球拍', e: '🏓' },
+  'a lock':         { zh: '鎖',     e: '🔐' },
+  'a basket':       { zh: '車籃',   e: '🧺' },
+  'a locker':       { zh: '置物櫃', e: '🔒' },
 });
 
 const LIFE_REGIONS = [
@@ -78,6 +87,8 @@ const LIFE_REGIONS = [
   // t-shirt" and no more.
   { id: 'fitting', name: '挑選與試穿', e: '👕', teaches: ['fit', 'colour'],
     tip: '這一區要聽兩件事：尺寸（small／medium／large）和顏色（black／white／red／blue／green）。英文的順序是尺寸在前、顏色在後——a medium blue t-shirt。' },
+  { id: 'waiting', name: '服務與等待', e: '🛎️', teaches: 'stay',
+    tip: '最後一區：客人會說要用多久——for two nights（住兩晚）、for two hours（借兩小時）。這一句放在東西的「後面」，而且排在 with 之前：a room for two nights with breakfast。' },
 ];
 
 const LIFE_SHOPS = [
@@ -297,7 +308,7 @@ const LIFE_SHOPS = [
       { w: 'phone case', zh: '手機殼', e: '📱', kind: 'item', pl: 'phone cases', choices: ['colour'],
         def: [], ex: ['a strap', 'stickers'] },
       { w: 'power bank', zh: '行動電源', e: '🔋', kind: 'item', pl: 'power banks', choices: ['colour'],
-        def: ['cable'], ex: ['a case'] },
+        def: [], ex: ['a cable', 'a case'] },
       { w: 'earphones', zh: '耳機', e: '🎧', kind: 'item', art: 'some', choices: ['colour'],
         def: [], ex: ['a case', 'a clip'] },
       { w: 'screen protector', zh: '保護貼', e: '🛡️', kind: 'item', pl: 'screen protectors',
@@ -336,6 +347,91 @@ const LIFE_SHOPS = [
         def: [], ex: ['a name tag', 'stickers'] },
       { w: 'pet carrier', zh: '外出籠', e: '🧳', kind: 'item', pl: 'pet carriers', choices: ['fit', 'colour'],
         def: ['padding'], ex: ['a strap'] },
+    ],
+  },
+  /* ================= 🛎️ 服務與等待 — stay（用多久）=================
+     The last region, and the one that collects everything: these counters still
+     inherit when / fit / colour, so a shift here is the whole world at once.
+     `nights` vs `hours` is per item — a room is booked in nights and a bike in
+     hours, and no counter mixes the two units on one thing. */
+  {
+    id: 'guesthouse', name: '民宿櫃台', e: '🏨', unlockAt: 132, region: 'waiting',
+    intro: '民宿櫃台！客人會說住幾晚——a room for two nights，時間放在房間後面。',
+    menu: [
+      { w: 'room', zh: '房間', e: '🏨', kind: 'stay', pl: 'rooms', choices: ['nights'],
+        def: ['towels'], ex: ['breakfast', 'wifi'] },
+      { w: 'family room', zh: '家庭房', e: '👨‍👩‍👧', kind: 'stay', pl: 'family rooms', choices: ['nights'],
+        def: ['towels'], ex: ['breakfast'] },
+      { w: 'bunk bed', zh: '上下舖', e: '🛌', kind: 'stay', pl: 'bunk beds', choices: ['nights'],
+        def: ['towels'], ex: ['wifi'] },
+      { w: 'locker', zh: '置物櫃', e: '🔒', kind: 'stay', pl: 'lockers', choices: ['nights'],
+        def: [], ex: ['a name tag'] },
+      { w: 'hair dryer', zh: '吹風機', e: '💨', kind: 'item', pl: 'hair dryers', choices: ['colour'],
+        def: [], ex: ['a cable'] },
+    ],
+  },
+  {
+    id: 'bikerental', name: '單車租借站', e: '🚲', unlockAt: 147, region: 'waiting',
+    intro: '單車站的客人說要借幾小時——for two hours。安全帽還要挑尺寸。',
+    menu: [
+      { w: 'bike', zh: '腳踏車', e: '🚲', kind: 'stay', pl: 'bikes', choices: ['hours'],
+        def: [], ex: ['a lock', 'a basket'] },
+      { w: 'electric bike', zh: '電動車', e: '⚡', kind: 'stay', pl: 'electric bikes', choices: ['hours'],
+        def: [], ex: ['a lock'] },
+      { w: 'mountain bike', zh: '登山車', e: '🚵', kind: 'stay', pl: 'mountain bikes', choices: ['hours'],
+        def: [], ex: ['a basket'] },
+      { w: 'helmet', zh: '安全帽', e: '⛑️', kind: 'item', pl: 'helmets', choices: ['fit', 'colour'],
+        def: [], ex: ['a name tag'] },
+      { w: 'bike lock', zh: '車鎖', e: '🔐', kind: 'item', pl: 'bike locks', choices: ['colour'],
+        def: [], ex: ['a clip'] },
+    ],
+  },
+  {
+    id: 'ktv', name: 'KTV 櫃台', e: '🎤', unlockAt: 163, region: 'waiting',
+    intro: 'KTV！包廂要唱幾小時，飲料要不要冰塊，一起聽清楚。',
+    menu: [
+      { w: 'karaoke room', zh: '包廂', e: '🎤', kind: 'stay', pl: 'karaoke rooms', choices: ['hours'],
+        def: [], ex: ['snacks'] },
+      { w: 'party room', zh: '派對包廂', e: '🎉', kind: 'stay', pl: 'party rooms', choices: ['hours'],
+        def: [], ex: ['snacks'] },
+      { w: 'microphone', zh: '麥克風', e: '🎙️', kind: 'item', pl: 'microphones', choices: ['colour'],
+        def: [], ex: ['a strap'] },
+      { w: 'drink', zh: '飲料', e: '🥤', kind: 'drink', sizes: true, pl: 'drinks',
+        def: ['ice'], ex: [] },
+      { w: 'fruit plate', zh: '水果盤', e: '🍉', kind: 'item', pl: 'fruit plates',
+        def: [], ex: ['snacks'] },
+    ],
+  },
+  {
+    id: 'sportcenter', name: '運動中心櫃台', e: '🏸', unlockAt: 180, region: 'waiting',
+    intro: '運動中心：場地都是論小時借的，還要問要不要租球拍。',
+    menu: [
+      { w: 'badminton court', zh: '羽球場', e: '🏸', kind: 'stay', pl: 'badminton courts', choices: ['hours'],
+        def: [], ex: ['rackets'] },
+      { w: 'ping pong table', zh: '桌球桌', e: '🏓', kind: 'stay', pl: 'ping pong tables', choices: ['hours'],
+        def: [], ex: ['paddles'] },
+      { w: 'swimming lane', zh: '游泳水道', e: '🏊', kind: 'stay', pl: 'swimming lanes', choices: ['hours'],
+        def: [], ex: ['a locker'] },
+      { w: 'locker', zh: '置物櫃', e: '🔒', kind: 'stay', pl: 'lockers', choices: ['hours'],
+        def: [], ex: ['a name tag'] },
+      { w: 'towel', zh: '毛巾', e: '🧻', kind: 'item', pl: 'towels', choices: ['colour'],
+        def: [], ex: ['a name tag'] },
+    ],
+  },
+  {
+    id: 'parking', name: '停車場繳費亭', e: '🅿️', unlockAt: 198, region: 'waiting',
+    intro: '最後一個櫃台！停多久、要不要收據，全部聽完再動手。',
+    menu: [
+      { w: 'parking space', zh: '停車位', e: '🅿️', kind: 'stay', pl: 'parking spaces', choices: ['hours'],
+        def: [], ex: ['a receipt'] },
+      { w: 'motorbike space', zh: '機車位', e: '🏍️', kind: 'stay', pl: 'motorbike spaces', choices: ['hours'],
+        def: [], ex: ['a receipt'] },
+      { w: 'charging spot', zh: '充電車位', e: '🔌', kind: 'stay', pl: 'charging spots', choices: ['hours'],
+        def: [], ex: ['a cable'] },
+      { w: 'car wash', zh: '洗車', e: '🚿', kind: 'item', pl: 'car washes',
+        def: [], ex: ['a receipt'] },
+      { w: 'parking card', zh: '停車卡', e: '🎫', kind: 'item', pl: 'parking cards', choices: ['colour'],
+        def: [], ex: ['a name tag'] },
     ],
   },
 ];
