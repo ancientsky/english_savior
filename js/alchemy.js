@@ -202,7 +202,11 @@ const AlchemyGame = (() => {
       const bad = partById(a).text + partById(b).text;
       SoundManager.playWrong();
       puff();
-      flash(`💨「${bad}」不是一個英文單字，換個組合再試試！`, 'bad');
+      // Some near-misses deserve a real explanation: "noone" is a sensible idea
+      // spelled as one word, and just saying "not a word" would leave the child
+      // thinking the idea itself was wrong.
+      const near = typeof ALCHEMY_NEARMISS !== 'undefined' && ALCHEMY_NEARMISS[bad];
+      flash(near ? `💡 ${near}` : `💨「${bad}」不是一個英文單字，換個組合再試試！`, 'bad');
       slots = [null, null];
       busy = false;
       renderShelf();
