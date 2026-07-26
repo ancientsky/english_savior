@@ -111,6 +111,25 @@ const OrderGame = (() => {
       opts: [{ w: 'one-way', zh: '單程', btn: '單程', e: '➡️' },
              { w: 'round-trip', zh: '來回', btn: '來回', e: '🔁' }],
     },
+    // 👕 挑選與試穿. Slots 1 and 2 put these BEFORE hot/iced, which is the real
+    // English order for the stack a clothes shop needs: "a medium blue t-shirt".
+    // Deliberately NOT merged into `sizes`: an unheard "large coffee" means the
+    // child didn't mind, so small is a fair default; an unheard "medium shirt"
+    // means they missed it, so the tray must start empty and be marked wrong.
+    fit: {
+      slot: 1, feat: 'fit', noun: '尺寸',
+      opts: [{ w: 'small', zh: '小號', btn: 'S', e: '🩳' },
+             { w: 'medium', zh: '中號', btn: 'M', e: '👕' },
+             { w: 'large', zh: '大號', btn: 'L', e: '🧥' }],
+    },
+    colour: {
+      slot: 2, feat: 'colour', noun: '顏色',
+      opts: [{ w: 'black', zh: '黑色', btn: '黑', e: '⬛' },
+             { w: 'white', zh: '白色', btn: '白', e: '⬜' },
+             { w: 'red', zh: '紅色', btn: '紅', e: '🟥' },
+             { w: 'blue', zh: '藍色', btn: '藍', e: '🟦' },
+             { w: 'green', zh: '綠色', btn: '綠', e: '🟩' }],
+    },
   };
 
   const chAxis = id => ORDER_CHOICES[id];
@@ -137,11 +156,26 @@ const OrderGame = (() => {
   function featuresOf(s) {
     const on = new Set();
     for (const r of REGIONS()) {
-      if (r.teaches) on.add(r.teaches);
+      teachesOf(r).forEach(f => on.add(f));
       if (r.id === s.region) break;
     }
     PATTERN_FEATURES().forEach(f => { if (s[f]) on.add(f); });
     return on;
+  }
+
+  // A region may introduce more than one pattern at once when they only make
+  // sense together — a clothes shop that taught size but not colour would be
+  // teaching half a phrase. Always an array, so callers never branch.
+  const teachesOf = r => (!r || !r.teaches) ? [] : [].concat(r.teaches);
+
+  // What THIS shop exists to teach: its region's patterns plus anything it opted
+  // into early. Everything else it has is inherited revision. The distinction
+  // drives the choice budget below — same rule factsOf already uses for asks.
+  function ownFeatures(s) {
+    return new Set([
+      ...teachesOf(regionOf(s)),
+      ...PATTERN_FEATURES().filter(f => s[f]),
+    ]);
   }
 
   // Every pattern flag a shop may switch on early. Derived from the choice
@@ -223,6 +257,15 @@ const OrderGame = (() => {
 
     orderAsks = makeAsks();
 
+    // Choice axes are exempt from DIFFS.facts on purpose (see factsOf), but a
+    // hard three-line order at a clothes shop could otherwise carry six of them
+    // uncounted. So they get their own per-order budget — and, exactly like the
+    // asks, whatever THIS shop is here to teach is mandatory and free: a size
+    // budget that stripped "a medium blue t-shirt" back to "a t-shirt" would
+    // mean the region never once teaches its own phrase.
+    const mustCh = ownFeatures(shop);
+    let chLeft = { easy: 1, medium: 2, hard: 3 }[difficulty] || 2;
+
     return trimToBudget(chosen.map(item => {
       // Quantity only where "two ___" is real English (the data marks those)
       const qty = cfg.qty && item.pl && Math.random() < 0.45 ? 2 + rand(2) : 1;
@@ -233,7 +276,16 @@ const OrderGame = (() => {
       // by difficulty would introduce "iced" for the first time in medium, where
       // the sentence is hidden.
       const line = { w: item.w, qty, size, temp: null, ch: {} };
-      choicesOf(item).forEach(id => chSet(line, id, pick(ORDER_CHOICES[id].opts).w));
+      const setCh = id => chSet(line, id, pick(ORDER_CHOICES[id].opts).w);
+      const cs = choicesOf(item);
+      const must = cs.filter(id => mustCh.has(ORDER_CHOICES[id].feat));
+      must.forEach(setCh);
+      // no line carries more than two axes however much budget is left — three
+      // adjectives stacked on one noun stops being listenable
+      let room = 2 - must.length;
+      cs.filter(id => !mustCh.has(ORDER_CHOICES[id].feat)).forEach(id => {
+        if (room > 0 && chLeft > 0 && Math.random() < 0.6) { setCh(id); room--; chLeft--; }
+      });
 
       let take = forceLevel ? 1 : (budget > 0 ? rand(Math.min(budget, 2) + 1) : 0);
       budget -= take;
@@ -358,8 +410,9 @@ const OrderGame = (() => {
         // These two override the ask's comma:false. A bare adverbial runs on,
         // but a "for ..." phrase landing right after a "no butter" clause reads
         // as "no butter for the show" — so it takes the parenthetical comma back.
-        { w: 'for the four o\'clock show', zh: '四點那場', e: '🎬', comma: true },
-        { w: 'for the seven o\'clock show', zh: '七點那場', e: '🎬', comma: true },
+        // `only` — a cinema line, so no shop gets it unless it names it
+        { w: 'for the four o\'clock show', zh: '四點那場', e: '🎬', comma: true, only: true },
+        { w: 'for the seven o\'clock show', zh: '七點那場', e: '🎬', comma: true, only: true },
       ],
     },
   };
@@ -367,10 +420,14 @@ const OrderGame = (() => {
   const asksOf = s2 => Object.keys(ORDER_ASKS).filter(id => featuresOf(s2).has(ORDER_ASKS[id].feat));
   const askOpt = (id, w) => ORDER_ASKS[id].opts.find(o => o.w === w) || { w, zh: w };
   // A shop may narrow the options — "for the seven o'clock show" is right at a
-  // cinema and absurd at a bank.
+  // cinema and absurd at a bank. Options flagged `only` are OUT of the default
+  // set and have to be asked for by name: defaulting to "every option" meant a
+  // clothes shop that simply didn't mention `when` inherited the cinema's lines
+  // and sold backpacks "for the four o'clock show".
   const askOpts = id => {
     const only = (shop.askOpts || {})[id];
-    return only ? ORDER_ASKS[id].opts.filter(o => only.includes(o.w)) : ORDER_ASKS[id].opts;
+    return only ? ORDER_ASKS[id].opts.filter(o => only.includes(o.w))
+                : ORDER_ASKS[id].opts.filter(o => !o.only);
   };
 
   function makeAsks() {
@@ -482,8 +539,11 @@ const OrderGame = (() => {
   // introduces it, and remembered in save.taught.
   function teachRegion() {
     const r = regionOf(shop);
-    if (!r.teaches || save.taught[r.teaches]) return;
-    save.taught[r.teaches] = 1;
+    const fs = teachesOf(r);
+    // shown once if ANY of the region's patterns is new; still keyed per pattern
+    // so saves written before regions could teach two things keep working
+    if (!fs.length || fs.every(f => save.taught[f])) return;
+    fs.forEach(f => { save.taught[f] = 1; });
     persist();
     els.result.innerHTML =
       `<div class="od-result ok od-teach"><strong>${r.e} ${r.name}：新句型！</strong>
@@ -1175,6 +1235,10 @@ const OrderGame = (() => {
       patterns: () => PATTERN_FEATURES(),
       // the ask ids, for the "one ask per shop" rule
       asks: () => Object.values(ORDER_ASKS).map(a => a.feat),
+      // every pre-nominal adjective any axis can emit, so checks that have to
+      // look "past the adjectives" at the noun stay complete as axes are added
+      adjectives: () => Object.values(ORDER_CHOICES)
+        .filter(a => a.slot < 5).flatMap(a => a.opts.map(o => o.w)),
       // which sentence patterns a shop actually has switched on (2a inheritance)
       features: i => [...featuresOf(SHOPS()[i])],
       // n generated orders for one (shop, difficulty) — the fuzzing entry point
@@ -1245,6 +1309,8 @@ const OrderGame = (() => {
     add: w => addToTray(w),
     setSize: (w, s) => setSize(w, s),
     setTemp: (w, t) => setTemp(w, t),
+    // any axis, not just 冰熱 — setTemp stays as the older alias
+    setChoice: (w, id, v) => setChoice(w, id, v),
     setLevel: (w, x, lv) => setLevel(w, x, lv),
     setPlace: p => setPlace(p),
     // any ask, not just 內用/外帶 — setPlace stays as the older alias

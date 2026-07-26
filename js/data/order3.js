@@ -51,6 +51,21 @@ Object.assign(ORDER_EXTRAS, {
   retouching: { zh: '修圖',     e: '🪄' },
   envelopes:  { zh: '信封',     e: '✉️' },
   stamps:     { zh: '郵票',     e: '📮' },
+  // 👕 挑選與試穿. An id that carries its own article reads fine after "with"
+  // ("with a strap") but NOT after "no", so these may only ever sit in `ex` —
+  // the validator enforces it, because "no a wash" already shipped once.
+  'gift wrap':      { zh: '禮物包裝', e: '🧧' },
+  'spare buttons':  { zh: '備用鈕扣', e: '🔘' },
+  stickers:         { zh: '貼紙',   e: '💮' },
+  solution:         { zh: '保養液', e: '🧴' },
+  'a case':         { zh: '收納盒', e: '🧰' },
+  'a strap':        { zh: '掛繩',   e: '🪢' },
+  'a clip':         { zh: '扣環',   e: '🧷' },
+  'a name tag':     { zh: '名牌',   e: '🏷️' },
+  'a bell':         { zh: '鈴鐺',   e: '🔔' },
+  cable:            { zh: '充電線', e: '🔌' },
+  padding:          { zh: '軟墊',   e: '🛋️' },
+  'a hanger':       { zh: '衣架',   e: '🪝' },
 });
 
 const LIFE_REGIONS = [
@@ -58,6 +73,11 @@ const LIFE_REGIONS = [
     tip: '基本功：聽清楚要幾個、要加什麼、不要什麼。' },
   { id: 'outing', name: '出門辦事', e: '🚉', teaches: 'when',
     tip: '這一區的客人會說什麼時候——today、tomorrow、at three o\'clock。買票的還會說 one-way（單程）還是 round-trip（來回）。' },
+  // Two patterns at once, because they are one phrase: a shop that taught size
+  // but not colour would leave the child able to hear half of "a medium blue
+  // t-shirt" and no more.
+  { id: 'fitting', name: '挑選與試穿', e: '👕', teaches: ['fit', 'colour'],
+    tip: '這一區要聽兩件事：尺寸（small／medium／large）和顏色（black／white／red／blue／green）。英文的順序是尺寸在前、顏色在後——a medium blue t-shirt。' },
 ];
 
 const LIFE_SHOPS = [
@@ -146,7 +166,7 @@ const LIFE_SHOPS = [
      may carry at most ONE ask, which is why nothing here also uses togo. */
   {
     id: 'trainstation', name: '火車站售票口', e: '🚄', unlockAt: 24, region: 'outing',
-    when: 1, trip: 1, askOpts: { when: ['today', 'tomorrow', "at three o'clock", "at five o'clock"] },
+    when: 1, trip: 1,
     intro: '售票口！客人會說單程還是來回，還會說哪一天要走。',
     menu: [
       { w: 'ticket', zh: '車票', e: '🎫', kind: 'ticket', pl: 'tickets', choices: ['trip'],
@@ -164,7 +184,7 @@ const LIFE_SHOPS = [
   },
   {
     id: 'busstation', name: '客運轉運站', e: '🚌', unlockAt: 31, region: 'outing',
-    when: 1, trip: 1, askOpts: { when: ['today', 'tomorrow', "at three o'clock", "at five o'clock"] },
+    when: 1, trip: 1,
     intro: '客運站的客人趕時間，班次和單程來回都要一次聽清楚。',
     menu: [
       { w: 'bus ticket', zh: '客運票', e: '🎫', kind: 'ticket', pl: 'bus tickets', choices: ['trip'],
@@ -198,7 +218,7 @@ const LIFE_SHOPS = [
   },
   {
     id: 'taxi', name: '叫車服務台', e: '🚕', unlockAt: 48, region: 'outing',
-    when: 1, askOpts: { when: ['today', 'tomorrow', "at three o'clock", "at five o'clock"] },
+    when: 1,
     intro: '幫客人叫車：幾台、什麼時候、要不要兒童座椅。',
     menu: [
       { w: 'taxi', zh: '計程車', e: '🚕', kind: 'service', pl: 'taxis',
@@ -215,7 +235,7 @@ const LIFE_SHOPS = [
   },
   {
     id: 'salon', name: '美髮沙龍', e: '💇', unlockAt: 58, region: 'outing',
-    when: 1, askOpts: { when: ['today', 'tomorrow', "at three o'clock", "at five o'clock"] },
+    when: 1,
     intro: '出門辦事最後一站！剪髮要預約時間，還要說洗不洗、要不要抓髮膠。',
     menu: [
       { w: 'haircut', zh: '剪髮', e: '💇', kind: 'service', pl: 'haircuts',
@@ -230,6 +250,92 @@ const LIFE_SHOPS = [
         def: ['wash'], ex: ['gel'] },
       { w: 'hair band', zh: '髮帶', e: '🎀', kind: 'item', pl: 'hair bands',
         def: [], ex: ['ribbon'] },
+    ],
+  },
+  /* ================= 👕 挑選與試穿 — fit（尺寸）＋ colour（顏色）=================
+     `fit` and `colour` only go on items where they are a real question. Glasses
+     have a colour but not a size; a cable has neither a size nor much of a
+     colour choice, so it carries only what it really has. Putting an axis on an
+     item that does not have it would teach a phrase nobody says. */
+  {
+    id: 'clothes', name: '潮流服飾店', e: '👕', unlockAt: 68, region: 'fitting',
+    intro: '服飾店！客人會說尺寸和顏色——a medium blue t-shirt，兩件都要聽到。',
+    menu: [
+      { w: 't-shirt', zh: '短T', e: '👕', kind: 'wear', pl: 't-shirts', choices: ['fit', 'colour'],
+        def: [], ex: ['gift wrap', 'a hanger'] },
+      { w: 'hoodie', zh: '帽T', e: '🧥', kind: 'wear', pl: 'hoodies', choices: ['fit', 'colour'],
+        def: [], ex: ['gift wrap', 'spare buttons'] },
+      { w: 'skirt', zh: '裙子', e: '👗', kind: 'wear', pl: 'skirts', choices: ['fit', 'colour'],
+        def: [], ex: ['gift wrap', 'spare buttons'] },
+      { w: 'cap', zh: '鴨舌帽', e: '🧢', kind: 'wear', pl: 'caps', choices: ['colour'],
+        def: [], ex: ['gift wrap'] },
+      { w: 'scarf', zh: '圍巾', e: '🧣', kind: 'wear', pl: 'scarves', choices: ['colour'],
+        def: [], ex: ['gift wrap'] },
+    ],
+  },
+  {
+    id: 'optician', name: '眼鏡行', e: '👓', unlockAt: 79, region: 'fitting',
+    intro: '眼鏡行：鏡框有顏色，但沒有 S／M／L——只有能問的才會被問到。',
+    menu: [
+      // plural-only nouns: "a glasses" is not English, so the data says "some"
+      { w: 'glasses', zh: '眼鏡', e: '👓', kind: 'item', art: 'some', choices: ['colour'],
+        def: [], ex: ['a case', 'a strap'] },
+      { w: 'sunglasses', zh: '太陽眼鏡', e: '🕶️', kind: 'item', art: 'some', choices: ['colour'],
+        def: [], ex: ['a case'] },
+      { w: 'glasses case', zh: '眼鏡盒', e: '🧰', kind: 'item', pl: 'glasses cases', choices: ['colour'],
+        def: [], ex: ['a strap', 'stickers'] },
+      { w: 'lens cloth', zh: '拭鏡布', e: '🧽', kind: 'item', pl: 'lens cloths', choices: ['colour'],
+        def: [], ex: ['gift wrap'] },
+      { w: 'contact lenses', zh: '隱形眼鏡', e: '🔵', kind: 'item', art: 'some',
+        def: ['solution'], ex: ['a case'] },
+    ],
+  },
+  {
+    id: 'phoneshop', name: '手機配件行', e: '📱', unlockAt: 91, region: 'fitting',
+    intro: '手機配件行：殼和耳機都有顏色，客人還會說要不要附充電線。',
+    menu: [
+      { w: 'phone case', zh: '手機殼', e: '📱', kind: 'item', pl: 'phone cases', choices: ['colour'],
+        def: [], ex: ['a strap', 'stickers'] },
+      { w: 'power bank', zh: '行動電源', e: '🔋', kind: 'item', pl: 'power banks', choices: ['colour'],
+        def: ['cable'], ex: ['a case'] },
+      { w: 'earphones', zh: '耳機', e: '🎧', kind: 'item', art: 'some', choices: ['colour'],
+        def: [], ex: ['a case', 'a clip'] },
+      { w: 'screen protector', zh: '保護貼', e: '🛡️', kind: 'item', pl: 'screen protectors',
+        def: [], ex: ['gift wrap'] },
+      { w: 'phone strap', zh: '手機掛繩', e: '🪢', kind: 'item', pl: 'phone straps', choices: ['colour'],
+        def: [], ex: ['a clip', 'stickers'] },
+    ],
+  },
+  {
+    id: 'stationery', name: '文具背包店', e: '🎒', unlockAt: 104, region: 'fitting',
+    intro: '開學季的文具店！背包和水壺都有大小和顏色。',
+    menu: [
+      { w: 'backpack', zh: '背包', e: '🎒', kind: 'item', pl: 'backpacks', choices: ['fit', 'colour'],
+        def: [], ex: ['a name tag', 'stickers'] },
+      { w: 'water bottle', zh: '水壺', e: '🍶', kind: 'item', pl: 'water bottles', choices: ['fit', 'colour'],
+        def: [], ex: ['a strap', 'stickers'] },
+      { w: 'lunch bag', zh: '便當袋', e: '🥪', kind: 'item', pl: 'lunch bags', choices: ['fit', 'colour'],
+        def: [], ex: ['a name tag'] },
+      { w: 'pencil case', zh: '鉛筆盒', e: '✏️', kind: 'item', pl: 'pencil cases', choices: ['colour'],
+        def: [], ex: ['stickers', 'a name tag'] },
+      { w: 'umbrella', zh: '雨傘', e: '☂️', kind: 'item', pl: 'umbrellas', choices: ['colour'],
+        def: [], ex: ['a name tag'] },
+    ],
+  },
+  {
+    id: 'petshop', name: '寵物用品店', e: '🐾', unlockAt: 118, region: 'fitting',
+    intro: '挑選與試穿最後一站！狗狗的項圈也要合身——尺寸和顏色一起說。',
+    menu: [
+      { w: 'collar', zh: '項圈', e: '📿', kind: 'item', pl: 'collars', choices: ['fit', 'colour'],
+        def: [], ex: ['a bell', 'a name tag'] },
+      { w: 'leash', zh: '牽繩', e: '🐕', kind: 'item', pl: 'leashes', choices: ['fit', 'colour'],
+        def: [], ex: ['a clip'] },
+      { w: 'pet bed', zh: '寵物床', e: '🛏️', kind: 'item', pl: 'pet beds', choices: ['fit', 'colour'],
+        def: ['padding'], ex: ['a name tag'] },
+      { w: 'pet bowl', zh: '飼料碗', e: '🥣', kind: 'item', pl: 'pet bowls', choices: ['fit', 'colour'],
+        def: [], ex: ['a name tag', 'stickers'] },
+      { w: 'pet carrier', zh: '外出籠', e: '🧳', kind: 'item', pl: 'pet carriers', choices: ['fit', 'colour'],
+        def: ['padding'], ex: ['a strap'] },
     ],
   },
 ];
