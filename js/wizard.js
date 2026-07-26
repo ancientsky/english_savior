@@ -20,6 +20,15 @@
    summon, hit or miss. Without it, browsing the spellbook and casting
    everything was strictly better than thinking.
 
+   A summon acts on the WHOLE scene, not just the blocker in front of the
+   wizard: fire burns every dry thing, cold freezes every stretch of water,
+   light reveals every dark room — and a flame you flew over is still burning,
+   so it lights the way for you. Chained obstacles clear for free, which is
+   what turns "which tool" into a decision worth making. Reactions are marked
+   on the obstacles themselves (🪵 💧 💡 💦) so the chain is always visible in
+   advance, and every reaction tag is already one of that obstacle's own
+   solutions — a chain can never make a level unsolvable.
+
    Physics is deliberately not a rigid-body engine: summoned objects fall to a
    resting spot chosen by what they solved. It reads as physical, is fully
    deterministic, and can never wedge a child in an unwinnable scene.
@@ -208,7 +217,7 @@ const WizardGame = (() => {
   function startLevel(i) {
     levelIndex = i;
     level = WIZARD_LEVELS[i];
-    obstacles = level.obs.map(type => ({ type, solved: false, solveTag: null, solveWord: null, anim: 0 }));
+    obstacles = level.obs.map(type => ({ type, solved: false, solveTag: null, solveWord: null, chained: false, anim: 0 }));
     layoutObstacles();
     objects = [];
     effects = [];
@@ -271,6 +280,68 @@ const WizardGame = (() => {
     }
   }
 
+  // W3: what this summon puts INTO THE SCENE, not just at the obstacle in
+  // front of the wizard. Fire burns and glows; a flame you flew over is still
+  // burning behind you, so it lights whatever is further down the path.
+  function sceneEffects(tag, o) {
+    const fx = new Set();
+    if (tag === 'fire') { fx.add('fire'); fx.add('light'); }
+    if (tag === 'cold') fx.add('cold');
+    if (tag === 'water') fx.add('water');
+    if (tag === 'light') fx.add('light');
+    if (o && WIZARD_OBSTACLES[o.type].glows && tag === 'fly') fx.add('light');
+    return fx;
+  }
+
+  // Apply those effects to every obstacle further along. A chained obstacle is
+  // solved for FREE — no extra magic — which is the whole reward for picking
+  // the tool that does two jobs. It can never make a level harder: every
+  // reaction tag is already one of that obstacle's own solutions.
+  function applyChains(tag, from, word) {
+    const fx = sceneEffects(tag, from);
+    if (!fx.size) return [];
+    const hit = [];
+    obstacles.forEach(o => {
+      if (o.solved || o === from) return;
+      const info = WIZARD_OBSTACLES[o.type];
+      for (const f of fx) {
+        const r = WIZARD_REACTS[f];
+        if (!r || !info[r.prop]) continue;
+        o.solved = true;
+        o.solveTag = r.tag;
+        o.solveWord = word;
+        o.anim = 0;
+        o.chained = true;
+        o.solveObj = {
+          word, e: word.e, x: o.cx, y: -40, vy: 0,
+          targetY: restingSpot(o, r.tag).y, floaty: restingSpot(o, r.tag).float,
+          bob: Math.random() * Math.PI * 2, landed: false, solving: true,
+        };
+        objects.push(o.solveObj);
+        burst(o.cx, GROUND_Y - 60, 10);
+        hit.push({ o, tag: r.tag, verb: r.verb });
+        creditSolution(r.tag);
+        break;
+      }
+    });
+    return hit;
+  }
+
+  // Record a solving tag against this level's 📖 collection, paying the
+  // new-solution bonus once. Shared by direct summons and chained clears.
+  function creditSolution(tag) {
+    const known = save.found[level.id] || [];
+    runFoundTags.add(tag);
+    if (known.includes(tag)) return false;
+    known.push(tag);
+    save.found[level.id] = known;
+    persist();
+    GameEngine.addXP(NEW_SOLUTION_XP);
+    GameEngine.addGems(NEW_SOLUTION_GEMS);
+    GameEngine.recordWizardSolution();
+    return true;
+  }
+
   // Called once the player has spelled the word correctly.
   function summon(word) {
     const o = currentObstacle();
@@ -327,22 +398,21 @@ const WizardGame = (() => {
       burst(o.cx, GROUND_Y - 60, 14);
 
       // ---- new way of solving this level? ----
-      const known = save.found[level.id] || [];
-      const fresh = !known.includes(solveTag);
-      runFoundTags.add(solveTag);
-      if (fresh) {
-        known.push(solveTag);
-        save.found[level.id] = known;
-        persist();
-        GameEngine.addXP(NEW_SOLUTION_XP);
-        GameEngine.addGems(NEW_SOLUTION_GEMS);
-        GameEngine.recordWizardSolution();
-        toast('✨ 新解法！', `用「${WIZARD_TAGS[solveTag].name}」破解 — 這一關你已經找到 ${known.length}/${starTarget(level)} 種解法`, 2800);
+      const fresh = creditSolution(solveTag);
+      // ---- and what did it do to the REST of the scene? ----
+      const chained = applyChains(solveTag, o, word);
+      if (chained.length) {
+        SoundManager.playCorrect();
+        toast('🔗 連鎖！', `${word.e} ${word.w} 的力量傳了過去 — ` +
+          chained.map(c => `${WIZARD_OBSTACLES[c.o.type].icon} ${WIZARD_OBSTACLES[c.o.type].name}${c.verb}`).join('、') +
+          '！這一步等於省下一次召喚。', 3400);
+      } else if (fresh) {
+        toast('✨ 新解法！', `用「${WIZARD_TAGS[solveTag].name}」破解 — 這一關你已經找到 ${(save.found[level.id] || []).length}/${starTarget(level)} 種解法`, 2800);
       } else {
         toast(`${WIZARD_TAGS[solveTag].icon} 成功！`, `${word.e} ${word.w}（${word.zh}）${WIZARD_TAGS[solveTag].verb}`, 2400);
       }
       renderHUD();
-      setTimeout(startWalk, 720);
+      setTimeout(startWalk, chained.length ? 1000 : 720);
     } else {
       SoundManager.playWrong();
       const info = o ? WIZARD_OBSTACLES[o.type] : null;
@@ -504,6 +574,7 @@ const WizardGame = (() => {
     objects.forEach(ob => drawEmoji(ob.e, ob.x, ob.y, 46));
 
     obstacles.forEach(o => drawObstacle(o));
+    obstacles.forEach(o => drawReactBadge(o));
 
     // ---- goal ----
     const bob = Math.sin(performance.now() / 320) * 5;
@@ -522,6 +593,23 @@ const WizardGame = (() => {
       ctx.fill();
       ctx.restore();
     });
+  }
+
+  // A marker on every obstacle that reacts to something in the air, so a
+  // child can see the chain coming instead of being surprised by it. Dry
+  // vines carry 🪵 (they burn), water 💧 (it freezes), and so on.
+  function drawReactBadge(o) {
+    const info = WIZARD_OBSTACLES[o.type];
+    if (o.solved || !info.badge) return;
+    const x = o.cx, y = GROUND_Y - 118;
+    ctx.save();
+    ctx.globalAlpha = 0.55 + 0.25 * Math.sin(performance.now() / 500);
+    ctx.fillStyle = 'rgba(20,12,40,.55)';
+    ctx.beginPath();
+    ctx.arc(x, y, 14, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    drawEmoji(info.badge, x, y, 17, 0.95);
   }
 
   function drawObstacle(o) {
@@ -700,7 +788,11 @@ const WizardGame = (() => {
         <p>小巫師被困住了！<strong>拼出英文單字就能把那個東西召喚出來</strong>，用它想辦法讓小巫師走到 ⭐。</p>
         <p>⛵ 船會浮在水上、🪨 石頭會把坑填平、🪜 梯子可以爬、🎈 氣球帶你飛、🧊 冰塊把水凍起來……
           <strong>什麼東西有什麼用，要自己想</strong>——魔法書是照「種類」排的，不會告訴你答案。</p>
-        <p>每一關的 🔮 <strong>魔力有限</strong>，召喚一次就用掉一點，用完就得重來，所以先想清楚再拼。</p>
+        <p>召喚出來的東西會影響<strong>整個場景</strong>，不是只有眼前那一關：🔥 火會把場上所有
+          乾燥的東西（帶 🪵 記號）一起燒掉，🧊 冰會凍住所有的水（💧），💡 光會照亮所有黑暗（💡）。
+          挑對一個，後面的難關就自己解決了。</p>
+        <p>每一關的 🔮 <strong>魔力有限</strong>，召喚一次就用掉一點，用完就得重來——所以「一次解兩關」
+          不只是帥，是真的省魔力。</p>
         <p>⭐ 看你這一次玩得多漂亮（沒看提示 ⭐⭐、每個難關都一次解掉又有魔力剩下 ⭐⭐⭐）；
           📖 記錄你<strong>總共想到幾種不同的解法</strong>——每一關都不只一種喔！</p>
         <div class="wz-diff" id="wz-diff"></div>
@@ -839,7 +931,11 @@ const WizardGame = (() => {
     }
     const info = WIZARD_OBSTACLES[o.type];
     els.taskIcon.textContent = info.icon;
-    els.taskName.textContent = `${info.name} — ${info.zh}`;
+    // What's still ahead matters now that a summon acts on the whole scene —
+    // you can't plan a chain you can't see.
+    const rest = obstacles.filter(x => !x.solved && x !== o);
+    els.taskName.textContent = `${info.name} — ${info.zh}` +
+      (rest.length ? `　（後面還有 ${rest.map(x => WIZARD_OBSTACLES[x.type].icon + WIZARD_OBSTACLES[x.type].name).join('、')}）` : '');
     // W1: the situation is always visible, the ways through never are — the
     // whole puzzle used to be printed here, so the game was "read, then tap".
     els.taskTip.textContent = hintShown ? info.hint : info.tip;

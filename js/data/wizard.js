@@ -55,9 +55,19 @@ const WIZARD_CATS = {
 // `hint` is the list of ways through and only appears behind the 「💡 想不出來」
 // button, which costs a star. The first version put the whole hint in `tip`,
 // which turned every level into "read the answer, tap a card".
+//
+// W3 side effects. `react` says what a scene-wide element does to this
+// obstacle even when the wizard isn't standing in front of it yet:
+//   flammable  fire anywhere burns it away
+//   freezable  cold anywhere freezes it solid
+//   douseable  water anywhere puts it out
+//   lightable  any light anywhere reveals it
+// `badge` is the marker drawn on the obstacle so a child can SEE which ones
+// will react before they act — the chain has to be predictable, not a surprise.
 const WIZARD_OBSTACLES = {
   river:   { name: '河流', icon: '🌊', zh: '又寬又急的河擋在前面',
              solve: ['float', 'long', 'fly', 'cold'],
+             freezable: true, badge: '💧',
              tip: '河水又深又急，小巫師不會游泳，一下水就會被沖走。',
              hint: '水上要有東西可以踩，或是架一座橋，不然就飛過去、把水凍起來！' },
   pit:     { name: '深坑', icon: '🕳️', zh: '一個深不見底的大坑',
@@ -70,11 +80,13 @@ const WIZARD_OBSTACLES = {
              hint: '找可以爬的東西靠著牆，或是會飛的東西，長長的東西也能當斜坡！' },
   flame:   { name: '火牆', icon: '🔥', zh: '燒得正旺的火焰擋住去路',
              solve: ['water', 'cold', 'fly'],
+             douseable: true, badge: '💦', glows: true,
              tip: '火燒得又高又燙，站在三步外就熱得受不了。',
              hint: '用水澆熄它，用冰冷的東西凍熄它，或是從上面飛過去。' },
   rope:    { name: '藤網', icon: '🕸️', zh: '纏成一片的藤蔓網',
              solve: ['cut', 'fire', 'climb'],
-             tip: '藤蔓一條纏著一條，用手扯根本扯不開。',
+             flammable: true, badge: '🪵',
+             tip: '藤蔓一條纏著一條，乾得像柴一樣，用手扯根本扯不開。',
              hint: '把它切斷、燒掉，或者……乾脆爬過去！' },
   monster: { name: '餓怪獸', icon: '👹', zh: '肚子餓得咕嚕叫的怪獸',
              solve: ['food', 'fire', 'fly'],
@@ -82,12 +94,23 @@ const WIZARD_OBSTACLES = {
              hint: '餵牠吃東西牠就讓路，或用火嚇跑牠，也可以從牠頭上飛過去。' },
   dark:    { name: '黑暗', icon: '🌑', zh: '伸手不見五指的漆黑',
              solve: ['light', 'fire'],
+             lightable: true, badge: '💡',
              tip: '前面黑得伸手不見五指，再走一步就不知道會踩到什麼。',
              hint: '需要會發亮的東西，有火的東西也會亮！' },
   lock:    { name: '鎖住的門', icon: '🔒', zh: '掛著一把大鎖的門',
              solve: ['key', 'cut', 'heavy'],
              tip: '門上掛著一把又大又重的鎖，推也推不開、踢也踢不動。',
              hint: '用鑰匙開、把鎖剪斷，或用很重的東西砸開它！' },
+};
+
+// Which scene-wide element clears which marked obstacle, and with what tag.
+// Every `tag` here must appear in that obstacle's own `solve` list — a chain
+// is a real solution arriving for free, not a special case.
+const WIZARD_REACTS = {
+  fire:  { prop: 'flammable', tag: 'fire',  verb: '也一起燒掉了' },
+  cold:  { prop: 'freezable', tag: 'cold',  verb: '也結成冰了' },
+  water: { prop: 'douseable', tag: 'water', verb: '也被澆熄了' },
+  light: { prop: 'lightable', tag: 'light', verb: '也被照亮了' },
 };
 
 // ===== Summonable objects =====
@@ -272,44 +295,51 @@ const WIZARD_CHAPTERS = [
 // ===== Levels =====
 // `obs` lists the obstacles between the wizard and the ⭐, left to right.
 // Solution tags (and therefore the star targets) come from WIZARD_OBSTACLES.
+//
+// Levels 1-4 are single-obstacle tutorials — one blocker, one idea. From
+// level 5 on almost everything is 2-3 blockers, because that is where the
+// game actually is: a summon acts on the WHOLE scene, so the tool you pick
+// for the blocker in front of you decides whether the one behind it clears
+// itself for free. 25 of the 30 levels used to be a single obstacle, which is
+// why the whole thing played as "read the tip, tap a card".
 const WIZARD_LEVELS = [
-  // ---- 第 1 章 翠綠森林 ----
+  // ---- 第 1 章 翠綠森林（教學：一關一個觀念）----
   { id: 'w1',  ch: 1, name: '過小溪',       obs: ['river'],            intro: '小巫師想去對面的草地摘星星，可是溪水好深！' },
   { id: 'w2',  ch: 1, name: '大坑洞',       obs: ['pit'],              intro: '路中間破了一個大洞，掉下去可就麻煩了。' },
   { id: 'w3',  ch: 1, name: '石頭牆',       obs: ['wall'],             intro: '一面比小巫師還高好幾倍的石牆擋在前面。' },
   { id: 'w4',  ch: 1, name: '藤蔓擋路',     obs: ['rope'],             intro: '整片藤蔓把小路封死了，得想辦法穿過去。' },
-  { id: 'w5',  ch: 1, name: '肚子餓的森林怪', obs: ['monster'],        intro: '森林怪擋在路中間，肚子餓得咕嚕咕嚕叫。' },
-  { id: 'w6',  ch: 1, name: '森林的出口',   obs: ['river', 'pit'],     intro: '出口就在前面！可是先有一條河，河的後面還有一個大坑。', boss: true },
+  { id: 'w5',  ch: 1, name: '森林怪與藤網', obs: ['monster', 'rope'],  intro: '森林怪擋在路中間肚子咕嚕叫，牠後面還有一整片乾藤蔓。有的東西，一次能對付兩個喔！' },
+  { id: 'w6',  ch: 1, name: '森林的出口',   obs: ['river', 'pit', 'rope'], intro: '出口就在前面！一條河、一個大坑，最後還有一片藤網。', boss: true },
 
-  // ---- 第 2 章 幽暗洞窟 ----
-  { id: 'w7',  ch: 2, name: '黑漆漆的洞口', obs: ['dark'],             intro: '洞裡黑得什麼都看不見，小巫師不敢往前走。' },
-  { id: 'w8',  ch: 2, name: '地底裂縫',     obs: ['pit'],              intro: '地面裂開一道又深又黑的縫。' },
-  { id: 'w9',  ch: 2, name: '巨大蜘蛛網',   obs: ['rope'],             intro: '一張比人還大的蜘蛛網黏在通道上。' },
-  { id: 'w10', ch: 2, name: '地下暗河',     obs: ['river'],            intro: '洞窟深處流著一條冰冷的地下河。' },
-  { id: 'w11', ch: 2, name: '岩漿溝',       obs: ['flame'],            intro: '滾燙的岩漿從地縫冒出來，熱得靠近不了。' },
-  { id: 'w12', ch: 2, name: '洞窟最深處',   obs: ['dark', 'river'],    intro: '最深處又黑又有暗河，要先看得見、再過得去。', boss: true },
+  // ---- 第 2 章 幽暗洞窟（火與光的連鎖）----
+  { id: 'w7',  ch: 2, name: '黑漆漆的洞口', obs: ['dark', 'rope'],     intro: '洞裡黑得什麼都看不見，摸過去還有一片乾掉的蜘蛛網。' },
+  { id: 'w8',  ch: 2, name: '地底裂縫',     obs: ['pit', 'dark'],      intro: '地面裂開一道深縫，過了縫之後就沒有光了。' },
+  { id: 'w9',  ch: 2, name: '蜘蛛的巢',     obs: ['rope', 'river'],    intro: '一張比人還大的蜘蛛網黏在通道上，網後面還有地下水流過。' },
+  { id: 'w10', ch: 2, name: '地下暗河',     obs: ['river', 'wall'],    intro: '冰冷的地下河擋在前面，對岸是一面濕滑的岩壁。' },
+  { id: 'w11', ch: 2, name: '岩漿與暗房',   obs: ['flame', 'dark'],    intro: '岩漿從地縫冒出來，再過去是一間沒有光的石室。想清楚：火滅了，前面就更黑了。' },
+  { id: 'w12', ch: 2, name: '洞窟最深處',   obs: ['dark', 'river', 'rope'], intro: '最深處又黑、有暗河、還有纏成一片的老藤。', boss: true },
 
   // ---- 第 3 章 古老城堡 ----
-  { id: 'w13', ch: 3, name: '護城河',       obs: ['river'],            intro: '城堡外圍是一圈又寬又深的護城河。' },
-  { id: 'w14', ch: 3, name: '城堡大門',     obs: ['lock'],             intro: '大門上掛著一把生鏽的大鎖。' },
-  { id: 'w15', ch: 3, name: '守門怪獸',     obs: ['monster'],          intro: '守門的大怪獸擋在走廊上，看起來餓壞了。' },
-  { id: 'w16', ch: 3, name: '火把走廊',     obs: ['flame'],            intro: '走廊兩側的火焰燒成一道火牆。' },
-  { id: 'w17', ch: 3, name: '高高的城牆',   obs: ['wall'],             intro: '通往塔頂的城牆又直又滑。' },
-  { id: 'w18', ch: 3, name: '王座之間',     obs: ['lock', 'monster'],  intro: '王座前有一道鎖住的門，門後還有一隻怪獸在等著。', boss: true },
+  { id: 'w13', ch: 3, name: '護城河',       obs: ['river', 'lock'],    intro: '城堡外圍是一圈護城河，過了河還有一道上鎖的側門。' },
+  { id: 'w14', ch: 3, name: '城堡大門',     obs: ['lock', 'monster'],  intro: '大門掛著生鏽的大鎖，門後傳來咕嚕咕嚕的肚子叫聲。' },
+  { id: 'w15', ch: 3, name: '守門怪獸',     obs: ['monster', 'wall'],  intro: '守門的大怪獸擋在走廊上，牠背後是一面光滑的高牆。' },
+  { id: 'w16', ch: 3, name: '火把走廊',     obs: ['flame', 'dark'],    intro: '走廊兩側的火焰燒成一道火牆，走廊盡頭是一片漆黑。' },
+  { id: 'w17', ch: 3, name: '高高的城牆',   obs: ['wall', 'pit'],      intro: '通往塔頂的城牆又直又滑，牆後還有一道護城壕。' },
+  { id: 'w18', ch: 3, name: '王座之間',     obs: ['lock', 'monster', 'flame'], intro: '王座前有一道鎖住的門，門後一隻怪獸，最後還有一圈守護的火。', boss: true },
 
   // ---- 第 4 章 雲端天空 ----
-  { id: 'w19', ch: 4, name: '雲朵斷層',     obs: ['pit'],              intro: '雲朵之間破了一個大洞，下面什麼都沒有。' },
-  { id: 'w20', ch: 4, name: '天空之牆',     obs: ['wall'],             intro: '一道白色的雲牆高高聳立。' },
-  { id: 'w21', ch: 4, name: '風之網',       obs: ['rope'],             intro: '被風纏成一團的雲絲網擋住了去路。' },
-  { id: 'w22', ch: 4, name: '無邊雲海',     obs: ['river'],            intro: '眼前是一片望不到底的雲海。' },
-  { id: 'w23', ch: 4, name: '太陽的火焰',   obs: ['flame'],            intro: '離太陽太近了，前面燒起一片火焰。' },
-  { id: 'w24', ch: 4, name: '天空神殿',     obs: ['wall', 'flame'],    intro: '神殿的高牆後面還有一道火焰結界。', boss: true },
+  { id: 'w19', ch: 4, name: '雲朵斷層',     obs: ['pit', 'wall'],      intro: '雲朵之間破了一個大洞，洞的另一邊是一道厚厚的雲牆。' },
+  { id: 'w20', ch: 4, name: '天空之牆',     obs: ['wall', 'rope'],     intro: '白色的雲牆高高聳立，翻過去還纏著一團乾枯的雲絲。' },
+  { id: 'w21', ch: 4, name: '風之網',       obs: ['rope', 'monster'],  intro: '被風纏成一團的雲絲網擋住去路，網後面有隻餓壞的雲獸。' },
+  { id: 'w22', ch: 4, name: '無邊雲海',     obs: ['river', 'pit'],     intro: '眼前是一片望不到底的雲海，雲海後面還有一個空洞。' },
+  { id: 'w23', ch: 4, name: '太陽的火焰',   obs: ['flame', 'wall'],    intro: '離太陽太近了，前面燒起一片火焰，火後面是一道發燙的牆。' },
+  { id: 'w24', ch: 4, name: '天空神殿',     obs: ['wall', 'flame', 'river'], intro: '神殿的高牆、火焰結界，最後還有一條天上的河。', boss: true },
 
   // ---- 第 5 章 祕密實驗室 ----
-  { id: 'w25', ch: 5, name: '電子鎖',       obs: ['lock'],             intro: '實驗室的門用電子鎖鎖得死死的。' },
-  { id: 'w26', ch: 5, name: '停電的走廊',   obs: ['dark'],             intro: '停電了，整條走廊黑得像墨水。' },
-  { id: 'w27', ch: 5, name: '廢料坑',       obs: ['pit'],              intro: '地板塌了一塊，下面是深深的廢料坑。' },
-  { id: 'w28', ch: 5, name: '實驗怪獸',     obs: ['monster'],          intro: '從培養槽跑出來的怪獸，餓得直流口水。' },
-  { id: 'w29', ch: 5, name: '雷射網',       obs: ['rope'],             intro: '一整面交錯的雷射網封住了通道。' },
+  { id: 'w25', ch: 5, name: '電子鎖',       obs: ['lock', 'dark'],     intro: '實驗室的門用電子鎖鎖死了，門後的房間一片漆黑。' },
+  { id: 'w26', ch: 5, name: '停電的走廊',   obs: ['dark', 'flame'],    intro: '停電了，走廊黑得像墨水，遠處有一團電線走火的火焰。' },
+  { id: 'w27', ch: 5, name: '廢料坑',       obs: ['pit', 'rope'],      intro: '地板塌了一塊，坑的對面纏著一大捆乾掉的舊電纜。' },
+  { id: 'w28', ch: 5, name: '實驗怪獸',     obs: ['monster', 'lock'],  intro: '從培養槽跑出來的怪獸餓得直流口水，牠後面是一道保險門。' },
+  { id: 'w29', ch: 5, name: '雷射網',       obs: ['rope', 'wall'],     intro: '一整面交錯的雷射網封住通道，網後面是一道無縫的合金牆。' },
   { id: 'w30', ch: 5, name: '最終實驗室',   obs: ['lock', 'dark', 'river'], intro: '最後一關！鎖住的門、漆黑的房間、還有一池冷卻液。撐過去就是大魔法師了！', boss: true },
 ];
