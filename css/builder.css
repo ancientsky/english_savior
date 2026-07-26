@@ -572,6 +572,11 @@
   .bd-panel { min-height: 0; }
   .bd-difficulty { margin-left: 0; }
   .bd-block { font-size: 0.9rem; padding: 7px 10px; }
+  /* .bd-layer is white-space:nowrap, so a six-emoji landmark (the Great Wall,
+     the Forbidden City) is one unbreakable run. At 1.35rem it clears a 360px
+     phone by only ~8px, and .bd-screen{overflow:hidden} would quietly crop it
+     rather than complain. One size down buys real headroom. */
+  .bd-layer { font-size: 1.15rem; }
 }
 
 /* ===== Landmark gallery (圖鑑) — view-only overlay, built once in JS ===== */
