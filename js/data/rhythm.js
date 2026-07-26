@@ -7,11 +7,21 @@
    Word: { w, zh, e, syl: [...], stress } — `stress` is the 0-based index of the
    stressed syllable, and syl.join('') must equal w (checked by the validator).
 
-   Song: { id, name, e, bpm, words: [...] }. Songs unlock in order.
+   Song: { id, name, e, bpm, groove, chords, words: [...] }. Songs unlock in order.
+
+   `groove` picks a drum pattern from MusicManager.GROOVES and `chords` is four
+   scale degrees (0-6 of a major scale) that become the bass + pad progression.
+   That is all the backing track needs — two fields per song instead of hand
+   writing 20 arrangements — and js/rhythm.js expands it into a real looping
+   accompaniment that shares the AudioContext clock with the note chart.
 */
 
+// Scale degrees → semitone offsets (major scale), used to expand `chords`.
+const RHYTHM_SCALE = [0, 2, 4, 5, 7, 9, 11];
+
 const RHYTHM_SONGS = [
-  { id: 'rs1', name: '水果搖擺', e: '🍎', bpm: 76, words: [
+  { id: 'rs1', name: '水果搖擺', e: '🍎', bpm: 76, groove: 'pop', chords: [0,5,3,4],
+    words: [
     { w: 'apple',      zh: '蘋果',   e: '🍎', syl: ['ap', 'ple'],            stress: 0 },
     { w: 'banana',     zh: '香蕉',   e: '🍌', syl: ['ba', 'na', 'na'],       stress: 1 },
     { w: 'orange',     zh: '柳橙',   e: '🍊', syl: ['or', 'ange'],           stress: 0 },
@@ -21,7 +31,8 @@ const RHYTHM_SONGS = [
     { w: 'peach',      zh: '桃子',   e: '🍑', syl: ['peach'],                stress: 0 },
     { w: 'strawberry', zh: '草莓',   e: '🍓', syl: ['straw', 'ber', 'ry'],   stress: 0 },
   ] },
-  { id: 'rs2', name: '動物遊行', e: '🐘', bpm: 78, words: [
+  { id: 'rs2', name: '動物遊行', e: '🐘', bpm: 78, groove: 'march', chords: [0,3,4,0],
+    words: [
     { w: 'cat',        zh: '貓',     e: '🐱', syl: ['cat'],                  stress: 0 },
     { w: 'rabbit',     zh: '兔子',   e: '🐰', syl: ['rab', 'bit'],           stress: 0 },
     { w: 'monkey',     zh: '猴子',   e: '🐵', syl: ['mon', 'key'],           stress: 0 },
@@ -31,7 +42,8 @@ const RHYTHM_SONGS = [
     { w: 'elephant',   zh: '大象',   e: '🐘', syl: ['e', 'le', 'phant'],     stress: 0 },
     { w: 'butterfly',  zh: '蝴蝶',   e: '🦋', syl: ['but', 'ter', 'fly'],    stress: 0 },
   ] },
-  { id: 'rs3', name: '彩虹拍子', e: '🌈', bpm: 80, words: [
+  { id: 'rs3', name: '彩虹拍子', e: '🌈', bpm: 80, groove: 'ballad', chords: [0,4,5,3],
+    words: [
     { w: 'red',        zh: '紅色',   e: '🟥', syl: ['red'],                  stress: 0 },
     { w: 'blue',       zh: '藍色',   e: '🟦', syl: ['blue'],                 stress: 0 },
     { w: 'green',      zh: '綠色',   e: '🟩', syl: ['green'],                stress: 0 },
@@ -41,7 +53,8 @@ const RHYTHM_SONGS = [
     { w: 'golden',     zh: '金色',   e: '🥇', syl: ['gol', 'den'],           stress: 0 },
     { w: 'rainbow',    zh: '彩虹',   e: '🌈', syl: ['rain', 'bow'],          stress: 0 },
   ] },
-  { id: 'rs4', name: '數字節拍', e: '🔢', bpm: 82, words: [
+  { id: 'rs4', name: '數字節拍', e: '🔢', bpm: 82, groove: 'chiptune', chords: [0,0,4,4],
+    words: [
     { w: 'seven',      zh: '七',     e: '7️⃣', syl: ['se', 'ven'],            stress: 0 },
     { w: 'zero',       zh: '零',     e: '0️⃣', syl: ['ze', 'ro'],             stress: 0 },
     { w: 'eleven',     zh: '十一',   e: '🔟', syl: ['e', 'le', 'ven'],       stress: 1 },
@@ -51,7 +64,8 @@ const RHYTHM_SONGS = [
     { w: 'hundred',    zh: '一百',   e: '💯', syl: ['hun', 'dred'],          stress: 0 },
     { w: 'million',    zh: '一百萬', e: '💰', syl: ['mil', 'lion'],          stress: 0 },
   ] },
-  { id: 'rs5', name: '家人圓舞曲', e: '👨‍👩‍👧', bpm: 84, words: [
+  { id: 'rs5', name: '家人圓舞曲', e: '👨‍👩‍👧', bpm: 84, groove: 'ballad', chords: [0,5,1,4],
+    words: [
     { w: 'mother',     zh: '媽媽',   e: '👩', syl: ['mo', 'ther'],           stress: 0 },
     { w: 'father',     zh: '爸爸',   e: '👨', syl: ['fa', 'ther'],           stress: 0 },
     { w: 'sister',     zh: '姊妹',   e: '👧', syl: ['sis', 'ter'],           stress: 0 },
@@ -61,7 +75,8 @@ const RHYTHM_SONGS = [
     { w: 'grandpa',    zh: '爺爺',   e: '👴', syl: ['grand', 'pa'],          stress: 0 },
     { w: 'family',     zh: '家人',   e: '👨‍👩‍👧', syl: ['fa', 'mi', 'ly'],      stress: 0 },
   ] },
-  { id: 'rs6', name: '上學進行曲', e: '🏫', bpm: 86, words: [
+  { id: 'rs6', name: '上學進行曲', e: '🏫', bpm: 86, groove: 'pop', chords: [0,3,4,4],
+    words: [
     { w: 'teacher',    zh: '老師',   e: '🧑‍🏫', syl: ['tea', 'cher'],         stress: 0 },
     { w: 'student',    zh: '學生',   e: '🎒', syl: ['stu', 'dent'],          stress: 0 },
     { w: 'pencil',     zh: '鉛筆',   e: '✏️', syl: ['pen', 'cil'],           stress: 0 },
@@ -71,7 +86,8 @@ const RHYTHM_SONGS = [
     { w: 'library',    zh: '圖書館', e: '📚', syl: ['li', 'bra', 'ry'],      stress: 0 },
     { w: 'computer',   zh: '電腦',   e: '💻', syl: ['com', 'pu', 'ter'],     stress: 1 },
   ] },
-  { id: 'rs7', name: '美食快板', e: '🍕', bpm: 88, words: [
+  { id: 'rs7', name: '美食快板', e: '🍕', bpm: 88, groove: 'latin', chords: [0,4,5,4],
+    words: [
     { w: 'pizza',      zh: '披薩',   e: '🍕', syl: ['piz', 'za'],            stress: 0 },
     { w: 'burger',     zh: '漢堡',   e: '🍔', syl: ['bur', 'ger'],           stress: 0 },
     { w: 'noodle',     zh: '麵',     e: '🍜', syl: ['noo', 'dle'],           stress: 0 },
@@ -81,7 +97,8 @@ const RHYTHM_SONGS = [
     { w: 'chicken',    zh: '雞肉',   e: '🍗', syl: ['chi', 'cken'],          stress: 0 },
     { w: 'spaghetti',  zh: '義大利麵', e: '🍝', syl: ['spa', 'ghet', 'ti'],  stress: 1 },
   ] },
-  { id: 'rs8', name: '運動場鼓聲', e: '⚽', bpm: 90, words: [
+  { id: 'rs8', name: '運動場鼓聲', e: '⚽', bpm: 90, groove: 'rock', chords: [0,5,3,4],
+    words: [
     { w: 'soccer',     zh: '足球',   e: '⚽', syl: ['soc', 'cer'],           stress: 0 },
     { w: 'tennis',     zh: '網球',   e: '🎾', syl: ['ten', 'nis'],           stress: 0 },
     { w: 'baseball',   zh: '棒球',   e: '⚾', syl: ['base', 'ball'],         stress: 0 },
@@ -91,7 +108,8 @@ const RHYTHM_SONGS = [
     { w: 'basketball', zh: '籃球',   e: '🏀', syl: ['bas', 'ket', 'ball'],   stress: 0 },
     { w: 'volleyball', zh: '排球',   e: '🏐', syl: ['vol', 'ley', 'ball'],   stress: 0 },
   ] },
-  { id: 'rs9', name: '天氣變奏', e: '🌦️', bpm: 92, words: [
+  { id: 'rs9', name: '天氣變奏', e: '🌦️', bpm: 92, groove: 'bossa', chords: [1,4,0,0],
+    words: [
     { w: 'sunny',      zh: '晴朗的', e: '☀️', syl: ['sun', 'ny'],            stress: 0 },
     { w: 'rainy',      zh: '下雨的', e: '🌧️', syl: ['rai', 'ny'],            stress: 0 },
     { w: 'windy',      zh: '有風的', e: '💨', syl: ['win', 'dy'],            stress: 0 },
@@ -101,7 +119,8 @@ const RHYTHM_SONGS = [
     { w: 'foggy',      zh: '起霧的', e: '🌫️', syl: ['fog', 'gy'],            stress: 0 },
     { w: 'hurricane',  zh: '颶風',   e: '🌀', syl: ['hur', 'ri', 'cane'],    stress: 0 },
   ] },
-  { id: 'rs10', name: '交通狂想', e: '🚀', bpm: 94, words: [
+  { id: 'rs10', name: '交通狂想', e: '🚀', bpm: 94, groove: 'chiptune', chords: [0,4,5,3],
+    words: [
     { w: 'taxi',        zh: '計程車',  e: '🚕', syl: ['ta', 'xi'],                     stress: 0 },
     { w: 'subway',      zh: '捷運',    e: '🚇', syl: ['sub', 'way'],                   stress: 0 },
     { w: 'tractor',     zh: '曳引機',  e: '🚜', syl: ['trac', 'tor'],                  stress: 0 },
@@ -111,7 +130,8 @@ const RHYTHM_SONGS = [
     { w: 'helicopter',  zh: '直升機',  e: '🚁', syl: ['he', 'li', 'cop', 'ter'],       stress: 0 },
     { w: 'motorcycle',  zh: '摩托車',  e: '🏍️', syl: ['mo', 'tor', 'cy', 'cle'],       stress: 0 },
   ] },
-  { id: 'rs11', name: '我的家', e: '🏠', bpm: 84, words: [
+  { id: 'rs11', name: '我的家', e: '🏠', bpm: 84, groove: 'ballad', chords: [0,3,1,4],
+    words: [
     { w: 'kitchen',    zh: '廚房',   e: '🍳', syl: ['kit', 'chen'],          stress: 0 },
     { w: 'bedroom',    zh: '臥室',   e: '🛏️', syl: ['bed', 'room'],          stress: 0 },
     { w: 'window',     zh: '窗戶',   e: '🪟', syl: ['win', 'dow'],           stress: 0 },
@@ -121,7 +141,8 @@ const RHYTHM_SONGS = [
     { w: 'apartment',  zh: '公寓',   e: '🏢', syl: ['a', 'part', 'ment'],    stress: 1 },
     { w: 'bathroom',   zh: '浴室',   e: '🛁', syl: ['bath', 'room'],         stress: 0 },
   ] },
-  { id: 'rs12', name: '穿搭節奏', e: '👕', bpm: 96, words: [
+  { id: 'rs12', name: '穿搭節奏', e: '👕', bpm: 96, groove: 'pop', chords: [5,3,0,4],
+    words: [
     { w: 'jacket',     zh: '外套',   e: '🧥', syl: ['jac', 'ket'],           stress: 0 },
     { w: 'sweater',    zh: '毛衣',   e: '🧶', syl: ['swea', 'ter'],          stress: 0 },
     { w: 'sneakers',   zh: '球鞋',   e: '👟', syl: ['snea', 'kers'],         stress: 0 },
@@ -131,7 +152,8 @@ const RHYTHM_SONGS = [
     { w: 'uniform',    zh: '制服',   e: '🎽', syl: ['u', 'ni', 'form'],      stress: 0 },
     { w: 'umbrella',   zh: '雨傘',   e: '☂️', syl: ['um', 'brel', 'la'],     stress: 1 },
   ] },
-  { id: 'rs13', name: '長大以後', e: '💼', bpm: 98, words: [
+  { id: 'rs13', name: '長大以後', e: '💼', bpm: 98, groove: 'march', chords: [0,4,0,4],
+    words: [
     { w: 'doctor',     zh: '醫生',   e: '🩺', syl: ['doc', 'tor'],           stress: 0 },
     { w: 'farmer',     zh: '農夫',   e: '🧑‍🌾', syl: ['far', 'mer'],          stress: 0 },
     { w: 'singer',     zh: '歌手',   e: '🎤', syl: ['sin', 'ger'],           stress: 0 },
@@ -141,7 +163,8 @@ const RHYTHM_SONGS = [
     { w: 'scientist',  zh: '科學家', e: '🔬', syl: ['sci', 'en', 'tist'],    stress: 0 },
     { w: 'engineer',   zh: '工程師', e: '👷', syl: ['en', 'gi', 'neer'],     stress: 2 },
   ] },
-  { id: 'rs14', name: '動起來', e: '🕺', bpm: 100, words: [
+  { id: 'rs14', name: '動起來', e: '🕺', bpm: 100, groove: 'rock', chords: [0,0,3,4],
+    words: [
     { w: 'jumping',    zh: '跳',     e: '🤸', syl: ['jum', 'ping'],          stress: 0 },
     { w: 'reading',    zh: '閱讀',   e: '📖', syl: ['rea', 'ding'],          stress: 0 },
     { w: 'singing',    zh: '唱歌',   e: '🎶', syl: ['sin', 'ging'],          stress: 0 },
@@ -151,7 +174,8 @@ const RHYTHM_SONGS = [
     { w: 'listening',  zh: '聆聽',   e: '👂', syl: ['lis', 'ten', 'ing'],    stress: 0 },
     { w: 'remember',   zh: '記得',   e: '🧠', syl: ['re', 'mem', 'ber'],     stress: 1 },
   ] },
-  { id: 'rs15', name: '心情曲', e: '😊', bpm: 96, words: [
+  { id: 'rs15', name: '心情曲', e: '😊', bpm: 96, groove: 'swing', chords: [0,5,1,4],
+    words: [
     { w: 'happy',      zh: '快樂的', e: '😄', syl: ['hap', 'py'],            stress: 0 },
     { w: 'angry',      zh: '生氣的', e: '😠', syl: ['an', 'gry'],            stress: 0 },
     { w: 'sleepy',     zh: '想睡的', e: '🥱', syl: ['slee', 'py'],           stress: 0 },
@@ -161,7 +185,8 @@ const RHYTHM_SONGS = [
     { w: 'amazing',    zh: '驚人的', e: '✨', syl: ['a', 'ma', 'zing'],      stress: 1 },
     { w: 'wonderful',  zh: '很棒的', e: '🎉', syl: ['won', 'der', 'ful'],    stress: 0 },
   ] },
-  { id: 'rs16', name: '世界地圖', e: '🌍', bpm: 94, words: [
+  { id: 'rs16', name: '世界地圖', e: '🌍', bpm: 94, groove: 'bossa', chords: [3,4,0,5],
+    words: [
     { w: 'island',     zh: '島嶼',   e: '🏝️', syl: ['is', 'land'],           stress: 0 },
     { w: 'mountain',   zh: '高山',   e: '⛰️', syl: ['moun', 'tain'],         stress: 0 },
     { w: 'forest',     zh: '森林',   e: '🌲', syl: ['fo', 'rest'],           stress: 0 },
@@ -171,7 +196,8 @@ const RHYTHM_SONGS = [
     { w: 'volcano',    zh: '火山',   e: '🌋', syl: ['vol', 'ca', 'no'],      stress: 1 },
     { w: 'waterfall',  zh: '瀑布',   e: '🏞️', syl: ['wa', 'ter', 'fall'],    stress: 0 },
   ] },
-  { id: 'rs17', name: '一週時光', e: '⏰', bpm: 92, words: [
+  { id: 'rs17', name: '一週時光', e: '⏰', bpm: 92, groove: 'pop', chords: [0,5,3,4],
+    words: [
     { w: 'monday',     zh: '星期一', e: '📅', syl: ['mon', 'day'],           stress: 0 },
     { w: 'tuesday',    zh: '星期二', e: '🗓️', syl: ['tues', 'day'],          stress: 0 },
     { w: 'morning',    zh: '早上',   e: '🌅', syl: ['mor', 'ning'],          stress: 0 },
@@ -181,7 +207,8 @@ const RHYTHM_SONGS = [
     { w: 'holiday',    zh: '假日',   e: '🏖️', syl: ['ho', 'li', 'day'],      stress: 0 },
     { w: 'tomorrow',   zh: '明天',   e: '🔮', syl: ['to', 'mor', 'row'],     stress: 1 },
   ] },
-  { id: 'rs18', name: '冒險節拍', e: '🎮', bpm: 102, words: [
+  { id: 'rs18', name: '冒險節拍', e: '🎮', bpm: 102, groove: 'chiptune', chords: [5,3,4,0],
+    words: [
     { w: 'level',      zh: '關卡',   e: '🎯', syl: ['le', 'vel'],            stress: 0 },
     { w: 'player',     zh: '玩家',   e: '🎮', syl: ['pla', 'yer'],           stress: 0 },
     { w: 'monster',    zh: '怪物',   e: '👾', syl: ['mon', 'ster'],          stress: 0 },
@@ -191,7 +218,8 @@ const RHYTHM_SONGS = [
     { w: 'character',  zh: '角色',   e: '🦸', syl: ['cha', 'rac', 'ter'],    stress: 0 },
     { w: 'adventure',  zh: '冒險',   e: '🗺️', syl: ['ad', 'ven', 'ture'],    stress: 1 },
   ] },
-  { id: 'rs19', name: '大自然', e: '🌍', bpm: 98, words: [
+  { id: 'rs19', name: '大自然', e: '🌍', bpm: 98, groove: 'latin', chords: [0,3,5,4],
+    words: [
     { w: 'flower',     zh: '花',     e: '🌸', syl: ['flo', 'wer'],           stress: 0 },
     { w: 'river',      zh: '河流',   e: '🏞️', syl: ['ri', 'ver'],            stress: 0 },
     { w: 'ocean',      zh: '海洋',   e: '🌊', syl: ['o', 'cean'],            stress: 0 },
@@ -202,7 +230,8 @@ const RHYTHM_SONGS = [
     { w: 'tornado',    zh: '龍捲風', e: '🌪️', syl: ['tor', 'na', 'do'],      stress: 1 },
   ] },
   // Finale: long words, and the classic stress-shift pair photograph → photographer
-  { id: 'rs20', name: '長字大魔王', e: '👑', bpm: 104, words: [
+  { id: 'rs20', name: '長字大魔王', e: '👑', bpm: 104, groove: 'rock', chords: [0,4,5,5],
+    words: [
     { w: 'potato',      zh: '馬鈴薯',  e: '🥔', syl: ['po', 'ta', 'to'],                   stress: 1 },
     { w: 'tomato',      zh: '番茄',    e: '🍅', syl: ['to', 'ma', 'to'],                   stress: 1 },
     { w: 'beautiful',   zh: '美麗的',  e: '🌺', syl: ['beau', 'ti', 'ful'],                stress: 0 },

@@ -167,6 +167,10 @@ function switchZone(zoneId) {
   const tab = document.querySelector(`.nav-tab[data-zone="${zoneId}"]`);
   if (tab) tab.classList.add('active');
 
-  // background music follows the zone's mood
-  if (typeof MusicManager !== 'undefined') MusicManager.playForZone(zoneId);
+  // Background music follows the zone's mood — except 英語節奏星, which plays
+  // its own in-time backing track and must not have a second tempo underneath.
+  if (typeof MusicManager !== 'undefined') {
+    if (zoneId === 'rhythm') MusicManager.stop();
+    else MusicManager.playForZone(zoneId);
+  }
 }

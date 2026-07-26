@@ -9,8 +9,11 @@
      medium  two lanes — stressed goes up, unstressed goes down (word shown)
      hard    two lanes — blind: only the emoji and Chinese, listen to the TTS
 
-   Timing runs off one performance.now() clock shared by the renderer and the
-   input handler, so what you see and what you hit can never disagree.
+   Every song has a real backing track (MusicManager.startGameTrack) and the
+   whole game runs off the AUDIO clock, not performance.now(). That matters:
+   performance.now() drifts against the audio hardware, so over a song the notes
+   slowly stop landing on the beat — which is exactly what makes a rhythm game
+   feel wrong. The chart's lead-in is bar-aligned so note 1 is a downbeat.
 
    Save: localStorage `english_savior_rhythm`
      { best: { songId: { score, acc, rank, fc } }, diff }
@@ -38,6 +41,11 @@ const RhythmGame = (() => {
   let canvas = null, ctx = null, rafId = null;
   let els = {};
   let audioCtx = null;
+  // The song's clock. `band` is the handle from MusicManager.startGameTrack —
+  // when it exists the game judges against the AUDIO clock, which is the only
+  // clock the music itself is on. performance.now() drifts against the audio
+  // hardware, so on the old code the notes slowly stopped landing on the beat.
+  let band = null;
 
   let save = { best: {}, diff: 'easy' };
   let difficulty = 'easy';
@@ -80,11 +88,14 @@ const RhythmGame = (() => {
 
   // One note per syllable, one beat apart, with a one-beat rest between words.
   function buildChart(s) {
-    const beat = (60000 / s.bpm) / DIFFS[difficulty].rate;
+    const beat = 60000 / songTempo(s);
     const lanes = DIFFS[difficulty].lanes;
     notes = [];
     wordSpans = [];
-    let t = 2600;   // lead-in so the first note isn't already on screen at t=0
+    // Lead-in is a whole number of bars so the first note falls on a downbeat
+    // and the count-in matches what the drums are doing.
+    const barMs = beat * 4;
+    let t = barMs * Math.max(2, Math.ceil(2600 / barMs));
     s.words.forEach((word, wi) => {
       const from = notes.length;
       word.syl.forEach((_, si) => {
@@ -100,6 +111,37 @@ const RhythmGame = (() => {
       t += beat;   // one beat of rest between words
     });
     return beat;
+  }
+
+  /* ================= backing track ================= */
+
+  // Expand the song's two data fields into a real 8-bar arrangement: bass root,
+  // a triad pad, and a simple melody that outlines the chord. Hand-writing 20
+  // arrangements would have been the alternative; this keeps the data to two
+  // fields per song and still gives every song its own harmony and beat.
+  // The song's actual tempo, after the difficulty rate. The band must be built
+  // at this tempo too — scaling only the note spacing (as the first version
+  // did) puts every note between the band's beats, which is worse than having
+  // no music at all.
+  function songTempo(s) { return s.bpm * DIFFS[difficulty].rate; }
+
+  function bandDef(s) {
+    const SCALE = typeof RHYTHM_SCALE !== 'undefined' ? RHYTHM_SCALE : [0, 2, 4, 5, 7, 9, 11];
+    const deg = d => SCALE[((d % 7) + 7) % 7];
+    const bars = [];
+    for (let rep = 0; rep < 2; rep++) {
+      s.chords.forEach((d, i) => {
+        const root = 36 + deg(d);
+        const triad = [60 + deg(d), 60 + deg(d + 2), 60 + deg(d + 4)];
+        // last bar of each pass gets a turnaround so the loop doesn't feel flat
+        const top = 72 + deg(d + (rep ? 4 : 2));
+        const m = (i === s.chords.length - 1)
+          ? [[triad[2], 1], [top, 1], [triad[1], 2]]
+          : [[triad[0], 1.5], [triad[1], .5], [triad[2], 1], [top, 1]];
+        bars.push({ b: root, p: triad, m });
+      });
+    }
+    return { style: 'soft', tempo: songTempo(s), groove: s.groove || 'pop', bars };
   }
 
   /* ================= audio ================= */
@@ -172,6 +214,10 @@ const RhythmGame = (() => {
     popups = [];
     lastBeat = -1;
     playing = true;
+    // Hand the speakers over from the zone BGM and take its clock. Playing a
+    // 92 BPM zone track underneath a 76 BPM chart is what made this feel wrong.
+    band = (typeof MusicManager !== 'undefined' && MusicManager.startGameTrack)
+      ? MusicManager.startGameTrack(bandDef(song)) : null;
     startTime = performance.now();
     GameEngine.setDeferLevelUp(true);
     els.start.style.display = 'none';
@@ -181,7 +227,15 @@ const RhythmGame = (() => {
     ensureLoop();
   }
 
-  function now() { return performance.now() - startTime; }
+  // One clock for everything: the audio clock while the band is playing (so the
+  // chart can never drift against the music), performance.now() as the fallback
+  // when music is switched off or Web Audio is unavailable.
+  function now() {
+    if (band && typeof MusicManager !== 'undefined') {
+      return (MusicManager.audioNow() - band.startTime) * 1000;
+    }
+    return performance.now() - startTime;
+  }
 
   // The note the player is most plausibly aiming at: the earliest unjudged one
   // still inside the GOOD window (or already past the line but not yet missed).
@@ -251,6 +305,8 @@ const RhythmGame = (() => {
 
   function finishSong() {
     playing = false;
+    if (typeof MusicManager !== 'undefined' && MusicManager.stopGameTrack) MusicManager.stopGameTrack();
+    band = null;
     const total = notes.length;
     const acc = total ? Math.round(((stats.perfect + stats.good * 0.6) / total) * 100) : 0;
     const fc = stats.miss === 0;
@@ -292,9 +348,10 @@ const RhythmGame = (() => {
     });
 
     // metronome + speak each word as it comes into view
-    const beat = (60000 / song.bpm) / DIFFS[difficulty].rate;
+    const beat = 60000 / songTempo(song);
     const b = Math.floor(t / beat);
-    if (b !== lastBeat && t > 0) { lastBeat = b; tick(300, 0.03); }
+    // Only click when there's no band — the drum kit is the metronome now.
+    if (b !== lastBeat && t > 0) { lastBeat = b; if (!band) tick(300, 0.03); }
 
     wordSpans.forEach(sp => {
       if (!sp.spoken && sp.startT - t <= LEAD_MS) {
@@ -449,6 +506,13 @@ const RhythmGame = (() => {
   function stopLoop() {
     if (rafId) cancelAnimationFrame(rafId);
     rafId = null;
+    // Navigating away mid-song would otherwise leave the band playing under
+    // whatever zone the player moved to.
+    if (band && !document.getElementById('zone-rhythm').classList.contains('active')) {
+      if (typeof MusicManager !== 'undefined') MusicManager.stopGameTrack();
+      band = null;
+      playing = false;
+    }
   }
 
   /* ================= DOM ================= */
