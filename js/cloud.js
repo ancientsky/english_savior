@@ -35,6 +35,7 @@ const CloudSave = (() => {
     'english_savior_rhythm',
     'english_savior_alchemy',
     'english_savior_order',
+  'english_savior_life',
     'sound_enabled',
     'music_enabled',
   ];

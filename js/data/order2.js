@@ -1,4 +1,4 @@
-/* ===== Order Up! expansion pack (英語餐廳大亂鬥 — 第 2-5 區) =====
+/* ===== Order Up! expansion pack (英語打工大亂鬥 🍜 餐飲世界 — 第 2-5 區) =====
    Pushes 20 shops into ORDER_SHOPS. Must load AFTER js/data/order.js.
 
    Same contract as the base file. The rules a shop cannot break (all enforced by
