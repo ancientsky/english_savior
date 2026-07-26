@@ -212,18 +212,25 @@
 }
 .od-qty b { min-width: 18px; text-align: center; }
 
-/* 內用 / 外帶 — an order-level answer, so it gets its own row above the items.
-   Neither starts selected: "not answered yet" is an honest state, and defaulting
-   to 內用 would let every missed "to go" pass silently. */
-.od-place {
+/* An ORDER-LEVEL answer (內用/外帶, 什麼時候) — it belongs to the whole order,
+   so it gets its own row above the items. Nothing starts selected: "not answered
+   yet" is an honest state, and defaulting to 內用 would let every missed "to go"
+   pass silently.
+
+   Selector is `.od-ask`, the class EVERY ask row carries, not `.od-place`. The
+   per-ask classes (.od-place, .od-when) stay on the element as DOM hooks, but
+   styling off one of them meant the second ask shipped with no border, no
+   padding and no pill shape at all — the same "new axis silently does nothing"
+   failure ORDER_CHOICES/PATTERN_FEATURES exist to prevent. */
+.od-ask {
   display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
   margin-bottom: 8px; padding: 8px 10px;
   background: rgba(255, 255, 255, .05);
   border: 1px dashed rgba(255, 255, 255, .28);
   border-radius: 10px;
 }
-.od-place-label { font-size: 13px; font-weight: 700; margin-right: 4px; }
-.od-place button {
+.od-ask-label { font-size: 13px; font-weight: 700; margin-right: 4px; }
+.od-ask button {
   display: inline-flex; align-items: baseline; gap: 5px;
   padding: 6px 12px;
   border-radius: 999px;
@@ -234,8 +241,8 @@
   font-weight: 700;
   cursor: pointer;
 }
-.od-place button small { font-size: 11px; opacity: .8; font-weight: 400; }
-.od-place button.on { background: var(--od-warm); border-color: var(--od-warm); color: #3a1e00; }
+.od-ask button small { font-size: 11px; opacity: .8; font-weight: 400; }
+.od-ask button.on { background: var(--od-warm); border-color: var(--od-warm); color: #3a1e00; }
 
 .od-size { display: inline-flex; gap: 4px; }
 .od-size button {

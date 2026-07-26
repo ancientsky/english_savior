@@ -104,6 +104,13 @@ const OrderGame = (() => {
       opts: [{ w: 'hot', zh: '熱的', btn: '熱', e: '🔥' },
              { w: 'iced', zh: '冰的', btn: '冰', e: '🧊' }],
     },
+    // 🚉 出門辦事. Structurally identical to hot/iced — a two-way adjective in
+    // front of the noun — which is exactly why the registry exists.
+    trip: {
+      slot: 3, feat: 'trip', noun: '單程來回',
+      opts: [{ w: 'one-way', zh: '單程', btn: '單程', e: '➡️' },
+             { w: 'round-trip', zh: '來回', btn: '來回', e: '🔁' }],
+    },
   };
 
   const chAxis = id => ORDER_CHOICES[id];
@@ -338,6 +345,23 @@ const OrderGame = (() => {
       cls: 'od-place', attr: 'data-place',
       opts: [{ w: 'for here', zh: '內用', e: '🍽️' }, { w: 'to go', zh: '外帶', e: '🥡' }],
     },
+    // comma: false — "Can I have a haircut tomorrow, please?" runs straight on.
+    // Printing ", tomorrow," would be teaching a pause nobody makes.
+    when: {
+      feat: 'when', comma: false, noun: '時間', label: '什麼時候？',
+      cls: 'od-when', attr: 'data-when',
+      opts: [
+        { w: 'today', zh: '今天', e: '📅' },
+        { w: 'tomorrow', zh: '明天', e: '🌅' },
+        { w: "at three o'clock", zh: '三點', e: '🕒' },
+        { w: "at five o'clock", zh: '五點', e: '🕔' },
+        // These two override the ask's comma:false. A bare adverbial runs on,
+        // but a "for ..." phrase landing right after a "no butter" clause reads
+        // as "no butter for the show" — so it takes the parenthetical comma back.
+        { w: 'for the four o\'clock show', zh: '四點那場', e: '🎬', comma: true },
+        { w: 'for the seven o\'clock show', zh: '七點那場', e: '🎬', comma: true },
+      ],
+    },
   };
 
   const asksOf = s2 => Object.keys(ORDER_ASKS).filter(id => featuresOf(s2).has(ORDER_ASKS[id].feat));
@@ -425,7 +449,10 @@ const OrderGame = (() => {
     let tail = '';
     Object.keys(asks || {}).forEach(id => {
       if (!ORDER_ASKS[id]) return;
-      tail += (ORDER_ASKS[id].comma ? ', ' : ' ') + asks[id];
+      const a = ORDER_ASKS[id];
+      const opt = a.opts.find(o => o.w === asks[id]);
+      const comma = opt && opt.comma !== undefined ? opt.comma : a.comma;
+      tail += (comma ? ', ' : ' ') + asks[id];
     });
     return `${opener} ${body}${tail}, please${end}`;
   }
@@ -795,7 +822,7 @@ const OrderGame = (() => {
       const row = document.createElement('div');
       // `cls` keeps each ask's original hook (.od-place) so the DOM contract holds
       row.className = 'od-ask' + (ax.cls ? ' ' + ax.cls : '');
-      row.innerHTML = `<span class="od-place-label">${ax.label}</span>`
+      row.innerHTML = `<span class="od-ask-label">${ax.label}</span>`
         + askOpts(id).map(o => `<button data-ask="${id}" data-ask-v="${o.w}"${ax.attr ? ` ${ax.attr}="${o.w}"` : ''}
             class="${trayAsks[id] === o.w ? 'on' : ''}">${o.e ? o.e + ' ' : ''}${o.w}<small>${o.zh}</small></button>`).join('');
       row.querySelectorAll('[data-ask]').forEach(b =>
@@ -1142,6 +1169,12 @@ const OrderGame = (() => {
       },
       shops: () => SHOPS(),
       diffs: () => DIFFS,
+      // every pattern flag that exists — so the validator's "is this a known
+      // pattern?" check can never fall behind the registries the way the
+      // module's own featuresOf() once did
+      patterns: () => PATTERN_FEATURES(),
+      // the ask ids, for the "one ask per shop" rule
+      asks: () => Object.values(ORDER_ASKS).map(a => a.feat),
       // which sentence patterns a shop actually has switched on (2a inheritance)
       features: i => [...featuresOf(SHOPS()[i])],
       // n generated orders for one (shop, difficulty) — the fuzzing entry point
@@ -1214,6 +1247,8 @@ const OrderGame = (() => {
     setTemp: (w, t) => setTemp(w, t),
     setLevel: (w, x, lv) => setLevel(w, x, lv),
     setPlace: p => setPlace(p),
+    // any ask, not just 內用/外帶 — setPlace stays as the older alias
+    setAsk: (id, v) => setAsk(id, v),
     toggleIng: (w, x) => toggleIng(w, x),
     bumpQty: (w, d) => bumpQty(w, d),
     removeLine: w => removeLine(w),

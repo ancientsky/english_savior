@@ -36,6 +36,16 @@ Object.assign(ORDER_EXTRAS, {
   staples:    { zh: '訂書針',   e: '📌' },
   lamination: { zh: '護貝',     e: '✨' },
   ribbon:     { zh: '緞帶',     e: '🎀' },
+  // "with seats" is not what anyone books — the phrase is "reserved seats".
+  'reserved seats': { zh: '劃位', e: '💺' },
+  snacks:     { zh: '零食',     e: '🍿' },
+  butter:     { zh: '奶油',     e: '🧈' },
+  // bare after no/with, so no article: "a haircut, no wash, please" ✓
+  wash:       { zh: '洗頭',     e: '🚿' },
+  gel:        { zh: '髮膠',     e: '💈' },
+  bangs:      { zh: '瀏海',     e: '✂️' },
+  'a receipt':{ zh: '收據',     e: '🧾' },
+  'a car seat': { zh: '兒童座椅', e: '🪑' },
   'wrapping paper': { zh: '包裝紙', e: '🎁' },
   borders:    { zh: '白邊',     e: '🖼️' },
   retouching: { zh: '修圖',     e: '🪄' },
@@ -46,6 +56,8 @@ Object.assign(ORDER_EXTRAS, {
 const LIFE_REGIONS = [
   { id: 'errand', name: '生活小舖', e: '🏪', teaches: null,
     tip: '基本功：聽清楚要幾個、要加什麼、不要什麼。' },
+  { id: 'outing', name: '出門辦事', e: '🚉', teaches: 'when',
+    tip: '這一區的客人會說什麼時候——today、tomorrow、at three o\'clock。買票的還會說 one-way（單程）還是 round-trip（來回）。' },
 ];
 
 const LIFE_SHOPS = [
@@ -127,6 +139,97 @@ const LIFE_SHOPS = [
         def: [], ex: ['envelopes', 'staples'] },
       { w: 'receipt', zh: '收據', e: '🧾', kind: 'doc', pl: 'receipts',
         def: [], ex: ['staples'] },
+    ],
+  },
+  /* ================= 🚉 出門辦事 — when（時間）＋ trip（單程/來回）=================
+     `when` is the region's ask; `trip` rides on the ticket items only. A shop
+     may carry at most ONE ask, which is why nothing here also uses togo. */
+  {
+    id: 'trainstation', name: '火車站售票口', e: '🚄', unlockAt: 24, region: 'outing',
+    when: 1, trip: 1, askOpts: { when: ['today', 'tomorrow', "at three o'clock", "at five o'clock"] },
+    intro: '售票口！客人會說單程還是來回，還會說哪一天要走。',
+    menu: [
+      { w: 'ticket', zh: '車票', e: '🎫', kind: 'ticket', pl: 'tickets', choices: ['trip'],
+        def: [], ex: ['reserved seats'] },
+      { w: 'child ticket', zh: '兒童票', e: '🧒', kind: 'ticket', pl: 'child tickets', choices: ['trip'],
+        def: [], ex: ['reserved seats'] },
+      { w: 'student ticket', zh: '學生票', e: '🎓', kind: 'ticket', pl: 'student tickets', choices: ['trip'],
+        def: [], ex: ['reserved seats'] },
+      // a day pass is not a seat booking, so it takes the receipt instead
+      { w: 'day pass', zh: '一日券', e: '🗓️', kind: 'ticket', pl: 'day passes',
+        def: [], ex: ['a receipt'] },
+      { w: 'lunch box', zh: '鐵路便當', e: '🍱', kind: 'item', pl: 'lunch boxes',
+        def: [], ex: ['snacks'] },
+    ],
+  },
+  {
+    id: 'busstation', name: '客運轉運站', e: '🚌', unlockAt: 31, region: 'outing',
+    when: 1, trip: 1, askOpts: { when: ['today', 'tomorrow', "at three o'clock", "at five o'clock"] },
+    intro: '客運站的客人趕時間，班次和單程來回都要一次聽清楚。',
+    menu: [
+      { w: 'bus ticket', zh: '客運票', e: '🎫', kind: 'ticket', pl: 'bus tickets', choices: ['trip'],
+        def: [], ex: ['reserved seats'] },
+      { w: 'child ticket', zh: '兒童票', e: '🧒', kind: 'ticket', pl: 'child tickets', choices: ['trip'],
+        def: [], ex: ['reserved seats'] },
+      { w: 'luggage tag', zh: '行李吊牌', e: '🏷️', kind: 'item', pl: 'luggage tags',
+        def: [], ex: ['ribbon'] },
+      { w: 'blanket', zh: '毯子', e: '🧣', kind: 'item', pl: 'blankets',
+        def: [], ex: ['snacks'] },
+      { w: 'bottle of water', zh: '瓶裝水', e: '💧', kind: 'item', pl: 'bottles of water',
+        def: [], ex: ['snacks'] },
+    ],
+  },
+  {
+    id: 'cinema', name: '電影院售票口', e: '🎬', unlockAt: 39, region: 'outing',
+    when: 1, askOpts: { when: ["for the four o'clock show", "for the seven o'clock show", 'today', 'tomorrow'] },
+    intro: '電影院：幾張票、哪一場，還有爆米花要不要加奶油。',
+    menu: [
+      { w: 'movie ticket', zh: '電影票', e: '🎟️', kind: 'ticket', pl: 'movie tickets',
+        def: [], ex: ['reserved seats'] },
+      { w: 'child ticket', zh: '兒童票', e: '🧒', kind: 'ticket', pl: 'child tickets',
+        def: [], ex: ['reserved seats'] },
+      { w: 'popcorn', zh: '爆米花', e: '🍿', kind: 'item', art: 'some',
+        def: ['butter'], ex: ['salt'] },
+      { w: 'drink', zh: '飲料', e: '🥤', kind: 'drink', sizes: true, pl: 'drinks',
+        def: ['ice'], ex: [] },
+      { w: 'poster', zh: '海報', e: '🖼️', kind: 'item', pl: 'posters',
+        def: [], ex: ['lamination'] },
+    ],
+  },
+  {
+    id: 'taxi', name: '叫車服務台', e: '🚕', unlockAt: 48, region: 'outing',
+    when: 1, askOpts: { when: ['today', 'tomorrow', "at three o'clock", "at five o'clock"] },
+    intro: '幫客人叫車：幾台、什麼時候、要不要兒童座椅。',
+    menu: [
+      { w: 'taxi', zh: '計程車', e: '🚕', kind: 'service', pl: 'taxis',
+        def: [], ex: ['a car seat', 'a receipt'] },
+      { w: 'van', zh: '廂型車', e: '🚐', kind: 'service', pl: 'vans',
+        def: [], ex: ['a car seat', 'a receipt'] },
+      { w: 'airport taxi', zh: '機場接送', e: '✈️', kind: 'service', pl: 'airport taxis',
+        def: [], ex: ['a receipt'] },
+      { w: 'luggage tag', zh: '行李吊牌', e: '🏷️', kind: 'item', pl: 'luggage tags',
+        def: [], ex: ['ribbon'] },
+      { w: 'bottle of water', zh: '瓶裝水', e: '💧', kind: 'item', pl: 'bottles of water',
+        def: [], ex: ['snacks'] },
+    ],
+  },
+  {
+    id: 'salon', name: '美髮沙龍', e: '💇', unlockAt: 58, region: 'outing',
+    when: 1, askOpts: { when: ['today', 'tomorrow', "at three o'clock", "at five o'clock"] },
+    intro: '出門辦事最後一站！剪髮要預約時間，還要說洗不洗、要不要抓髮膠。',
+    menu: [
+      { w: 'haircut', zh: '剪髮', e: '💇', kind: 'service', pl: 'haircuts',
+        def: ['wash'], ex: ['gel', 'bangs'] },
+      // "some shampoo" would be the bottle on the shelf; the service a salon
+      // sells at the counter is a blow dry, and it counts.
+      { w: 'blow dry', zh: '吹整', e: '💨', kind: 'service', pl: 'blow dries',
+        def: ['wash'], ex: ['gel'] },
+      { w: 'hair dye', zh: '染髮', e: '🎨', kind: 'service', art: 'some',
+        def: ['wash'], ex: ['gel'] },
+      { w: 'perm', zh: '燙髮', e: '🌀', kind: 'service', pl: 'perms',
+        def: ['wash'], ex: ['gel'] },
+      { w: 'hair band', zh: '髮帶', e: '🎀', kind: 'item', pl: 'hair bands',
+        def: [], ex: ['ribbon'] },
     ],
   },
 ];
