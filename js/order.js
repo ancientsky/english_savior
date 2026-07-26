@@ -112,10 +112,21 @@ const OrderGame = (() => {
     const n = cfg.lines[0] + rand(cfg.lines[1] - cfg.lines[0] + 1);
     const chosen = shuffled(shop.menu).slice(0, Math.min(n, shop.menu.length));
 
-    // with/no phrases are budgeted across the WHOLE order, not per item: three
-    // items each carrying "with X and Y, no Z" is unparseable by ear even for
-    // an adult, and this is a listening game, not a memory test.
+    // with/no/extra/less phrases are budgeted across the WHOLE order, not per
+    // item: three items each carrying "with X and Y, no Z" is unparseable by ear
+    // even for an adult, and this is a listening game, not a memory test.
+    const amt = hasFeature('amt');
     let budget = cfg.mods;
+    // Easy mode has mods: 0, so without this the child would meet extra/less for
+    // the first time in medium, where the sentence is hidden. One item, one
+    // "extra", sentence on screen is the right introduction.
+    // Not every easy order, or the region's easy mode would never once show a
+    // plain "Can I have a naan, please?" again.
+    let forceLevel = false;
+    if (amt && !budget && Math.random() < 0.6) { budget = 1; forceLevel = true; }
+    // "no X" is the highest-value phrase in the game and must not be diluted by a
+    // third axis, so amounts get a per-order sub-cap on top of the shared budget.
+    let levelsLeft = amt ? (difficulty === 'hard' ? 2 : 1) : 0;
 
     orderPlace = makePlace();
 
@@ -130,21 +141,49 @@ const OrderGame = (() => {
       // the sentence is hidden.
       const temp = item.temps && hasFeature('temps') ? pick(['hot', 'iced']) : null;
 
-      let take = budget > 0 ? rand(Math.min(budget, 2) + 1) : 0;
+      let take = forceLevel ? 1 : (budget > 0 ? rand(Math.min(budget, 2) + 1) : 0);
       budget -= take;
       const added = [], dropped = [];
+      const lv = {};
       const canAdd = shuffled(item.ex || []);
       const canDrop = shuffled(item.def || []);
+      // extra/less only ever applies to a `def` ingredient, and only to the ones
+      // the data marks uncountable ("extra pickle" is not a thing). Keeping it off
+      // `added` means a def ingredient carries exactly one of {—, no, extra, less}
+      // so nothing is ever ambiguous, in the sentence or on the tray.
+      const canAmt = shuffled((item.def || []).filter(x => (ORDER_EXTRAS[x] || {}).amt));
       while (take-- > 0) {
-        // prefer whichever kind still has options, so "no ..." really appears
-        if (canDrop.length && (!canAdd.length || Math.random() < 0.5)) dropped.push(canDrop.pop());
-        else if (canAdd.length) added.push(canAdd.pop());
+        const wantLevel = amt && canAmt.length && levelsLeft > 0
+          && (forceLevel || Math.random() < 0.25);
+        // otherwise prefer whichever kind still has options, so "no ..." keeps
+        // showing up: drop 40 / add 35 / level 25
+        if (wantLevel) {
+          const x = canAmt.pop();
+          lv[x] = Math.random() < 0.5 ? 'extra' : 'less';
+          levelsLeft--;
+          // that ingredient is now spoken for — it can't also be refused
+          const i = canDrop.indexOf(x);
+          if (i >= 0) canDrop.splice(i, 1);
+        } else if (canDrop.length && (!canAdd.length || Math.random() < 0.53)) {
+          const x = canDrop.pop();
+          dropped.push(x);
+          // and it can no longer be adjusted — "with extra soy sauce, no soy
+          // sauce" on one item is nonsense, and this exclusion has to hold in
+          // BOTH orders, not just level-then-drop
+          const i = canAmt.indexOf(x);
+          if (i >= 0) canAmt.splice(i, 1);
+          delete lv[x];
+        } else if (canAdd.length) added.push(canAdd.pop());
         else budget++;   // nothing left to modify on this item — give it back
       }
       const ing = (item.def || []).filter(x => !dropped.includes(x)).concat(added);
-      return { w: item.w, qty, size, temp, ing, added, dropped };
+      return { w: item.w, qty, size, temp, ing, added, dropped, lv };
     }));
   }
+
+  // Never store 'normal': a present key with a normal value would make two
+  // otherwise-identical lines compare unequal.
+  const lvOf = (line, x) => (line && line.lv && line.lv[x]) || null;
 
   // The OPTIONAL load: qty / size / mods are independent dice rolls, so hard mode
   // could roll a 24-word order with nine facts in it — and hard only gets a
@@ -190,6 +229,10 @@ const OrderGame = (() => {
   // Deliberately NOT part of the mods budget: it is always in the same slot,
   // right before `please`, so the cost to the ear is close to nothing.
   const hasFeature = f => featuresOf(shop).has(f);
+  // The amount buttons only appear where the customer could actually have asked:
+  // on a `def` ingredient the data marks uncountable, in a region that teaches it.
+  const canLevel = (item, x) =>
+    hasFeature('amt') && (item.def || []).includes(x) && !!(ORDER_EXTRAS[x] || {}).amt;
 
   function makePlace() {
     if (!hasFeature('togo')) return null;
@@ -230,7 +273,12 @@ const OrderGame = (() => {
     else if (item.art === 'some') head = `some ${[...adj, noun].join(' ')}`;
     else head = `${articleFor(adj[0] || noun)} ${[...adj, noun].join(' ')}`;
     let s = head;
-    if (line.added.length) s += ` with ${listWords(line.added)}`;
+    // Plain add-ons first, adjusted ones last, each modifier hugging its own
+    // noun: "with extra pearls and honey" leaves a listener unable to tell
+    // whether "extra" reaches the honey.
+    const adds = line.added.concat(
+      Object.keys(line.lv || {}).map(x => `${line.lv[x]} ${x}`));
+    if (adds.length) s += ` with ${listWords(adds)}`;
     if (line.dropped.length) s += `, no ${line.dropped.join(' or ')}`;
     return s;
   }
@@ -363,7 +411,24 @@ const OrderGame = (() => {
     const line = tray.find(t => t.w === w);
     if (!line) return;
     const i = line.ing.indexOf(ing);
-    if (i >= 0) line.ing.splice(i, 1); else line.ing.push(ing);
+    if (i >= 0) {
+      line.ing.splice(i, 1);
+      // Taking the ingredient off must clear its amount too, or checkOrder would
+      // report a 份量 mistake on something that is not even on the plate — the
+      // kind of ghost error that makes a child give up.
+      if (line.lv) delete line.lv[ing];
+    } else line.ing.push(ing);
+    renderTray();
+  }
+
+  // The amount IS the ingredient's size: two independent toggles, at most one lit,
+  // exactly the interaction the child already learned from small/large.
+  function setLevel(w, ing, level) {
+    const line = tray.find(t => t.w === w);
+    if (!line || !line.ing.includes(ing)) return;
+    line.lv = line.lv || {};
+    if (lvOf(line, ing) === level) delete line.lv[ing];   // press again to clear
+    else line.lv[ing] = level;
     renderTray();
   }
 
@@ -401,11 +466,24 @@ const OrderGame = (() => {
           : `${item.zh} 還沒選冷熱：客人說 ${o.temp}（${o.temp === 'hot' ? '熱的' : '冰的'}）`);
       }
       const want = [...o.ing].sort(), got = [...t.ing].sort();
-      want.filter(x => !got.includes(x)).forEach(x => add(RANK.ing, `${item.zh} 少加了 ${extraOf(x).e} ${extraOf(x).zh}（${x}）`));
+      const missing = want.filter(x => !got.includes(x));
+      const surplus = got.filter(x => !want.includes(x));
+      // Amounts are only checked on ingredients that are actually on the plate,
+      // and only when the ingredient itself is right — otherwise the same single
+      // mistake gets reported twice.
+      want.filter(x => got.includes(x)).forEach(x => {
+        const wantLv = lvOf(o, x), gotLv = lvOf(t, x);
+        if (wantLv === gotLv) return;
+        const zh = `${extraOf(x).e} ${extraOf(x).zh}`;
+        add(RANK.lv, wantLv
+          ? `${item.zh} 的 ${zh} 份量錯了：客人說 ${wantLv} ${x}（${wantLv === 'extra' ? '多一點' : '少一點'}）`
+          : `${item.zh} 的 ${zh} 客人沒有說要多還是少，照原本的份量就好`);
+      });
+      missing.forEach(x => add(RANK.ing, `${item.zh} 少加了 ${extraOf(x).e} ${extraOf(x).zh}（${x}）`));
       // Two different mistakes, two different lessons: the customer refusing an
       // ingredient is not the same as the child adding one nobody asked for.
       // Saying 「客人說 no X」 for both taught the child to mishear the order.
-      got.filter(x => !want.includes(x)).forEach(x => add(RANK.ing, o.dropped.includes(x)
+      surplus.forEach(x => add(RANK.ing, o.dropped.includes(x)
         ? `${item.zh} 多了 ${extraOf(x).e} ${extraOf(x).zh}（${x}）— 客人說 no ${x}，要拿掉`
         : `${item.zh} 多了 ${extraOf(x).e} ${extraOf(x).zh}（${x}）— 客人沒有說要加這個`));
       if (problems.length === before) right.push(`${item.e} ${item.w}`);
@@ -607,7 +685,13 @@ const OrderGame = (() => {
           <button class="od-line-x" data-act="del">✕</button>
         </div>
         <div class="od-ings">
-          ${t.ing.map(x => `<button class="od-ing on" data-ing="${x}">${extraOf(x).e} ${x}<small>${extraOf(x).zh}</small></button>`).join('')}
+          ${t.ing.map(x => `<span class="od-ing-wrap">
+            <button class="od-ing on" data-ing="${x}">${extraOf(x).e} ${x}<small>${extraOf(x).zh}</small></button>
+            ${canLevel(item, x) ? `<span class="od-size od-lv">
+              <button data-lv="less" data-lv-ing="${x}" class="${lvOf(t, x) === 'less' ? 'on' : ''}">less 少</button>
+              <button data-lv="extra" data-lv-ing="${x}" class="${lvOf(t, x) === 'extra' ? 'on' : ''}">extra 多</button>
+            </span>` : ''}
+          </span>`).join('')}
           ${optional.map(x => `<button class="od-ing" data-ing="${x}">＋ ${extraOf(x).e} ${x}<small>${extraOf(x).zh}</small></button>`).join('')}
         </div>`;
 
@@ -620,6 +704,8 @@ const OrderGame = (() => {
       line.querySelectorAll('[data-size]').forEach(b => b.addEventListener('click', () => setSize(t.w, b.dataset.size)));
       line.querySelectorAll('[data-temp]').forEach(b => b.addEventListener('click', () => setTemp(t.w, b.dataset.temp)));
       line.querySelectorAll('[data-ing]').forEach(b => b.addEventListener('click', () => toggleIng(t.w, b.dataset.ing)));
+      line.querySelectorAll('[data-lv]').forEach(b =>
+        b.addEventListener('click', () => setLevel(t.w, b.dataset.lvIng, b.dataset.lv)));
       els.tray.appendChild(line);
     });
   }
@@ -792,6 +878,7 @@ const OrderGame = (() => {
   function cloneLine(l) {
     const c = { ...l };
     ['ing', 'added', 'dropped'].forEach(k => { if (Array.isArray(l[k])) c[k] = l[k].slice(); });
+    if (l.lv) c.lv = { ...l.lv };
     return c;
   }
 
@@ -812,7 +899,7 @@ const OrderGame = (() => {
     return {
       w: l.w, qty: l.qty || 1, size: l.size || null, temp: l.temp || null,
       ing: l.ing ? l.ing.slice() : (item.def || []).filter(x => !dropped.includes(x)).concat(added),
-      added, dropped,
+      added, dropped, lv: { ...(l.lv || {}) },
     };
   }
 
@@ -851,6 +938,7 @@ const OrderGame = (() => {
     // Replace the customer's order outright — lets a test aim at one branch of
     // checkOrder() instead of waiting for the dice to produce it.
     setOrder: (lines, place) => {
+      resetTray();     // a new order means a new customer — same as nextCustomer
       order = lines.map(l => normalizeLine(shopIndex, l));
       if (place !== undefined) orderPlace = place;
       sentence = buildSentence(order, orderPlace);
@@ -864,6 +952,7 @@ const OrderGame = (() => {
         size: o.size || (itemOf(o.w).sizes ? 'small' : null),
         temp: o.temp || null,
         ing: o.ing.slice(),
+        lv: { ...(o.lv || {}) },
       }));
       trayPlace = orderPlace;
       renderTray();
@@ -872,6 +961,7 @@ const OrderGame = (() => {
     add: w => addToTray(w),
     setSize: (w, s) => setSize(w, s),
     setTemp: (w, t) => setTemp(w, t),
+    setLevel: (w, x, lv) => setLevel(w, x, lv),
     setPlace: p => setPlace(p),
     toggleIng: (w, x) => toggleIng(w, x),
     bumpQty: (w, d) => bumpQty(w, d),

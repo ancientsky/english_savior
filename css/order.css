@@ -261,6 +261,13 @@
 
 .od-ings { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
 
+/* extra / less — the amount IS the ingredient's size, so it reuses .od-size
+   exactly: two independent toggles, at most one lit, one click between any two
+   of the three states. That is the interaction the child already knows from
+   small/large, which is why it needs almost no new styling. */
+.od-ing-wrap { display: inline-flex; align-items: center; gap: 4px; }
+.od-lv button { font-size: 10px; padding: 3px 7px; }
+
 .od-ing {
   display: inline-flex;
   align-items: baseline;
