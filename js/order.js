@@ -117,14 +117,18 @@ const OrderGame = (() => {
     // an adult, and this is a listening game, not a memory test.
     let budget = cfg.mods;
 
-    // Decided here, before trimming, because 內用/外帶 is one more thing to
-    // remember and so has to compete for the same fact budget as everything else.
     orderPlace = makePlace();
 
     return trimToBudget(chosen.map(item => {
       // Quantity only where "two ___" is real English (the data marks those)
       const qty = cfg.qty && item.pl && Math.random() < 0.45 ? 2 + rand(2) : 1;
       const size = cfg.size && item.sizes && Math.random() < 0.6 ? pick(['small', 'large']) : null;
+      // Temperature has no DIFFS switch on purpose: a shop with `temps` items IS
+      // the shop that teaches hot/iced, and its EASY mode — one item, no add-ons,
+      // sentence on screen — is the ideal first meeting with the word. Gating it
+      // by difficulty would introduce "iced" for the first time in medium, where
+      // the sentence is hidden.
+      const temp = item.temps && hasFeature('temps') ? pick(['hot', 'iced']) : null;
 
       let take = budget > 0 ? rand(Math.min(budget, 2) + 1) : 0;
       budget -= take;
@@ -138,35 +142,38 @@ const OrderGame = (() => {
         else budget++;   // nothing left to modify on this item — give it back
       }
       const ing = (item.def || []).filter(x => !dropped.includes(x)).concat(added);
-      return { w: item.w, qty, size, ing, added, dropped };
-    }), orderPlace ? 1 : 0);
+      return { w: item.w, qty, size, temp, ing, added, dropped };
+    }));
   }
 
-  // Every separate thing the child has to hold in their head. qty / size / mods
-  // are independent dice rolls, so hard mode could roll a 24-word order with
-  // nine facts in it — and hard only gets a couple of replays.
+  // The OPTIONAL load: qty / size / mods are independent dice rolls, so hard mode
+  // could roll a 24-word order with nine facts in it — and hard only gets a
+  // couple of replays.
+  //
+  // 內用/外帶 and hot/iced are deliberately NOT counted. They are the reason the
+  // region exists, they are mandatory there, and making them compete for the
+  // budget had a nasty consequence: in 百貨美食層 the compulsory "for here" ate
+  // easy mode's entire allowance, so "iced" never once appeared in the mode whose
+  // whole job is to introduce it (one item, no add-ons, sentence on screen).
   function factsOf(o) {
     let n = 0;
     o.forEach(l => {
       n += 1;
       if (l.qty > 1) n++;
       if (l.size) n++;
-      if (l.temp) n++;
       n += l.added.length + l.dropped.length + Object.keys(l.lv || {}).length;
     });
     return n;
   }
 
-  // Peel optional facts off, cheapest-to-lose first, until the order fits.
-  // Quantity survives longest: it is the one the child is worst at hearing.
-  // `extra` counts facts that live outside the lines (內用/外帶) and cannot be
-  // stripped, so they push the item-level detail down instead.
-  function trimToBudget(o, extra) {
-    const cap = DIFFS[difficulty].facts - (extra || 0);
-    if (!DIFFS[difficulty].facts) return o;
+  // Peel optional facts off until the order fits, oldest lesson first. Trimming
+  // starts from the LAST item, so the front of the sentence — the part a child
+  // still has attention for — keeps its detail.
+  function trimToBudget(o) {
+    const cap = DIFFS[difficulty].facts;
+    if (!cap) return o;
     const strip = [
       l => { if (l.size) { l.size = null; return true; } },
-      l => { if (l.temp) { l.temp = null; return true; } },
       l => { if (l.qty > 1) { l.qty = 1; return true; } },
     ];
     for (const step of strip) {
@@ -182,8 +189,10 @@ const OrderGame = (() => {
   // customer who didn't ask, and only fails "for here").
   // Deliberately NOT part of the mods budget: it is always in the same slot,
   // right before `please`, so the cost to the ear is close to nothing.
+  const hasFeature = f => featuresOf(shop).has(f);
+
   function makePlace() {
-    if (!featuresOf(shop).has('togo')) return null;
+    if (!hasFeature('togo')) return null;
     return Math.random() < 0.5 ? 'for here' : 'to go';
   }
 
@@ -323,7 +332,10 @@ const OrderGame = (() => {
     const item = itemOf(w);
     const line = tray.find(t => t.w === w);
     if (line) line.qty = Math.min(4, line.qty + 1);
-    else tray.push({ w, qty: 1, size: item.sizes ? 'small' : null, ing: (item.def || []).slice() });
+    // size defaults to small because "didn't say" means "doesn't mind", but temp
+    // has NO default: pre-selecting 'hot' would silently pass every order whose
+    // "hot" the child never heard.
+    else tray.push({ w, qty: 1, size: item.sizes ? 'small' : null, temp: null, ing: (item.def || []).slice() });
     renderTray();
   }
 
@@ -340,6 +352,11 @@ const OrderGame = (() => {
   function setSize(w, size) {
     const line = tray.find(t => t.w === w);
     if (line) { line.size = size; renderTray(); }
+  }
+
+  function setTemp(w, temp) {
+    const line = tray.find(t => t.w === w);
+    if (line) { line.temp = temp; renderTray(); }
   }
 
   function toggleIng(w, ing) {
@@ -376,6 +393,12 @@ const OrderGame = (() => {
       if (t.qty !== o.qty) add(RANK.qty, `${item.zh} 的數量錯了：要 ${o.qty} 份，你做了 ${t.qty} 份`);
       if ((o.size || null) !== (t.size || null) && o.size) {
         add(RANK.size, `${item.zh} 的大小錯了：要 ${o.size === 'large' ? '大杯 large' : '小杯 small'}`);
+      }
+      // only compared when the customer actually said one
+      if (o.temp && o.temp !== t.temp) {
+        add(RANK.temp, t.temp
+          ? `${item.zh} 的冷熱錯了：客人說 ${o.temp}（${o.temp === 'hot' ? '熱的' : '冰的'}）`
+          : `${item.zh} 還沒選冷熱：客人說 ${o.temp}（${o.temp === 'hot' ? '熱的' : '冰的'}）`);
       }
       const want = [...o.ing].sort(), got = [...t.ing].sort();
       want.filter(x => !got.includes(x)).forEach(x => add(RANK.ing, `${item.zh} 少加了 ${extraOf(x).e} ${extraOf(x).zh}（${x}）`));
@@ -577,6 +600,10 @@ const OrderGame = (() => {
             <button data-size="small" class="${t.size === 'small' ? 'on' : ''}">small 小</button>
             <button data-size="large" class="${t.size === 'large' ? 'on' : ''}">large 大</button>
           </span>` : ''}
+          ${item.temps && hasFeature('temps') ? `<span class="od-size od-temp">
+            <button data-temp="hot" class="${t.temp === 'hot' ? 'on' : ''}">🔥 hot 熱</button>
+            <button data-temp="iced" class="${t.temp === 'iced' ? 'on' : ''}">🧊 iced 冰</button>
+          </span>` : ''}
           <button class="od-line-x" data-act="del">✕</button>
         </div>
         <div class="od-ings">
@@ -591,6 +618,7 @@ const OrderGame = (() => {
         else removeLine(t.w);
       }));
       line.querySelectorAll('[data-size]').forEach(b => b.addEventListener('click', () => setSize(t.w, b.dataset.size)));
+      line.querySelectorAll('[data-temp]').forEach(b => b.addEventListener('click', () => setTemp(t.w, b.dataset.temp)));
       line.querySelectorAll('[data-ing]').forEach(b => b.addEventListener('click', () => toggleIng(t.w, b.dataset.ing)));
       els.tray.appendChild(line);
     });
@@ -782,7 +810,7 @@ const OrderGame = (() => {
     const added = (l.added || []).slice();
     const dropped = (l.dropped || []).slice();
     return {
-      w: l.w, qty: l.qty || 1, size: l.size || null,
+      w: l.w, qty: l.qty || 1, size: l.size || null, temp: l.temp || null,
       ing: l.ing ? l.ing.slice() : (item.def || []).filter(x => !dropped.includes(x)).concat(added),
       added, dropped,
     };
@@ -831,13 +859,19 @@ const OrderGame = (() => {
     // Build the tray exactly as the order asks — the "perfect employee" path.
     // Split from autoServe so a test can assert problems() without spending XP.
     autoTray: () => {
-      tray = order.map(o => ({ w: o.w, qty: o.qty, size: o.size || (itemOf(o.w).sizes ? 'small' : null), ing: o.ing.slice() }));
+      tray = order.map(o => ({
+        w: o.w, qty: o.qty,
+        size: o.size || (itemOf(o.w).sizes ? 'small' : null),
+        temp: o.temp || null,
+        ing: o.ing.slice(),
+      }));
       trayPlace = orderPlace;
       renderTray();
     },
     autoServe: () => { TestHooks.autoTray(); serve(); },
     add: w => addToTray(w),
     setSize: (w, s) => setSize(w, s),
+    setTemp: (w, t) => setTemp(w, t),
     setPlace: p => setPlace(p),
     toggleIng: (w, x) => toggleIng(w, x),
     bumpQty: (w, d) => bumpQty(w, d),
