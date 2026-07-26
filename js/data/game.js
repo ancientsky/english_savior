@@ -84,15 +84,19 @@ const ACHIEVEMENTS = [
   { id: 'alchemy_50', name: '鍊金術士', desc: '在單字鍊金術合成 50 個單字', icon: '🔤', pts: 20, condition: s => (s.alchemyWords || 0) >= 50 },
   { id: 'alchemy_master', name: '鍊金大師', desc: '在單字鍊金術合成 120 個單字', icon: '📜', pts: 20, condition: s => (s.alchemyWords || 0) >= 120 },
   { id: 'alchemy_sage', name: '鍊金賢者', desc: '在單字鍊金術合成 240 個單字', icon: '🧪', pts: 20, condition: s => (s.alchemyWords || 0) >= 240 },
-  { id: 'order_first', name: '見習店員', desc: '在英語餐廳大亂鬥完成第一張訂單', icon: '🧑‍🍳', pts: 10, condition: s => (s.orderServed || 0) >= 1 },
-  { id: 'order_50', name: '金牌店員', desc: '在英語餐廳大亂鬥完成 50 張訂單', icon: '🏅', pts: 20, condition: s => (s.orderServed || 0) >= 50 },
+  { id: 'order_first', name: '見習店員', desc: '在英語打工大亂鬥完成第一張訂單', icon: '🧑‍🍳', pts: 10, condition: s => (s.orderServed || 0) >= 1 },
+  { id: 'order_50', name: '金牌店員', desc: '在英語打工大亂鬥完成 50 張訂單', icon: '🏅', pts: 20, condition: s => (s.orderServed || 0) >= 50 },
   // The threshold stays at 5 even though there are now 25 shops: achievements are
   // grant-only, so raising it would quietly move the goalpost for players who
   // already earned it. It is simply relabelled as the first region's badge.
-  { id: 'order_shops', name: '五星大廚', desc: '在英語餐廳大亂鬥開遍學校美食街 5 家店', icon: '👨‍🍳', pts: 20, condition: s => (s.orderShops || 0) >= 5 },
-  { id: 'order_15', name: '商圈名廚', desc: '在英語餐廳大亂鬥開到 15 家店（走完百貨美食層）', icon: '🏬', pts: 20, condition: s => (s.orderShops || 0) >= 15 },
-  { id: 'order_all', name: '餐飲帝王', desc: '在英語餐廳大亂鬥開遍 5 個區域全部 25 家店', icon: '👑', pts: 40, condition: s => (s.orderShops || 0) >= 25 },
-  { id: 'order_200', name: '出餐大師', desc: '在英語餐廳大亂鬥完成 200 張訂單', icon: '🍽️', pts: 30, condition: s => (s.orderServed || 0) >= 200 },
+  { id: 'order_shops', name: '五星大廚', desc: '在英語打工大亂鬥開遍學校美食街 5 家店', icon: '👨‍🍳', pts: 20, condition: s => (s.orderShops || 0) >= 5 },
+  { id: 'order_15', name: '商圈名廚', desc: '在英語打工大亂鬥開到 15 家店（走完百貨美食層）', icon: '🏬', pts: 20, condition: s => (s.orderShops || 0) >= 15 },
+  { id: 'order_all', name: '餐飲帝王', desc: '在英語打工大亂鬥開遍 5 個區域全部 25 家店', icon: '👑', pts: 40, condition: s => (s.orderShops || 0) >= 25 },
+  { id: 'order_200', name: '出餐大師', desc: '在英語打工大亂鬥完成 200 張訂單', icon: '🍽️', pts: 30, condition: s => (s.orderServed || 0) >= 200 },
+  // 生活服務 world — its own counters, so 餐飲 badges keep meaning what they say
+  { id: 'life_first', name: '櫃台新手', desc: '在英語打工大亂鬥服務第一位生活服務的客人', icon: '🛎️', pts: 10, condition: s => (s.lifeServed || 0) >= 1 },
+  { id: 'life_50', name: '街頭達人', desc: '在英語打工大亂鬥服務 50 位生活服務的客人', icon: '🏪', pts: 20, condition: s => (s.lifeServed || 0) >= 50 },
+  { id: 'life_all', name: '打工帝王', desc: '在英語打工大亂鬥開遍全部 20 個生活服務場景', icon: '👑', pts: 40, condition: s => (s.lifeScenes || 0) >= 20 },
 ];
 
 const DAILY_QUESTS = [
@@ -115,7 +119,7 @@ const DAILY_QUESTS = [
   { id: 'dq_wizard', name: '今日召喚', desc: '在單字魔法師召喚 5 個東西', icon: '🪄', target: 5, key: 'dailyWizard' },
   { id: 'dq_rhythm', name: '今日一曲', desc: '在英語節奏星完成 1 首歌', icon: '🎵', target: 1, key: 'dailyRhythm' },
   { id: 'dq_alchemy', name: '今日鍊金', desc: '在單字鍊金術合成 3 個單字', icon: '🔤', target: 3, key: 'dailyAlchemy' },
-  { id: 'dq_order', name: '今日出餐', desc: '在英語餐廳大亂鬥完成 3 張訂單', icon: '🍜', target: 3, key: 'dailyOrder' },
+  { id: 'dq_order', name: '今日出餐', desc: '在英語打工大亂鬥完成 3 張訂單', icon: '🍜', target: 3, key: 'dailyOrder' },
 ];
 
 const INVENTORY_ITEMS = [

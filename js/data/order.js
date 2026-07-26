@@ -187,3 +187,36 @@ const ORDER_OPENERS = [
   'I want', 'I would like', "I'd like", "I'll have",
   'Can I have', 'Could I get', 'May I have',
 ];
+
+/* ===== Worlds =====
+   The zone holds two separate games sharing one engine: the restaurant (25
+   shops) and life-service counters (20 scenes). They are separate WORLDS, not
+   more regions, because they need separate progress — the 25th restaurant
+   unlocks at 248 orders served, and nobody should have to grind that far before
+   the post office exists.
+
+   Each world owns its save key, its shop and region arrays, and the handful of
+   UI words that are genuinely restaurant-flavoured. `shops`/`regions` hold live
+   references, so the `*2.js` / `*3.js` expansion packs keep pushing into them.
+
+   `t` is the string table. Only ten labels differ; 客人 (customer) is right at
+   every counter and needs no override.
+*/
+const ORDER_WORLDS = [
+  {
+    id: 'food', name: '餐飲', e: '🍜', saveKey: 'english_savior_order',
+    shops: ORDER_SHOPS, regions: ORDER_REGIONS, openers: ORDER_OPENERS,
+    sub: '25 家餐廳，從學校美食街到神級餐廳',
+    t: {
+      tray: '🍽️ 你的托盤', serve: '🛎️ 送出餐點', toShops: '🏪 換店',
+      shopsTitle: '🏪 店家', shopWord: '店', servedWord: '出餐', unitWord: '份',
+      empty: '點下面的菜單，把客人要的東西做出來 👇',
+      emptyWarn: '托盤是空的！先點菜單做東西給客人。',
+      closed: '今天打烊囉！',
+      intro: `<p>客人會用<strong>一整句英文</strong>跟你點餐。你不用選答案——<strong>直接把餐做出來</strong>！</p>
+        <p>「Can I have a hamburger <strong>with cheese</strong>, <strong>no onion</strong>, please?」<br>
+           → 做漢堡、加起司、把洋蔥拿掉。</p>
+        <p>with（加）、no（不要）、two（兩份）、large（大杯）——每個字都會改變你要做的東西。</p>`,
+    },
+  },
+];

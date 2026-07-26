@@ -400,6 +400,26 @@
   color: var(--od-ink);
 }
 
+/* The two worlds (🍜 餐飲 / 🏪 生活服務). Deliberately inside the shop panel
+   rather than in front of it: 上工去 must still open straight into the
+   restaurant list, which is what every existing save and test expects. */
+.od-world { display: flex; gap: 8px; padding: 8px 16px 0; flex-wrap: wrap; }
+.od-world-btn {
+  flex: 1 1 200px;
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 2px solid rgba(255, 255, 255, .16);
+  background: rgba(255, 255, 255, .05);
+  color: var(--od-ink);
+  cursor: pointer;
+  text-align: left;
+}
+.od-world-btn strong { font-size: 14px; }
+.od-world-btn span { font-size: 11px; opacity: .72; }
+.od-world-btn.active { background: var(--od-warm); border-color: var(--od-warm); color: #3a1e00; }
+.od-world-btn.active span { opacity: .85; }
+
 .od-shop-list { padding: 6px 16px 20px; overflow-y: auto; }
 
 /* One section per region: five shops and the sentence pattern that region

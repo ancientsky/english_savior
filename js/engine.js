@@ -699,6 +699,26 @@ const GameEngine = (() => {
     checkDailyQuests();
   }
 
+  // Volume counters are shared across both worlds of the zone — after the rename
+  // the zone genuinely contains both, counting both is honest, and it only ever
+  // makes the existing 出餐 achievements easier, never harder.
+  function recordLifeServed() {
+    state.lifeServed = (state.lifeServed || 0) + 1;
+    save();
+    checkAchievements();
+  }
+
+  // 生活服務 keeps its OWN scene counter. It must not feed `orderShops`: that
+  // drives 「開遍 5 個區域全部 25 家店」, and unlocking it by working the post
+  // office would make the badge say something it does not mean.
+  function recordLifeScene(n) {
+    if (n > (state.lifeScenes || 0)) {
+      state.lifeScenes = n;
+      save();
+      checkAchievements();
+    }
+  }
+
   function recordOrderShop(n) {
     if (n > (state.orderShops || 0)) {
       state.orderShops = n;
@@ -1479,7 +1499,7 @@ const GameEngine = (() => {
     recordPetCatch, recordPetGym, recordTypingWord, recordTutorLesson, recordDetectiveCase, recordFishCatch,
     recordFishLegendary, recordFishDistinct,
     recordWizardCast, recordWizardLevel, recordWizardSolution,
-    recordRhythmSong, recordRhythmFC, recordRhythmPerfectGauge, recordWizardFlawless, recordAlchemyWord, recordOrderServed, recordOrderShop,
+    recordRhythmSong, recordRhythmFC, recordRhythmPerfectGauge, recordWizardFlawless, recordAlchemyWord, recordOrderServed, recordOrderShop, recordLifeScene, recordLifeServed,
     recordBuilder, recordBuilderLandmark, recordSpeak,
     recordTowerWord, recordTowerBoss,
     recordRpgTalk, recordRpgChapter,

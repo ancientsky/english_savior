@@ -189,11 +189,14 @@ const HubView = (() => {
 
     // ---- order: english_savior_order → orders served + shops open ----
     try {
-      const od = readJSON('english_savior_order');
-      const served = od && Number(od.served) > 0 ? Number(od.served) : 0;
-      const shops = od && Number(od.shops) > 0 ? Number(od.shops) : 1;
-      const total = (typeof ORDER_SHOPS !== 'undefined' && Array.isArray(ORDER_SHOPS)) ? ORDER_SHOPS.length : 25;
-      setBadge('order', served > 0 ? `🍜 ${served} 單　🏪 ${shops}/${total}` : '');
+      // two worlds share this zone (餐飲 + 生活服務) — the badge sums both
+      const od = readJSON('english_savior_order') || {};
+      const lf = readJSON('english_savior_life') || {};
+      const served = (Number(od.served) || 0) + (Number(lf.served) || 0);
+      const open = (Number(od.shops) || 0) + (Number(lf.shops) || 0);
+      const total = (typeof ORDER_WORLDS !== 'undefined' && Array.isArray(ORDER_WORLDS))
+        ? ORDER_WORLDS.reduce((n, w) => n + w.shops.length, 0) : 45;
+      setBadge('order', served > 0 ? `🛎️ ${served} 單　🏪 ${open}/${total}` : '');
     } catch { setBadge('order', ''); }
   }
 
