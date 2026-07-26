@@ -220,8 +220,9 @@ const OrderGame = (() => {
 
   /* ================= serving ================= */
 
-  // Returns [] when the tray matches the order, otherwise a list of Chinese
-  // problems — telling a child *what* they misheard is the teaching moment.
+  // Returns { all, shown }: `all` decides pass/fail, `shown` is what the child
+  // reads. Telling a child *what* they misheard is the teaching moment — but a
+  // wall of twelve mistakes is a beating, so the two lists are separate.
   function checkOrder() {
     const problems = [];
     order.forEach(o => {
@@ -242,19 +243,19 @@ const OrderGame = (() => {
         problems.push(`多做了 ${item.e} ${item.zh}（${t.w}），客人沒有點`);
       }
     });
-    return problems;
+    return { all: problems, shown: problems };
   }
 
   function serve() {
     if (!running) return;
     if (!tray.length) { flash('托盤是空的！先點菜單做東西給客人。', 'bad'); return; }
-    const problems = checkOrder();
-    if (problems.length) {
+    const res = checkOrder();
+    if (res.all.length) {
       SoundManager.playWrong();
       retried = true;
       els.result.innerHTML =
         `<div class="od-result bad"><strong>😕 客人皺眉了…</strong>
-          <ul>${problems.map(p => `<li>${p}</li>`).join('')}</ul>
+          <ul>${res.shown.map(p => `<li>${p}</li>`).join('')}</ul>
           <p>再聽一次，改好之後重新送出！</p></div>`;
       renderOrderBar();
       return;
@@ -325,6 +326,7 @@ const OrderGame = (() => {
   function renderAll() { renderOrderBar(); renderMenu(); renderTray(); }
 
   function renderOrderBar() {
+    if (!els.bubble) return;   // validate_order.js evals this file with no DOM
     const face = CUSTOMERS[(customer + shopIndex) % CUSTOMERS.length];
     const cfg = DIFFS[difficulty];
     els.customer.textContent = face;
@@ -337,6 +339,7 @@ const OrderGame = (() => {
   }
 
   function renderMenu() {
+    if (!els.menu) return;
     els.menu.innerHTML = '';
     ['food', 'drink'].forEach(kind => {
       const list = shop.menu.filter(m => m.kind === kind);
@@ -356,6 +359,7 @@ const OrderGame = (() => {
   }
 
   function renderTray() {
+    if (!els.tray) return;
     els.tray.innerHTML = '';
     if (!tray.length) {
       els.tray.innerHTML = '<p class="od-tray-empty">點下面的菜單，把客人要的東西做出來 👇</p>';
@@ -538,34 +542,103 @@ const OrderGame = (() => {
     return true;
   }
 
+  /* ================= test hooks =================
+     Deliberately OUTSIDE init(): validate_order.js evals this file in Node with
+     a stubbed document, so the `pure` half has to exist without any DOM at all.
+     That way the validator checks the REAL sentence builder instead of keeping
+     its own copy of the grammar, which would silently drift.
+     The DOM half only does anything once init() has built the shell.
+  */
+
+  // The old hook handed tests a shallow copy, i.e. a live reference to `ing`.
+  function cloneLine(l) {
+    const c = { ...l };
+    ['ing', 'added', 'dropped'].forEach(k => { if (Array.isArray(l[k])) c[k] = l[k].slice(); });
+    return c;
+  }
+
+  // Point the module at a shop without disturbing a shift that may be running.
+  function withShop(i, diff, fn) {
+    const keep = { shop, shopIndex, difficulty, order, sentence };
+    shopIndex = i;
+    shop = ORDER_SHOPS[i];
+    if (diff) difficulty = diff;
+    try { return fn(); } finally { ({ shop, shopIndex, difficulty, order, sentence } = keep); }
+  }
+
+  // Fill in whatever a test literal left out, the same way makeOrder() would.
+  function normalizeLine(i, l) {
+    const item = ORDER_SHOPS[i].menu.find(m => m.w === l.w);
+    const added = (l.added || []).slice();
+    const dropped = (l.dropped || []).slice();
+    return {
+      w: l.w, qty: l.qty || 1, size: l.size || null,
+      ing: l.ing ? l.ing.slice() : (item.def || []).filter(x => !dropped.includes(x)).concat(added),
+      added, dropped,
+    };
+  }
+
+  const TestHooks = {
+    pure: {
+      shops: () => ORDER_SHOPS,
+      diffs: () => DIFFS,
+      // n generated orders for one (shop, difficulty) — the fuzzing entry point
+      sample: (i, diff, n) => withShop(i, diff, () => {
+        const out = [];
+        for (let k = 0; k < n; k++) {
+          const o = makeOrder();
+          out.push({ shop: ORDER_SHOPS[i].id, diff, sentence: buildSentence(o), order: o.map(cloneLine) });
+        }
+        return out;
+      }),
+      // one hand-written order, so a specific phrasing can be asserted
+      sentenceFor: (i, lines) => withShop(i, null, () => buildSentence(lines.map(l => normalizeLine(i, l)))),
+    },
+
+    state: () => ({
+      shop: shop && shop.id,
+      customer, correctCount, running,
+      served: save.served, shops: save.shops,
+      difficulty, sentence,
+      order: order && order.map(cloneLine),
+      tray: tray.map(cloneLine),
+    }),
+    save: () => JSON.parse(JSON.stringify(save)),
+    setDiff: d => { difficulty = d; renderOrderBar(); },
+    startShift: i => startShift(i),
+    // Replace the customer's order outright — lets a test aim at one branch of
+    // checkOrder() instead of waiting for the dice to produce it.
+    setOrder: lines => {
+      order = lines.map(l => normalizeLine(shopIndex, l));
+      sentence = buildSentence(order);
+      renderAll();
+    },
+    // Build the tray exactly as the order asks — the "perfect employee" path.
+    // Split from autoServe so a test can assert problems() without spending XP.
+    autoTray: () => {
+      tray = order.map(o => ({ w: o.w, qty: o.qty, size: o.size || (itemOf(o.w).sizes ? 'small' : null), ing: o.ing.slice() }));
+      renderTray();
+    },
+    autoServe: () => { TestHooks.autoTray(); serve(); },
+    add: w => addToTray(w),
+    setSize: (w, s) => setSize(w, s),
+    toggleIng: (w, x) => toggleIng(w, x),
+    bumpQty: (w, d) => bumpQty(w, d),
+    removeLine: w => removeLine(w),
+    serve: () => serve(),
+    // { all, shown }: returning only the truncated list would let a regression
+    // in the display cap hide real problems from the tests as well.
+    problems: () => checkOrder(),
+  };
+
+  if (typeof window !== 'undefined') window.__orderTest = TestHooks;
+
   /* ================= lifecycle ================= */
 
   function init() {
     loadSave();
     if (!buildShell()) return;
     renderDiffRow(els.diffRow);
-
-    window.__orderTest = {
-      state: () => ({
-        shop: shop && shop.id,
-        customer, correctCount, running,
-        served: save.served, shops: save.shops,
-        sentence,
-        order: order && order.map(o => ({ ...o })),
-        tray: tray.map(t => ({ ...t })),
-      }),
-      startShift: i => startShift(i),
-      // Build the tray exactly as the order asks — the "perfect employee" path
-      autoServe: () => {
-        tray = order.map(o => ({ w: o.w, qty: o.qty, size: o.size || (itemOf(o.w).sizes ? 'small' : null), ing: o.ing.slice() }));
-        renderTray();
-        serve();
-      },
-      add: w => addToTray(w),
-      serve: () => serve(),
-      problems: () => checkOrder(),
-      save: () => JSON.parse(JSON.stringify(save)),
-    };
   }
 
   return { init };
