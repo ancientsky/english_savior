@@ -667,6 +667,20 @@ const GameEngine = (() => {
     checkAchievements();
   }
 
+  // A song cleared with the momentum gauge still at 100.
+  function recordRhythmPerfectGauge() {
+    state.rhythmMaxGauge = (state.rhythmMaxGauge || 0) + 1;
+    save();
+    checkAchievements();
+  }
+
+  // A wizard level cleared without a single wasted summon and magic to spare.
+  function recordWizardFlawless() {
+    state.wizardFlawless = (state.wizardFlawless || 0) + 1;
+    save();
+    checkAchievements();
+  }
+
   // ---- Word Alchemy (單字鍊金術) ----
   function recordAlchemyWord() {
     state.alchemyWords = (state.alchemyWords || 0) + 1;
@@ -1465,7 +1479,7 @@ const GameEngine = (() => {
     recordPetCatch, recordPetGym, recordTypingWord, recordTutorLesson, recordDetectiveCase, recordFishCatch,
     recordFishLegendary, recordFishDistinct,
     recordWizardCast, recordWizardLevel, recordWizardSolution,
-    recordRhythmSong, recordRhythmFC, recordAlchemyWord, recordOrderServed, recordOrderShop,
+    recordRhythmSong, recordRhythmFC, recordRhythmPerfectGauge, recordWizardFlawless, recordAlchemyWord, recordOrderServed, recordOrderShop,
     recordBuilder, recordBuilderLandmark, recordSpeak,
     recordTowerWord, recordTowerBoss,
     recordRpgTalk, recordRpgChapter,

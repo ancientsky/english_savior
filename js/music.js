@@ -384,7 +384,7 @@ const MusicManager = (() => {
     typing: ['battle2', 'battle3', 'race'],
     tutor: ['story', 'playful', 'story2'],
     detective: ['mystic', 'story2', 'dream'],
-    fishing: ['lake', 'lullaby', 'dream'],
+    fishing: ['lake', 'mystic', 'dream'],
     wizard: ['mystic', 'dream', 'story2'],
     rhythm: ['playful2', 'carnival', 'race'],
     alchemy: ['mystic', 'story', 'dream'],
@@ -533,8 +533,24 @@ const MusicManager = (() => {
     s.stop(t + 0.12);
   }
 
+  // ---------- drum grooves (beat offsets within a 4-beat bar) ----------
+  // Shared by the rhythm game so its 20 songs don't all feel identical.
+  const GROOVES = {
+    pop:    { kick: [0, 2],          snare: [1, 3],    hat: [0, .5, 1, 1.5, 2, 2.5, 3, 3.5] },
+    rock:   { kick: [0, 1.5, 2],     snare: [1, 3],    hat: [0, .5, 1, 1.5, 2, 2.5, 3, 3.5] },
+    march:  { kick: [0, 1, 2, 3],    snare: [1, 3],    hat: [0, 1, 2, 3] },
+    swing:  { kick: [0, 2],          snare: [1, 3],    hat: [0, .66, 1, 1.66, 2, 2.66, 3, 3.66] },
+    latin:  { kick: [0, 1.5, 2.5],   snare: [1, 3],    hat: [0, .5, 1, 1.5, 2, 2.5, 3, 3.5] },
+    chiptune: { kick: [0, .75, 2],   snare: [1, 3],    hat: [0, .25, .5, .75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3, 3.25, 3.5, 3.75] },
+    ballad: { kick: [0],             snare: [2],       hat: [0, 1, 2, 3] },
+    bossa:  { kick: [0, 1.5, 2, 3.5], snare: [1.5, 3], hat: [0, .5, 1, 1.5, 2, 2.5, 3, 3.5] },
+  };
+
   // ---------- scheduler (one bar of lookahead) ----------
   function scheduleBar(track, t) {
+    // Nothing owns the bus right now (the track was stopped between ticks) —
+    // silently drop the bar instead of throwing on connect(null).
+    if (!trackGain) return;
     const bar = track.bars[barIdx % track.bars.length];
     const beat = 60 / track.tempo;
     const chip = track.style === 'chip';
@@ -559,8 +575,14 @@ const MusicManager = (() => {
       }
     }
 
-    // percussion (chip only)
-    if (chip) {
+    // percussion — `groove` (used by the rhythm game) wins over the old
+    // chip-only default, so a soft-palette song can still have a real beat.
+    const g = track.groove && GROOVES[track.groove];
+    if (g) {
+      g.kick.forEach(b => kick(t + b * beat));
+      g.snare.forEach(b => snare(t + b * beat));
+      g.hat.forEach(b => hat(t + b * beat));
+    } else if (chip) {
       kick(t);
       kick(t + beat * 2);
       snare(t + beat);
@@ -616,10 +638,84 @@ const MusicManager = (() => {
     trackGain = null;
   }
 
+  /* ---------- game-driven track (英語節奏星) ----------
+     A rhythm game has to share ONE clock with its music, and that clock must be
+     the AudioContext's: performance.now() drifts against the audio hardware, so
+     over a two-minute song the notes slowly stop landing on the beat. This
+     returns the exact ctx time bar 0 begins, and the caller builds its chart
+     against that. It also takes the speakers away from the zone BGM — playing a
+     92 BPM zone track underneath a 76 BPM chart is what made the game feel
+     wrong in the first place. */
+  let gameSched = null, gameGain = null;
+
+  function startGameTrack(def) {
+    stopGameTrack();
+    stopScheduler();            // hand the speakers over from the zone playlist
+    currentId = null;
+    pendingId = null;
+    if (!enabled) return null;  // 🔇 off — caller falls back to its own clock
+    getCtx();
+
+    gameGain = ctx.createGain();
+    gameGain.gain.setValueAtTime(0.0001, ctx.currentTime);
+    gameGain.gain.linearRampToValueAtTime(1, ctx.currentTime + 0.3);
+    gameGain.connect(masterGain);
+
+    // scheduleBar() routes its voices through trackGain; stopScheduler() above
+    // already released it from the zone playlist, so the game owns it now.
+    trackGain = gameGain;
+    barIdx = 0;
+
+    const barDur = (60 / def.tempo) * 4;
+    const startTime = ctx.currentTime + 0.25;   // small lead-in for scheduling
+    let next = startTime;
+    // prime two bars synchronously so nothing is ever late on the downbeat
+    while (next < startTime + barDur * 2) { scheduleBar(def, next); next += barDur; }
+    gameSched = setInterval(() => {
+      trackGain = gameGain;
+      while (next < ctx.currentTime + 0.4) {
+        scheduleBar(def, next);
+        next += barDur;
+      }
+    }, 90);
+
+    return { startTime, tempo: def.tempo, barDur };
+  }
+
+  function stopGameTrack() {
+    if (gameSched) { clearInterval(gameSched); gameSched = null; }
+    if (gameGain && ctx) {
+      const g = gameGain;
+      g.gain.setValueAtTime(g.gain.value, ctx.currentTime);
+      g.gain.linearRampToValueAtTime(0.0001, ctx.currentTime + 0.25);
+      setTimeout(() => { try { g.disconnect(); } catch { /* already gone */ } }, 500);
+    }
+    gameGain = null;
+    trackGain = null;
+  }
+
+  // The audio clock the game judges against (seconds).
+  function audioNow() { return ctx ? ctx.currentTime : 0; }
+
+  // Duck the music while the TTS speaks a word, so the two don't fight.
+  function duck(seconds) {
+    if (!gameGain || !ctx) return;
+    const t = ctx.currentTime;
+    gameGain.gain.cancelScheduledValues(t);
+    gameGain.gain.setValueAtTime(gameGain.gain.value, t);
+    gameGain.gain.linearRampToValueAtTime(0.35, t + 0.08);
+    gameGain.gain.linearRampToValueAtTime(1, t + Math.max(0.3, seconds));
+  }
+
   // ---------- public API ----------
   function play(trackId) {
     if (!TRACKS[trackId]) return;
     if (currentId === trackId && schedTimer) return;
+    // A game-driven track owns trackGain and re-claims it every 90ms. Starting
+    // a zone playlist on top of one leaves both schedulers fighting over it,
+    // and whichever stops first nulls the gain node the other is still
+    // connecting voices to. Only one may be alive at a time.
+    stopGameTrack();
     currentId = trackId;
     if (!unlocked || !enabled) {
       pendingId = trackId;
@@ -648,6 +744,7 @@ const MusicManager = (() => {
   function stop() {
     currentId = null;
     pendingId = null;
+    stopGameTrack();
     stopScheduler();
   }
 
@@ -655,6 +752,7 @@ const MusicManager = (() => {
     enabled = value;
     localStorage.setItem(STORAGE_KEY, value ? '1' : '0');
     if (!value) {
+      stopGameTrack();
       stopScheduler();
     } else if (currentId || lastZone) {
       const id = currentId || (ZONE_TRACKS[lastZone] || ['home'])[0];
@@ -702,5 +800,8 @@ const MusicManager = (() => {
       document.addEventListener(evt, unlock, { once: false, passive: true }));
   }
 
-  return { init, play, playForZone, stop, setEnabled, isEnabled, current, debugLevel };
+  return {
+    init, play, playForZone, stop, setEnabled, isEnabled, current, debugLevel,
+    startGameTrack, stopGameTrack, audioNow, duck, GROOVES,
+  };
 })();

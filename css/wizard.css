@@ -65,6 +65,9 @@
   backdrop-filter: blur(3px);
 }
 
+.wz-chip-mana { letter-spacing: 1px; color: #cfe4ff; }
+.wz-chip-mana.low { color: #ffd3dc; background: rgba(120, 20, 40, .72); }
+
 /* Sits under the HUD chips, not over the play area — the ground band is where
    everything actually happens. */
 .wz-toast {
@@ -88,6 +91,38 @@
 .wz-toast.show { opacity: 1; transform: translate(-50%, 0); }
 
 .wz-toast strong { display: block; font-size: 15px; color: var(--wz-gold); }
+
+/* The "now pick a spot" strip, pinned to the bottom of the stage so it never
+   covers the ground band where the placement actually happens. */
+.wz-place {
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 94%;
+  padding: 7px 12px;
+  background: rgba(20, 12, 40, .9);
+  border: 2px solid var(--wz-gold);
+  border-radius: 999px;
+  color: #fff;
+  font-size: 13px;
+  white-space: nowrap;
+  animation: wz-place-in .2s ease;
+}
+
+@keyframes wz-place-in { from { opacity: 0; transform: translate(-50%, 8px); } }
+
+.wz-place-icon { font-size: 18px; }
+.wz-place-name { font-weight: 800; color: var(--wz-gold); }
+.wz-place-note { opacity: .8; }
+.wz-place .wz-btn { padding: 5px 12px; font-size: 13px; }
+
+@media (max-width: 640px) {
+  .wz-place-note { display: none; }
+}
 .wz-toast span { display: block; font-size: 13px; }
 
 /* ---------- task bar ---------- */
@@ -116,6 +151,10 @@
 .wz-task-icon { font-size: 30px; line-height: 1; }
 .wz-task-name { font-weight: 800; font-size: 15px; }
 .wz-task-tip { font-size: 13px; opacity: .78; line-height: 1.5; }
+.wz-task-tip.revealed { opacity: 1; color: #8a5a00; font-weight: 700; }
+.wz-task-text { min-width: 0; }
+
+.wz-hint-btn { flex: 0 0 auto; align-self: center; font-size: 13px; padding: 6px 10px; }
 
 .wz-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
@@ -273,6 +312,7 @@
 .wz-level-no { font-weight: 800; font-size: 15px; }
 .wz-level-name { opacity: .82; }
 .wz-level-stars { letter-spacing: 1px; }
+.wz-level-found { font-size: 11px; opacity: .68; }
 
 /* ---------- spellbook ---------- */
 
@@ -435,6 +475,40 @@
 .wz-done-body h3 { margin: 6px 0 10px; font-size: 21px; }
 .wz-done-reward { font-weight: 800; color: #1f7a4d; }
 .wz-done-found, .wz-done-hint { font-size: 14px; line-height: 1.9; margin: 10px 0; }
+.wz-done-why { font-size: 13px; opacity: .8; margin: 2px 0 8px; }
+.wz-done-icon { font-size: 52px; line-height: 1.1; }
+.wz-done-line { font-size: 14px; line-height: 1.8; margin: 6px 0; }
+.wz-done-tip { font-size: 13px; line-height: 1.9; margin: 12px 0; opacity: .88; }
+
+/* The 📖 track is a collection, so it gets a progress bar of its own rather
+   than sharing the star row — they measure different things. */
+.wz-collect {
+  margin: 14px 0;
+  padding: 10px 12px;
+  background: rgba(255, 233, 184, .45);
+  border: 1px solid #d9bb7c;
+  border-radius: 10px;
+}
+
+.wz-collect-head { font-size: 14px; font-weight: 700; }
+
+.wz-collect-bar {
+  height: 9px;
+  margin: 7px 0;
+  background: rgba(0, 0, 0, .12);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.wz-collect-bar span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #f0b429, #ffd85e);
+  border-radius: 999px;
+  transition: width .5s ease;
+}
+
+.wz-collect-tags { line-height: 2; }
 
 .wz-done-tag {
   display: inline-block;

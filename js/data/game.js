@@ -78,6 +78,8 @@ const ACHIEVEMENTS = [
   { id: 'rhythm_first', name: '節奏新星', desc: '在英語節奏星完成第一首歌', icon: '🎵', pts: 10, condition: s => (s.rhythmSongs || 0) >= 1 },
   { id: 'rhythm_combo', name: '全連大師', desc: '在英語節奏星拿到 10 次 Full Combo', icon: '🎼', pts: 20, condition: s => (s.rhythmFC || 0) >= 10 },
   { id: 'rhythm_all', name: '節奏之星', desc: '在英語節奏星完成全部 20 首歌', icon: '🌟', pts: 20, condition: s => (s.rhythmSongs || 0) >= 20 },
+  { id: 'rhythm_gauge', name: '氣勢滿分', desc: '在英語節奏星以滿氣勢（100）完成 5 首歌', icon: '🔥', pts: 30, condition: s => (s.rhythmMaxGauge || 0) >= 5 },
+  { id: 'wizard_mana', name: '魔力大師', desc: '在單字魔法師以「零浪費、有剩魔力」通關 10 次', icon: '🔮', pts: 30, condition: s => (s.wizardFlawless || 0) >= 10 },
   { id: 'alchemy_first', name: '鍊金學徒', desc: '在單字鍊金術合成第一個單字', icon: '⚗️', pts: 10, condition: s => (s.alchemyWords || 0) >= 1 },
   { id: 'alchemy_50', name: '鍊金術士', desc: '在單字鍊金術合成 50 個單字', icon: '🔤', pts: 20, condition: s => (s.alchemyWords || 0) >= 50 },
   { id: 'alchemy_master', name: '鍊金大師', desc: '在單字鍊金術合成 120 個單字', icon: '📜', pts: 20, condition: s => (s.alchemyWords || 0) >= 120 },
