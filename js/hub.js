@@ -192,7 +192,7 @@ const HubView = (() => {
       const od = readJSON('english_savior_order');
       const served = od && Number(od.served) > 0 ? Number(od.served) : 0;
       const shops = od && Number(od.shops) > 0 ? Number(od.shops) : 1;
-      const total = (typeof ORDER_SHOPS !== 'undefined' && Array.isArray(ORDER_SHOPS)) ? ORDER_SHOPS.length : 5;
+      const total = (typeof ORDER_SHOPS !== 'undefined' && Array.isArray(ORDER_SHOPS)) ? ORDER_SHOPS.length : 25;
       setBadge('order', served > 0 ? `🍜 ${served} 單　🏪 ${shops}/${total}` : '');
     } catch { setBadge('order', ''); }
   }
