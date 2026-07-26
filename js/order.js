@@ -16,16 +16,19 @@ const OrderGame = (() => {
   const SAVE_KEY = 'english_savior_order';
   const SHIFT_LEN = 6;   // customers per shift
 
+  // `facts` is the ceiling on how much the child has to remember at once (see
+  // factsOf). Without it, qty / size / temperature / amount are independent dice
+  // and hard mode can roll a nine-fact, twenty-four-word order on three replays.
   const DIFFS = {
     easy:   { label: '簡單', xp: 10, gem: 1, bonus: 10, lines: [1, 1], mods: 0,
-              qty: false, size: false, showText: true, replays: 99,
+              qty: false, size: false, showText: true, replays: 99, facts: 2,
               desc: '一樣東西、不加料，句子看得到' },
     medium: { label: '中等', xp: 14, gem: 1, bonus: 15, lines: [1, 2], mods: 1,
-              qty: false, size: true, showText: false, replays: 99,
+              qty: false, size: true, showText: false, replays: 99, facts: 5,
               desc: '兩樣、會加料或說不要，句子藏起來（可無限重聽）' },
     hard:   { label: '困難', xp: 18, gem: 2, bonus: 20, lines: [2, 3], mods: 3,
-              qty: true, size: true, showText: false, replays: 2,
-              desc: '最多三樣＋數量＋大小杯，只能重聽 2 次' },
+              qty: true, size: true, showText: false, replays: 3, facts: 8,
+              desc: '最多三樣＋數量＋大小杯，只能重聽 3 次' },
   };
 
   let els = {};
@@ -93,7 +96,7 @@ const OrderGame = (() => {
     // an adult, and this is a listening game, not a memory test.
     let budget = cfg.mods;
 
-    return chosen.map(item => {
+    return trimToBudget(chosen.map(item => {
       // Quantity only where "two ___" is real English (the data marks those)
       const qty = cfg.qty && item.pl && Math.random() < 0.45 ? 2 + rand(2) : 1;
       const size = cfg.size && item.sizes && Math.random() < 0.6 ? pick(['small', 'large']) : null;
@@ -111,7 +114,39 @@ const OrderGame = (() => {
       }
       const ing = (item.def || []).filter(x => !dropped.includes(x)).concat(added);
       return { w: item.w, qty, size, ing, added, dropped };
+    }));
+  }
+
+  // Every separate thing the child has to hold in their head. qty / size / mods
+  // are independent dice rolls, so hard mode could roll a 24-word order with
+  // nine facts in it — and hard only gets a couple of replays.
+  function factsOf(o) {
+    let n = 0;
+    o.forEach(l => {
+      n += 1;
+      if (l.qty > 1) n++;
+      if (l.size) n++;
+      if (l.temp) n++;
+      n += l.added.length + l.dropped.length + Object.keys(l.lv || {}).length;
     });
+    return n;
+  }
+
+  // Peel optional facts off, cheapest-to-lose first, until the order fits.
+  // Quantity survives longest: it is the one the child is worst at hearing.
+  function trimToBudget(o) {
+    const cap = DIFFS[difficulty].facts;
+    if (!cap) return o;
+    const strip = [
+      l => { if (l.size) { l.size = null; return true; } },
+      l => { if (l.temp) { l.temp = null; return true; } },
+      l => { if (l.qty > 1) { l.qty = 1; return true; } },
+    ];
+    for (const step of strip) {
+      for (let i = o.length - 1; i >= 0 && factsOf(o) > cap; i--) step(o[i]);
+      if (factsOf(o) <= cap) break;
+    }
+    return o;
   }
 
   function listWords(arr) {
@@ -249,35 +284,57 @@ const OrderGame = (() => {
 
   /* ================= serving ================= */
 
-  // Returns { all, shown }: `all` decides pass/fail, `shown` is what the child
-  // reads. Telling a child *what* they misheard is the teaching moment — but a
-  // wall of twelve mistakes is a beating, so the two lists are separate.
+  // How much of the order a mistake ruins, worst first. Packaging comes last on
+  // purpose: leading with 「內用還是外帶」 when the burger itself is wrong would
+  // teach the child the wrong priority.
+  const RANK = { missing: 0, extra: 1, qty: 2, size: 3, temp: 4, ing: 5 };
+  const SHOW_MAX = 3;      // lines the child reads
+  const PER_ITEM_MAX = 2;  // …of which at most two may come from one item
+
+  // Returns { all, shown, right }: `all` decides pass/fail, `shown` is what the
+  // child reads, `right` is what they already got correct. Twelve <li> of failure
+  // is a beating, not a lesson — and nobody remembers twelve things on a replay.
   function checkOrder() {
-    const problems = [];
+    const problems = [];   // { rank, key, msg }
+    const right = [];
     order.forEach(o => {
       const t = tray.find(x => x.w === o.w);
       const item = itemOf(o.w);
-      if (!t) { problems.push(`少了 ${item.e} ${item.zh}（${o.w}）`); return; }
-      if (t.qty !== o.qty) problems.push(`${item.zh} 的數量錯了：要 ${o.qty} 份，你做了 ${t.qty} 份`);
+      const add = (rank, msg) => problems.push({ rank, key: o.w, msg });
+      if (!t) { add(RANK.missing, `少了 ${item.e} ${item.zh}（${o.w}）`); return; }
+      const before = problems.length;
+      if (t.qty !== o.qty) add(RANK.qty, `${item.zh} 的數量錯了：要 ${o.qty} 份，你做了 ${t.qty} 份`);
       if ((o.size || null) !== (t.size || null) && o.size) {
-        problems.push(`${item.zh} 的大小錯了：要 ${o.size === 'large' ? '大杯 large' : '小杯 small'}`);
+        add(RANK.size, `${item.zh} 的大小錯了：要 ${o.size === 'large' ? '大杯 large' : '小杯 small'}`);
       }
       const want = [...o.ing].sort(), got = [...t.ing].sort();
-      want.filter(x => !got.includes(x)).forEach(x => problems.push(`${item.zh} 少加了 ${extraOf(x).e} ${extraOf(x).zh}（${x}）`));
+      want.filter(x => !got.includes(x)).forEach(x => add(RANK.ing, `${item.zh} 少加了 ${extraOf(x).e} ${extraOf(x).zh}（${x}）`));
       // Two different mistakes, two different lessons: the customer refusing an
       // ingredient is not the same as the child adding one nobody asked for.
       // Saying 「客人說 no X」 for both taught the child to mishear the order.
-      got.filter(x => !want.includes(x)).forEach(x => problems.push(o.dropped.includes(x)
+      got.filter(x => !want.includes(x)).forEach(x => add(RANK.ing, o.dropped.includes(x)
         ? `${item.zh} 多了 ${extraOf(x).e} ${extraOf(x).zh}（${x}）— 客人說 no ${x}，要拿掉`
         : `${item.zh} 多了 ${extraOf(x).e} ${extraOf(x).zh}（${x}）— 客人沒有說要加這個`));
+      if (problems.length === before) right.push(`${item.e} ${item.w}`);
     });
     tray.forEach(t => {
       if (!order.find(o => o.w === t.w)) {
         const item = itemOf(t.w);
-        problems.push(`多做了 ${item.e} ${item.zh}（${t.w}），客人沒有點`);
+        problems.push({ rank: RANK.extra, key: t.w, msg: `多做了 ${item.e} ${item.zh}（${t.w}），客人沒有點` });
       }
     });
-    return { all: problems, shown: problems };
+
+    // Worst first, but no single item may eat the whole quota — otherwise one
+    // completely botched item hides the mistake on the next one entirely.
+    const perItem = {};
+    const shown = problems
+      .slice()
+      .sort((a, b) => a.rank - b.rank)
+      .filter(p => (perItem[p.key] = (perItem[p.key] || 0) + 1) <= PER_ITEM_MAX)
+      .slice(0, SHOW_MAX)
+      .map(p => p.msg);
+
+    return { all: problems.map(p => p.msg), shown, right, truncated: problems.length > shown.length };
   }
 
   function serve() {
@@ -287,9 +344,13 @@ const OrderGame = (() => {
     if (res.all.length) {
       SoundManager.playWrong();
       retried = true;
+      // Leading with what already works is what makes a three-line cap feel safe
+      // instead of arbitrary: the child can see the rest of the tray is fine.
       els.result.innerHTML =
         `<div class="od-result bad"><strong>😕 客人皺眉了…</strong>
+          ${res.right.length ? `<p class="od-right">✅ 這些做對了：${res.right.join('　')}</p>` : ''}
           <ul>${res.shown.map(p => `<li>${p}</li>`).join('')}</ul>
+          ${res.truncated ? '<p class="od-more">還有其他地方沒對上，再聽一次喔</p>' : ''}
           <p>再聽一次，改好之後重新送出！</p></div>`;
       renderOrderBar();
       return;

@@ -153,6 +153,11 @@
 .od-result ul { margin: 6px 0 6px 18px; padding: 0; }
 .od-result li { margin: 3px 0; }
 .od-result p { margin: 6px 0 0; }
+
+/* What the child already got right, above the mistakes — a capped list of
+   problems only feels fair when you can see the rest of the tray is fine. */
+.od-right { color: var(--od-ok); font-weight: 700; }
+.od-more { opacity: .8; font-size: 13px; }
 .od-sentence-reveal { font-family: ui-monospace, monospace; opacity: .85; font-size: 13px; }
 
 /* ---------- tray ---------- */
