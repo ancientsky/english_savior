@@ -20,9 +20,10 @@ const AlchemyGame = (() => {
 
   // Chapter clear reward, by how deep the chapter is (matches Candy/Tower tiers)
   function chapterReward(i) {
-    if (i < 3) return { xp: 30, gems: 5 };
-    if (i < 6) return { xp: 45, gems: 8 };
-    return { xp: 60, gems: 11 };
+    if (i < 4) return { xp: 30, gems: 5 };
+    if (i < 8) return { xp: 45, gems: 8 };
+    if (i < 12) return { xp: 60, gems: 11 };
+    return { xp: 75, gems: 14 };
   }
 
   let els = {};
@@ -58,8 +59,17 @@ const AlchemyGame = (() => {
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch { /* quota */ }
   }
 
+  // Every recipe in a chapter (targets + ⭐ bonus finds) — used by the dex.
   function recipesOf(chId) { return ALCHEMY_RECIPES.filter(r => r.ch === chId); }
-  function foundIn(chId) { return recipesOf(chId).filter(r => save.found.includes(r.w)).length; }
+
+  // Only the chapter's ??? cards. A ⭐ bonus word is a real English word the
+  // parts happen to spell, so the game must recognise it — but requiring it to
+  // clear the chapter would bloat some chapters to 30 words. Progress, the
+  // target grid and the timed challenge all run off targets alone.
+  function targetsOf(chId) { return ALCHEMY_RECIPES.filter(r => r.ch === chId && !r.bonus); }
+  function bonusOf(chId) { return ALCHEMY_RECIPES.filter(r => r.ch === chId && r.bonus); }
+
+  function foundIn(chId) { return targetsOf(chId).filter(r => save.found.includes(r.w)).length; }
   function isUnlocked(i) { return i === 0 || save.done.includes(ALCHEMY_CHAPTERS[i - 1].id); }
 
   // The literal rule, spelled out from the two parts — this is the payload
@@ -73,7 +83,7 @@ const AlchemyGame = (() => {
   function openChapter(i) {
     chapterIndex = i;
     chapter = ALCHEMY_CHAPTERS[i];
-    const rs = recipesOf(chapter.id);
+    const rs = targetsOf(chapter.id);
     const ids = [];
     rs.forEach(r => { if (!ids.includes(r.a)) ids.push(r.a); if (!ids.includes(r.b)) ids.push(r.b); });
     // group by type so the shelf reads as 字首 / 字根 / 字尾
@@ -105,12 +115,14 @@ const AlchemyGame = (() => {
       els.hud.textContent = `⚗️ 已合成 ${save.found.length} / ${ALCHEMY_RECIPES.length} 個單字`;
       return;
     }
-    els.hud.textContent = `${chapter.e} ${chapter.name}　${foundIn(chapter.id)} / ${recipesOf(chapter.id).length}`;
+    const extra = bonusOf(chapter.id).filter(r => save.found.includes(r.w)).length;
+    els.hud.textContent = `${chapter.e} ${chapter.name}　${foundIn(chapter.id)} / ${targetsOf(chapter.id).length}` +
+      (extra ? `　⭐ ${extra}` : '');
   }
 
   function renderTargets() {
     els.targets.innerHTML = '';
-    recipesOf(chapter.id).forEach(r => {
+    targetsOf(chapter.id).forEach(r => {
       const got = save.found.includes(r.w);
       const card = document.createElement('button');
       card.className = 'al-target' + (got ? ' got' : '');
@@ -190,7 +202,11 @@ const AlchemyGame = (() => {
       const bad = partById(a).text + partById(b).text;
       SoundManager.playWrong();
       puff();
-      flash(`💨「${bad}」不是一個英文單字，換個組合再試試！`, 'bad');
+      // Some near-misses deserve a real explanation: "noone" is a sensible idea
+      // spelled as one word, and just saying "not a word" would leave the child
+      // thinking the idea itself was wrong.
+      const near = typeof ALCHEMY_NEARMISS !== 'undefined' && ALCHEMY_NEARMISS[bad];
+      flash(near ? `💡 ${near}` : `💨「${bad}」不是一個英文單字，換個組合再試試！`, 'bad');
       slots = [null, null];
       busy = false;
       renderShelf();
@@ -215,23 +231,31 @@ const AlchemyGame = (() => {
     renderAll();
 
     // chapter done?
-    if (chapter && foundIn(chapter.id) === recipesOf(chapter.id).length) {
+    if (chapter && foundIn(chapter.id) === targetsOf(chapter.id).length) {
       setTimeout(() => finishChapter(), 1400);
     }
   }
 
   function showFusion(r, isNew) {
+    // A ⭐ bonus word is not one of this chapter's ??? cards — it is a real
+    // English word these parts happen to spell. Saying so out loud is the whole
+    // point: the game must never tell a child a real word doesn't exist.
+    const tag = !isNew ? '已經合成過了'
+      : r.bonus ? `⭐ 額外發現！+${DISCOVER_XP} XP +${DISCOVER_GEM} 💎`
+      : `✨ 新單字！+${DISCOVER_XP} XP +${DISCOVER_GEM} 💎`;
+    els.fusion.className = 'al-fusion' + (r.bonus ? ' bonus' : '');
     els.fusion.innerHTML = `
       <span class="al-fusion-e">${r.e}</span>
       <div class="al-fusion-body">
-        <div class="al-fusion-w">${r.w}</div>
+        <div class="al-fusion-w">${r.w}${r.bonus ? '<span class="al-fusion-star">⭐ 額外發現</span>' : ''}</div>
         <div class="al-fusion-zh">${r.zh}</div>
-        <div class="al-fusion-ex">${explain(r)}</div>
+        <div class="al-fusion-ex">${explain(r)}${r.bonus ? '　—　這也是一個真的英文單字！' : ''}</div>
+        ${r.note ? `<div class="al-fusion-note">💡 ${r.note}</div>` : ''}
       </div>
-      <span class="al-fusion-tag">${isNew ? `✨ 新單字！+${DISCOVER_XP} XP +${DISCOVER_GEM} 💎` : '已經合成過了'}</span>`;
+      <span class="al-fusion-tag">${tag}</span>`;
     els.fusion.classList.add('show');
     clearTimeout(showFusion._t);
-    showFusion._t = setTimeout(() => els.fusion.classList.remove('show'), 3400);
+    showFusion._t = setTimeout(() => els.fusion.classList.remove('show'), 3800);
   }
 
   function finishChapter() {
@@ -265,7 +289,7 @@ const AlchemyGame = (() => {
   /* ================= challenge mode ================= */
 
   function startChallenge() {
-    const pool = recipesOf(chapter.id).slice();
+    const pool = targetsOf(chapter.id).slice();
     for (let i = pool.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [pool[i], pool[j]] = [pool[j], pool[i]];
@@ -353,7 +377,7 @@ const AlchemyGame = (() => {
     els.chList.innerHTML = '';
     ALCHEMY_CHAPTERS.forEach((c, i) => {
       const open = isUnlocked(i);
-      const n = foundIn(c.id), total = recipesOf(c.id).length;
+      const n = foundIn(c.id), total = targetsOf(c.id).length;
       const btn = document.createElement('button');
       btn.className = 'al-ch' + (open ? '' : ' locked') + (save.done.includes(c.id) ? ' done' : '');
       btn.disabled = !open;
@@ -372,27 +396,40 @@ const AlchemyGame = (() => {
 
   function openDex() {
     els.dexBody.innerHTML = '';
-    ALCHEMY_CHAPTERS.forEach(c => {
-      const rs = recipesOf(c.id);
-      const got = rs.filter(r => save.found.includes(r.w));
-      const sec = document.createElement('div');
-      sec.className = 'al-dex-sec';
-      sec.innerHTML = `<h4>${c.e} ${c.name}　<span>${got.length} / ${rs.length}</span></h4>`;
+    const makeGrid = (list, bonus) => {
       const grid = document.createElement('div');
       grid.className = 'al-dex-grid';
-      rs.forEach(r => {
+      list.forEach(r => {
         const has = save.found.includes(r.w);
         const card = document.createElement('button');
-        card.className = 'al-dex-card' + (has ? '' : ' locked');
+        card.className = 'al-dex-card' + (has ? '' : ' locked') + (bonus ? ' bonus' : '');
         card.innerHTML = has
           ? `<span class="al-dex-e">${r.e}</span><span class="al-dex-w">${r.w}</span>
              <span class="al-dex-zh">${r.zh}</span><span class="al-dex-ex">${partById(r.a).text} + ${partById(r.b).text}</span>`
           : `<span class="al-dex-e">❔</span><span class="al-dex-w">???</span>
-             <span class="al-dex-zh">${r.zh}</span><span class="al-dex-ex"></span>`;
+             <span class="al-dex-zh">${bonus ? '？？？' : r.zh}</span><span class="al-dex-ex"></span>`;
         if (has) card.addEventListener('click', () => TTSManager.speak(r.w));
         grid.appendChild(card);
       });
-      sec.appendChild(grid);
+      return grid;
+    };
+
+    ALCHEMY_CHAPTERS.forEach(c => {
+      const targets = targetsOf(c.id), extras = bonusOf(c.id);
+      const got = targets.filter(r => save.found.includes(r.w));
+      const gotExtra = extras.filter(r => save.found.includes(r.w));
+      const sec = document.createElement('div');
+      sec.className = 'al-dex-sec';
+      sec.innerHTML = `<h4>${c.e} ${c.name}　<span>${got.length} / ${targets.length}` +
+        `${extras.length ? `　⭐ ${gotExtra.length} / ${extras.length}` : ''}</span></h4>`;
+      sec.appendChild(makeGrid(targets, false));
+      if (extras.length) {
+        const h = document.createElement('div');
+        h.className = 'al-dex-bonus-head';
+        h.textContent = '⭐ 額外發現 — 這些字不是關卡目標，是零件剛好也拼得出來的真英文字';
+        sec.appendChild(h);
+        sec.appendChild(makeGrid(extras, true));
+      }
       els.dexBody.appendChild(sec);
     });
     els.dexSub.textContent = `${save.found.length} / ${ALCHEMY_RECIPES.length}`;
@@ -540,6 +577,9 @@ const AlchemyGame = (() => {
         inChallenge: !!challenge,
       }),
       openChapter: i => openChapter(i),
+      targets: chId => targetsOf(chId).map(r => r.w),
+      bonuses: chId => bonusOf(chId).map(r => r.w),
+      progress: chId => `${foundIn(chId)}/${targetsOf(chId).length}`,
       // Combine two parts by id, exactly as tapping them would
       combine: (a, b) => { slots = [a, b]; brew(); },
       pick: id => pick(id),

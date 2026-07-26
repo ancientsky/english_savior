@@ -188,10 +188,31 @@
 }
 
 .al-fusion.show { opacity: 1; transform: translateY(0); }
+
+/* ⭐ 額外發現 — a real English word the parts happen to spell, but not one of
+   this chapter's targets. Gold instead of green so it reads as a discovery. */
+.al-fusion.bonus {
+  background: rgba(255, 209, 102, .14);
+  border-color: rgba(255, 209, 102, .6);
+}
+.al-fusion.bonus .al-fusion-tag { color: #ffd166; }
+
+.al-fusion-star {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 209, 102, .22);
+  border: 1px solid rgba(255, 209, 102, .6);
+  color: #ffd166;
+  font-size: 11px;
+  font-weight: 700;
+  vertical-align: middle;
+}
 .al-fusion-e { font-size: 38px; }
 .al-fusion-w { font-size: 22px; font-weight: 800; letter-spacing: 1px; }
 .al-fusion-zh { font-size: 14px; opacity: .85; }
 .al-fusion-ex { font-size: 12px; opacity: .75; margin-top: 3px; }
+.al-fusion-note { font-size: 12px; line-height: 1.6; margin-top: 4px; color: #ffd166; }
 .al-fusion-tag { margin-left: auto; font-size: 12px; font-weight: 700; color: var(--al-glow); white-space: nowrap; }
 
 /* ---------- targets ---------- */
@@ -429,6 +450,16 @@
 }
 
 .al-dex-card.locked { opacity: .35; cursor: default; }
+.al-dex-card.bonus { border-color: rgba(255, 209, 102, .55); background: rgba(255, 209, 102, .08); }
+.al-dex-card.bonus .al-dex-w { color: #ffd166; }
+
+.al-dex-bonus-head {
+  margin: 10px 0 6px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #ffd166;
+  opacity: .9;
+}
 .al-dex-e { font-size: 22px; }
 .al-dex-w { font-weight: 800; font-size: 13px; }
 .al-dex-zh { opacity: .75; }

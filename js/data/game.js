@@ -81,6 +81,7 @@ const ACHIEVEMENTS = [
   { id: 'alchemy_first', name: '鍊金學徒', desc: '在單字鍊金術合成第一個單字', icon: '⚗️', pts: 10, condition: s => (s.alchemyWords || 0) >= 1 },
   { id: 'alchemy_50', name: '鍊金術士', desc: '在單字鍊金術合成 50 個單字', icon: '🔤', pts: 20, condition: s => (s.alchemyWords || 0) >= 50 },
   { id: 'alchemy_master', name: '鍊金大師', desc: '在單字鍊金術合成 120 個單字', icon: '📜', pts: 20, condition: s => (s.alchemyWords || 0) >= 120 },
+  { id: 'alchemy_sage', name: '鍊金賢者', desc: '在單字鍊金術合成 240 個單字', icon: '🧪', pts: 20, condition: s => (s.alchemyWords || 0) >= 240 },
   { id: 'order_first', name: '見習店員', desc: '在英語餐廳大亂鬥完成第一張訂單', icon: '🧑‍🍳', pts: 10, condition: s => (s.orderServed || 0) >= 1 },
   { id: 'order_50', name: '金牌店員', desc: '在英語餐廳大亂鬥完成 50 張訂單', icon: '🏅', pts: 20, condition: s => (s.orderServed || 0) >= 50 },
   { id: 'order_shops', name: '五星大廚', desc: '在英語餐廳大亂鬥開遍全部 5 家店', icon: '👨‍🍳', pts: 20, condition: s => (s.orderShops || 0) >= 5 },

@@ -8,9 +8,20 @@
    y→i. A kid who sees "happy + ly = happily" learns a spelling exception, not
    a rule, so those words are simply left out.
 
+   Second hard rule: NEVER TELL A CHILD A REAL WORD DOESN'T EXIST. If two parts
+   on a chapter's shelf spell a real English word, it must appear here. Words
+   that are real but off-topic for the chapter carry `bonus: true`: they are
+   celebrated, spoken, rewarded and collected in the dex, but they are not ???
+   cards and do not gate chapter completion. `node validate_alchemy.js` fails
+   the build on any combination that spells a word the site teaches elsewhere;
+   `--review` lists the rest for a human pass.
+
    ALCHEMY_PARTS   { id, text, type: prefix|root|suffix, zh, e }
-   ALCHEMY_RECIPES { ch, a, b, w, zh, e }  — a/b are part ids
-   ALCHEMY_CHAPTERS{ id, name, e, rule }   — the rule shown before the chapter
+   ALCHEMY_RECIPES { ch, a, b, w, zh, e, bonus?, note? } — a/b are part ids;
+                     `note` explains the few words where the affix's usual gloss
+                     doesn't quite land (dis- in discount means "off", not "not")
+   ALCHEMY_CHAPTERS{ id, name, e, rule, compound? } — `compound` asks the
+                     validator to also review root+root pairs in that chapter
 */
 
 const ALCHEMY_PARTS = [
@@ -138,6 +149,117 @@ const ALCHEMY_PARTS = [
   { id: 'r_wash',    text: 'wash',    type: 'root', zh: '洗',       e: '🧼' },
   { id: 'r_break',   text: 'break',   type: 'root', zh: '打破',     e: '💔' },
   { id: 'r_enjoy',   text: 'enjoy',   type: 'root', zh: '享受',     e: '😄' },
+  // ---- ch9-ch16 additions ----
+  // 代名詞（第 9 章）— 都是獨立的字，所以歸在字根
+  { id: 'r_my',    text: 'my',    type: 'root', zh: '我的',     e: '🙋' },
+  { id: 'r_your',  text: 'your',  type: 'root', zh: '你的',     e: '👉' },
+  { id: 'r_him',   text: 'him',   type: 'root', zh: '他',       e: '👦' },
+  { id: 'r_her',   text: 'her',   type: 'root', zh: '她',       e: '👧' },
+  { id: 'r_it',    text: 'it',    type: 'root', zh: '牠、它',   e: '🐾' },
+  { id: 'r_our',   text: 'our',   type: 'root', zh: '我們的',   e: '👨‍👩‍👧' },
+  { id: 'r_them',  text: 'them',  type: 'root', zh: '他們',     e: '👥' },
+  { id: 'r_one',   text: 'one',   type: 'root', zh: '一個人',   e: '🧍' },
+  { id: 's_self',   text: 'self',   type: 'suffix', zh: '自己（一個人）', e: '🪞' },
+  { id: 's_selves', text: 'selves', type: 'suffix', zh: '自己（很多人）', e: '🪞' },
+
+  // 第 10 章：放在前面決定「哪一個」
+  { id: 'p_some',  text: 'some',  type: 'prefix', zh: '某一個',   e: '🔹' },
+  { id: 'p_any',   text: 'any',   type: 'prefix', zh: '任何一個', e: '🔸' },
+  { id: 'p_every', text: 'every', type: 'prefix', zh: '每一個',   e: '🔁' },
+  { id: 'p_no',    text: 'no',    type: 'prefix', zh: '沒有',     e: '⛔' },
+  { id: 'r_body',  text: 'body',  type: 'root', zh: '身體→人', e: '🧍' },
+  { id: 'r_thing', text: 'thing', type: 'root', zh: '東西',     e: '📦' },
+  { id: 'r_where', text: 'where', type: 'root', zh: '地方',     e: '📍' },
+
+  // 第 11 章：常常放在後面的三個名詞
+  { id: 'r_room',  text: 'room',  type: 'root', zh: '房間',     e: '🚪' },
+  { id: 'r_book',  text: 'book',  type: 'root', zh: '書',       e: '📕' },
+  { id: 'r_class', text: 'class', type: 'root', zh: '班級、課', e: '🏫' },
+  { id: 'r_bed',   text: 'bed',   type: 'root', zh: '床',       e: '🛏️' },
+  { id: 'r_bath',  text: 'bath',  type: 'root', zh: '洗澡',     e: '🛁' },
+  { id: 'r_note',  text: 'note',  type: 'root', zh: '筆記',     e: '📝' },
+  { id: 'r_text',  text: 'text',  type: 'root', zh: '課文',     e: '📄' },
+  { id: 'r_house', text: 'house', type: 'root', zh: '房子',     e: '🏠' },
+
+  // 第 12 章：天氣與自然
+  { id: 'r_sun',     text: 'sun',     type: 'root', zh: '太陽',   e: '☀️' },
+  { id: 'r_snow',    text: 'snow',    type: 'root', zh: '雪',     e: '❄️' },
+  { id: 'r_sea',     text: 'sea',     type: 'root', zh: '海',     e: '🌊' },
+  { id: 'r_shine',   text: 'shine',   type: 'root', zh: '照耀',   e: '🌞' },
+  { id: 'r_flower',  text: 'flower',  type: 'root', zh: '花',     e: '🌸' },
+  { id: 'r_rise',    text: 'rise',    type: 'root', zh: '升起',   e: '⬆️' },
+  { id: 'r_set',     text: 'set',     type: 'root', zh: '落下',   e: '⬇️' },
+  { id: 'r_glasses', text: 'glasses', type: 'root', zh: '眼鏡',   e: '👓' },
+  { id: 'r_bow',     text: 'bow',     type: 'root', zh: '弓、拱', e: '🏹' },
+  { id: 'r_coat',    text: 'coat',    type: 'root', zh: '外套',   e: '🧥' },
+  { id: 'r_drop',    text: 'drop',    type: 'root', zh: '一滴',   e: '💧' },
+  { id: 'r_ball',    text: 'ball',    type: 'root', zh: '球',     e: '⚽' },
+  { id: 'r_food',    text: 'food',    type: 'root', zh: '食物',   e: '🍽️' },
+  { id: 'r_side',    text: 'side',    type: 'root', zh: '邊',     e: '📐' },
+  { id: 'r_shell',   text: 'shell',   type: 'root', zh: '殼',     e: '🐚' },
+  { id: 'r_weed',    text: 'weed',    type: 'root', zh: '草',     e: '🌿' },
+
+  // 第 13 章：方位字首
+  { id: 'p_out',  text: 'out',  type: 'prefix', zh: '向外、外面', e: '🚪' },
+  { id: 'p_up',   text: 'up',   type: 'prefix', zh: '向上',       e: '⬆️' },
+  { id: 'p_down', text: 'down', type: 'prefix', zh: '向下',       e: '⬇️' },
+  { id: 'p_back', text: 'back', type: 'prefix', zh: '向後、背面', e: '🔙' },
+  { id: 'p_in',   text: 'in',   type: 'prefix', zh: '向內、裡面', e: '📥' },
+  { id: 'r_door',   text: 'door',   type: 'root', zh: '門',   e: '🚪' },
+  { id: 'r_put',    text: 'put',    type: 'root', zh: '放',   e: '🤲' },
+  { id: 'r_stairs', text: 'stairs', type: 'root', zh: '樓梯', e: '🪜' },
+  { id: 'r_date',   text: 'date',   type: 'root', zh: '日期', e: '📅' },
+  { id: 'r_town',   text: 'town',   type: 'root', zh: '城鎮', e: '🏙️' },
+
+  // 第 14 章：移動的字根
+  { id: 'p_trans', text: 'trans', type: 'prefix', zh: '橫越、轉換', e: '🔀' },
+  { id: 'p_sub',   text: 'sub',   type: 'prefix', zh: '在下面',     e: '🔽' },
+  { id: 'p_ex',    text: 'ex',    type: 'prefix', zh: '向外',       e: '📤' },
+  { id: 'p_im',    text: 'im',    type: 'prefix', zh: '向內',       e: '📩' },
+  { id: 'r_form',   text: 'form',   type: 'root', zh: '形狀、樣子', e: '🔷' },
+  { id: 'r_way',    text: 'way',    type: 'root', zh: '路',         e: '🛣️' },
+  { id: 'r_marine', text: 'marine', type: 'root', zh: '海的',       e: '🌊' },
+  { id: 'r_title',  text: 'title',  type: 'root', zh: '標題',       e: '🔤' },
+  { id: 'r_air',    text: 'air',    type: 'root', zh: '空氣、飛行', e: '✈️' },
+  { id: 'r_pass',   text: 'pass',   type: 'root', zh: '通過',       e: '🎫' },
+
+  // 第 15 章：科學字根
+  { id: 'p_auto',   text: 'auto',   type: 'prefix', zh: '自己、自動', e: '🤖' },
+  { id: 'p_photo',  text: 'photo',  type: 'prefix', zh: '光、照片',   e: '📸' },
+  { id: 'p_bio',    text: 'bio',    type: 'prefix', zh: '生命',       e: '🧬' },
+  { id: 'p_geo',    text: 'geo',    type: 'prefix', zh: '大地',       e: '🌍' },
+  { id: 'p_thermo', text: 'thermo', type: 'prefix', zh: '溫度、熱',   e: '🌡️' },
+  { id: 'p_kilo',   text: 'kilo',   type: 'prefix', zh: '一千',       e: '🔢' },
+  { id: 'p_centi',  text: 'centi',  type: 'prefix', zh: '百分之一',   e: '📏' },
+  { id: 'p_dia',    text: 'dia',    type: 'prefix', zh: '穿過',       e: '↔️' },
+  { id: 'p_zoo',    text: 'zoo',    type: 'prefix', zh: '動物',       e: '🦁' },
+  { id: 's_graph',  text: 'graph',  type: 'suffix', zh: '寫、畫下來的東西', e: '✍️' },
+  { id: 's_graphy', text: 'graphy', type: 'suffix', zh: '……學（描述）',     e: '📖' },
+  { id: 's_logy',   text: 'logy',   type: 'suffix', zh: '……學（研究）',     e: '🔬' },
+  { id: 's_meter',  text: 'meter',  type: 'suffix', zh: '量……的東西／公尺', e: '📐' },
+  { id: 's_gram',   text: 'gram',   type: 'suffix', zh: '寫下來的紀錄／公克', e: '📊' },
+  { id: 's_copy',   text: 'copy',   type: 'suffix', zh: '複製',             e: '🖨️' },
+  { id: 's_mobile', text: 'mobile', type: 'suffix', zh: '會動的東西',       e: '🚗' },
+
+  // 第 16 章：最終試煉
+  { id: 'p_for', text: 'for', type: 'prefix', zh: '向前', e: '➡️' },
+  { id: 'p_to',  text: 'to',  type: 'prefix', zh: '朝向', e: '🧭' },
+  { id: 'r_friend',   text: 'friend',   type: 'root', zh: '朋友',   e: '🤝' },
+  { id: 'r_member',   text: 'member',   type: 'root', zh: '成員',   e: '🎫' },
+  { id: 'r_leader',   text: 'leader',   type: 'root', zh: '領導者', e: '🚩' },
+  { id: 'r_child',    text: 'child',    type: 'root', zh: '小孩',   e: '🧒' },
+  { id: 'r_neighbor', text: 'neighbor', type: 'root', zh: '鄰居',   e: '🏘️' },
+  { id: 'r_free',     text: 'free',     type: 'root', zh: '自由的', e: '🕊️' },
+  { id: 'r_king',     text: 'king',     type: 'root', zh: '國王',   e: '👑' },
+  { id: 'r_bore',     text: 'bore',     type: 'root', zh: '無聊',   e: '🥱' },
+  { id: 'r_fire',     text: 'fire',     type: 'root', zh: '火',     e: '🔥' },
+  { id: 'r_life',     text: 'life',     type: 'root', zh: '生命',   e: '🌱' },
+  { id: 's_ship',  text: 'ship',  type: 'suffix', zh: '……的關係或身分', e: '🎖️' },
+  { id: 's_hood',  text: 'hood',  type: 'suffix', zh: '……的時期或群體', e: '🏡' },
+  { id: 's_dom',   text: 'dom',   type: 'suffix', zh: '……的狀態或領域', e: '🏰' },
+  { id: 's_ward',  text: 'ward',  type: 'suffix', zh: '往……的方向',     e: '🧭' },
+  { id: 's_proof', text: 'proof', type: 'suffix', zh: '防……的',         e: '🛡️' },
+  { id: 's_like',  text: 'like',  type: 'suffix', zh: '像……一樣的',     e: '🪞' },
 ];
 
 const ALCHEMY_CHAPTERS = [
@@ -155,8 +277,24 @@ const ALCHEMY_CHAPTERS = [
     rule: '-y 把名詞變形容詞（rain → rainy），-ly 說明「怎麼做」（slow → slowly），-ness 把形容詞變名詞（kind → kindness）。' },
   { id: 'ac7', name: '字根大家族', e: '🔭',
     rule: 'tele- 是「遠」、micro- 是「微小」、bi- 是「二」、tri- 是「三」、uni- 是「一」。認識一個字根，一次看懂一整家族的字。' },
-  { id: 'ac8', name: '鍊金大魔王', e: '👑',
-    rule: '最後一關全部混在一起：pre-（之前）、over-（過度）、under-（之下）、super-（超級）、inter-（之間）、-able（可以被）、-ment（行為結果）。' },
+  { id: 'ac8', name: '混合大挑戰', e: '🎯',
+    rule: '這一章全部混在一起：pre-（之前）、over-（過度）、under-（之下）、super-（超級）、inter-（之間）、-able（可以被）、-ment（行為結果）。' },
+  { id: 'ac9', name: '我自己', e: '🧍',
+    rule: '代名詞後面接 -self（一個人）或 -selves（很多人），就是「……自己」。my → myself，them → themselves。' },
+  { id: 'ac10', name: '某人・某事・某地', e: '🔍',
+    rule: 'some（某一個）、any（任何）、every（每一個）、no（沒有）放前面，body/one（人）、thing（東西）、where（地方）放後面，四乘四就是十六個超常用的字！' },
+  { id: 'ac11', name: '三個萬用字尾名詞', e: '🏫', compound: true,
+    rule: '-room（房間）、-book（書）、-work（工作）是英文最愛拿來組字的三個名詞。work 自己也可以放前面，變成 workroom、workbook。' },
+  { id: 'ac12', name: '天氣與大自然', e: '☀️', compound: true,
+    rule: 'sun、rain、snow、sea 後面接一個名詞，就變出一整組天氣與自然的字。sun ＋ flower ＝ 向著太陽的花，就是向日葵。' },
+  { id: 'ac13', name: '方位字首', e: '🧭', compound: true,
+    rule: 'out（外）、up（上）、down（下）、back（後）、in（內）放在前面，字的方向就跟著變。upload 是上傳，download 就是下載。' },
+  { id: 'ac14', name: '移動的字根', e: '🚄',
+    rule: 'port 是「搬運」、form 是「形狀」。前面換一個字首，方向就變了：ex-（向外）＋ port ＝ 出口，im-（向內）＋ port ＝ 進口。' },
+  { id: 'ac15', name: '科學家的字根', e: '🔬',
+    rule: 'auto（自己）、photo（光）、bio（生命）、geo（大地）、thermo（熱），配上 -graph（畫下來）、-logy（學問）、-meter（量的東西），就是所有科學名詞的組法。' },
+  { id: 'ac16', name: '鍊金大魔王', e: '👑',
+    rule: '最後一關：-ship（關係身分）、-hood（時期群體）、-dom（狀態領域）、-ward（方向）、-proof（防……）、-like（像……一樣）。全部混在一起，你已經是鍊金賢者了！' },
 ];
 
 const ALCHEMY_RECIPES = [
@@ -222,8 +360,13 @@ const ALCHEMY_RECIPES = [
   { ch: 'ac4', a: 'r_use',    b: 's_less', w: 'useless',   zh: '沒用的',       e: '🗑️' },
   { ch: 'ac4', a: 'r_care',   b: 's_less', w: 'careless',  zh: '粗心的',       e: '😅' },
   { ch: 'ac4', a: 'r_home',   b: 's_less', w: 'homeless',  zh: '無家可歸的',   e: '🏚️' },
+  { ch: 'ac4', a: 'r_hope',   b: 's_ful',  w: 'hopeful',   zh: '有希望的',     e: '🌟' },
   { ch: 'ac4', a: 'r_hope',   b: 's_less', w: 'hopeless',  zh: '絕望的',       e: '😔' },
   { ch: 'ac4', a: 'r_end',    b: 's_less', w: 'endless',   zh: '無盡的',       e: '♾️' },
+  // ⭐ 額外發現：零件也拼得出來的真英文字
+  { ch: 'ac4', a: 'r_color',  b: 's_less', w: 'colorless', zh: '無色的',       e: '🤍', bonus: true },
+  { ch: 'ac4', a: 'r_power',  b: 's_less', w: 'powerless', zh: '無能為力的',   e: '🪫', bonus: true },
+  { ch: 'ac4', a: 'r_thank',  b: 's_less', w: 'thankless', zh: '吃力不討好的', e: '😮‍💨', bonus: true },
 
   // ---- ac5: dis- / mis- ----
   { ch: 'ac5', a: 'p_dis', b: 'r_like',    w: 'dislike',    zh: '不喜歡',   e: '👎' },
@@ -238,6 +381,10 @@ const ALCHEMY_RECIPES = [
   { ch: 'ac5', a: 'p_mis', b: 'r_lead',    w: 'mislead',    zh: '誤導',     e: '🧭' },
   { ch: 'ac5', a: 'p_mis', b: 'r_read',    w: 'misread',    zh: '讀錯',     e: '👓' },
   { ch: 'ac5', a: 'p_mis', b: 'r_count',   w: 'miscount',   zh: '數錯',     e: '🧮' },
+  // dis- 也有「去掉」的意思：把價錢算掉一部分，就是打折
+  { ch: 'ac5', a: 'p_dis', b: 'r_count',   w: 'discount',   zh: '折扣',     e: '🏷️',
+    note: '這裡的 dis- 是「去掉」的意思：把價錢「算掉」一部分，就是打折。' },
+  { ch: 'ac5', a: 'p_dis', b: 'r_use',     w: 'disuse',     zh: '廢棄不用', e: '🕸️', bonus: true },
 
   // ---- ac6: -y / -ly / -ness ----
   { ch: 'ac6', a: 'r_rain',   b: 's_y',    w: 'rainy',    zh: '下雨的',   e: '🌧️' },
@@ -258,6 +405,14 @@ const ALCHEMY_RECIPES = [
   { ch: 'ac6', a: 'r_ill',    b: 's_ness', w: 'illness',  zh: '疾病',     e: '🤒' },
   { ch: 'ac6', a: 'r_weak',   b: 's_ness', w: 'weakness', zh: '弱點',     e: '🪶' },
   { ch: 'ac6', a: 'r_sick',   b: 's_ness', w: 'sickness', zh: '生病',     e: '🏥' },
+  // ⭐ 額外發現：同樣的規則還拼得出這些真英文字
+  { ch: 'ac6', a: 'r_sick',   b: 's_ly',   w: 'sickly',    zh: '病懨懨的', e: '🤢', bonus: true },
+  { ch: 'ac6', a: 'r_weak',   b: 's_ly',   w: 'weakly',    zh: '虛弱地',   e: '🫠', bonus: true },
+  { ch: 'ac6', a: 'r_dark',   b: 's_ly',   w: 'darkly',    zh: '陰沉地',   e: '🌚', bonus: true },
+  { ch: 'ac6', a: 'r_loud',   b: 's_ness', w: 'loudness',  zh: '響度',     e: '🔊', bonus: true },
+  { ch: 'ac6', a: 'r_quiet',  b: 's_ness', w: 'quietness', zh: '寧靜',     e: '🌙', bonus: true },
+  { ch: 'ac6', a: 'r_slow',   b: 's_ness', w: 'slowness',  zh: '緩慢',     e: '🐢', bonus: true },
+  { ch: 'ac6', a: 'r_quick',  b: 's_ness', w: 'quickness', zh: '敏捷',     e: '🐆', bonus: true },
 
   // ---- ac7: tele- / micro- / bi- / tri- / uni- ----
   { ch: 'ac7', a: 'p_tele',  b: 'r_phone',   w: 'telephone',  zh: '電話',     e: '☎️' },
@@ -271,6 +426,8 @@ const ALCHEMY_RECIPES = [
   { ch: 'ac7', a: 'p_bi',    b: 'r_lingual', w: 'bilingual',  zh: '雙語的',   e: '🗣️' },
   { ch: 'ac7', a: 'p_tri',   b: 'r_cycle',   w: 'tricycle',   zh: '三輪車',   e: '🛺' },
   { ch: 'ac7', a: 'p_tri',   b: 'r_angle',   w: 'triangle',   zh: '三角形',   e: '🔺' },
+  { ch: 'ac7', a: 'p_uni',   b: 'r_cycle',   w: 'unicycle',   zh: '獨輪車',   e: '🎪' },
+  { ch: 'ac7', a: 'p_tri',   b: 'r_lingual', w: 'trilingual', zh: '三語的',   e: '🌐' },
   { ch: 'ac7', a: 'p_uni',   b: 'r_corn',    w: 'unicorn',    zh: '獨角獸',   e: '🦄' },
 
   // ---- ac8: the mixed finale ----
@@ -296,4 +453,181 @@ const ALCHEMY_RECIPES = [
   { ch: 'ac8', a: 'r_move',  b: 's_ment',     w: 'movement',     zh: '移動',         e: '🏃' },
   { ch: 'ac8', a: 'r_agree', b: 's_ment',     w: 'agreement',    zh: '協議',         e: '🤝' },
   { ch: 'ac8', a: 'r_enjoy', b: 's_ment',     w: 'enjoyment',    zh: '樂趣',         e: '🎊' },
+  { ch: 'ac8', a: 'p_inter', b: 'r_view',     w: 'interview',    zh: '面試、訪問',   e: '🎙️',
+    note: 'inter（在……之間）＋ view（看）→ 兩個人面對面互相看著談話，就是面試／訪問。' },
+  { ch: 'ac8', a: 'p_under', b: 'r_cook',     w: 'undercook',    zh: '煮不熟',       e: '🥩' },
+  { ch: 'ac8', a: 'r_net',   b: 'r_work',     w: 'network',      zh: '網路',         e: '🕸️' },
+  // ⭐ 額外發現
+  { ch: 'ac8', a: 'p_over',  b: 'r_view',     w: 'overview',     zh: '概觀',         e: '🔭', bonus: true },
+  { ch: 'ac8', a: 'p_over',  b: 'r_pay',      w: 'overpay',      zh: '付太多',       e: '💸', bonus: true },
+  { ch: 'ac8', a: 'p_under', b: 'r_pay',      w: 'underpay',     zh: '付太少',       e: '🪙', bonus: true },
+  { ch: 'ac8', a: 'p_pre',   b: 'r_cook',     w: 'precook',      zh: '預先煮好',     e: '🍲', bonus: true },
+  { ch: 'ac8', a: 'p_pre',   b: 'r_wash',     w: 'prewash',      zh: '預洗',         e: '🧺', bonus: true },
+  { ch: 'ac8', a: 'r_pay',   b: 's_able',     w: 'payable',      zh: '應付款的',     e: '🧾', bonus: true },
+  { ch: 'ac8', a: 'r_work',  b: 's_able',     w: 'workable',     zh: '行得通的',     e: '🛠️', bonus: true },
+  { ch: 'ac8', a: 'r_agree', b: 's_able',     w: 'agreeable',    zh: '令人愉快的',   e: '😊', bonus: true },
+  { ch: 'ac8', a: 'r_market', b: 's_able',    w: 'marketable',   zh: '好賣的',       e: '🏷️', bonus: true },
+  { ch: 'ac8', a: 'r_work',  b: 'r_load',     w: 'workload',     zh: '工作量',       e: '📚', bonus: true },
+  { ch: 'ac8', a: 'r_work',  b: 'r_man',      w: 'workman',      zh: '工人',         e: '👷', bonus: true },
+  { ch: 'ac8', a: 'r_school', b: 'r_work',    w: 'schoolwork',   zh: '學校功課',     e: '📝', bonus: true },
+  { ch: 'ac8', a: 'r_ground', b: 'r_water',   w: 'groundwater',  zh: '地下水',       e: '💦', bonus: true },
+
+  // ---- ac9: -self / -selves ----
+  { ch: 'ac9', a: 'r_my',   b: 's_self',   w: 'myself',     zh: '我自己',   e: '🙋' },
+  { ch: 'ac9', a: 'r_your', b: 's_self',   w: 'yourself',   zh: '你自己',   e: '👉' },
+  { ch: 'ac9', a: 'r_him',  b: 's_self',   w: 'himself',    zh: '他自己',   e: '👦' },
+  { ch: 'ac9', a: 'r_her',  b: 's_self',   w: 'herself',    zh: '她自己',   e: '👧' },
+  { ch: 'ac9', a: 'r_it',   b: 's_self',   w: 'itself',     zh: '它自己',   e: '🐾' },
+  { ch: 'ac9', a: 'r_one',  b: 's_self',   w: 'oneself',    zh: '一個人自己', e: '🧍' },
+  { ch: 'ac9', a: 'r_our',  b: 's_selves', w: 'ourselves',  zh: '我們自己', e: '👨‍👩‍👧' },
+  { ch: 'ac9', a: 'r_your', b: 's_selves', w: 'yourselves', zh: '你們自己', e: '👥' },
+  { ch: 'ac9', a: 'r_them', b: 's_selves', w: 'themselves', zh: '他們自己', e: '🧑‍🤝‍🧑' },
+  { ch: 'ac9', a: 'r_them', b: 's_self',   w: 'themself',   zh: '他／她自己', e: '🧑', bonus: true,
+    note: '現代英文在不確定對方是男是女的時候，會用 they／themself 來稱呼一個人。' },
+
+  // ---- ac10: some / any / every / no ----
+  { ch: 'ac10', a: 'p_some',  b: 'r_body',  w: 'somebody',   zh: '某個人',   e: '🧍' },
+  { ch: 'ac10', a: 'p_some',  b: 'r_one',   w: 'someone',    zh: '某個人',   e: '🙋' },
+  { ch: 'ac10', a: 'p_some',  b: 'r_thing', w: 'something',  zh: '某個東西', e: '📦' },
+  { ch: 'ac10', a: 'p_some',  b: 'r_where', w: 'somewhere',  zh: '某個地方', e: '📍' },
+  { ch: 'ac10', a: 'p_any',   b: 'r_body',  w: 'anybody',    zh: '任何人',   e: '🤷' },
+  { ch: 'ac10', a: 'p_any',   b: 'r_one',   w: 'anyone',     zh: '任何人',   e: '🙌' },
+  { ch: 'ac10', a: 'p_any',   b: 'r_thing', w: 'anything',   zh: '任何東西', e: '🎁' },
+  { ch: 'ac10', a: 'p_any',   b: 'r_where', w: 'anywhere',   zh: '任何地方', e: '🗺️' },
+  { ch: 'ac10', a: 'p_every', b: 'r_body',  w: 'everybody',  zh: '每個人',   e: '👨‍👩‍👧‍👦' },
+  { ch: 'ac10', a: 'p_every', b: 'r_one',   w: 'everyone',   zh: '每個人',   e: '👪' },
+  { ch: 'ac10', a: 'p_every', b: 'r_thing', w: 'everything', zh: '每件事',   e: '🌏' },
+  { ch: 'ac10', a: 'p_every', b: 'r_where', w: 'everywhere', zh: '到處',     e: '🧭' },
+  { ch: 'ac10', a: 'p_no',    b: 'r_body',  w: 'nobody',     zh: '沒有人',   e: '🚷' },
+  { ch: 'ac10', a: 'p_no',    b: 'r_thing', w: 'nothing',    zh: '什麼都沒有', e: '🕳️' },
+  { ch: 'ac10', a: 'p_no',    b: 'r_where', w: 'nowhere',    zh: '哪裡都不是', e: '❓' },
+
+  // ---- ac11: -room / -book / -work ----
+  { ch: 'ac11', a: 'r_class', b: 'r_room', w: 'classroom', zh: '教室',       e: '🏫' },
+  { ch: 'ac11', a: 'r_bed',   b: 'r_room', w: 'bedroom',   zh: '臥室',       e: '🛏️' },
+  { ch: 'ac11', a: 'r_bath',  b: 'r_room', w: 'bathroom',  zh: '浴室',       e: '🛁' },
+  { ch: 'ac11', a: 'r_home',  b: 'r_room', w: 'homeroom',  zh: '導師教室',   e: '🧑‍🏫' },
+  { ch: 'ac11', a: 'r_work',  b: 'r_room', w: 'workroom',  zh: '工作室',     e: '🛠️' },
+  { ch: 'ac11', a: 'r_note',  b: 'r_book', w: 'notebook',  zh: '筆記本',     e: '📓' },
+  { ch: 'ac11', a: 'r_text',  b: 'r_book', w: 'textbook',  zh: '課本',       e: '📘' },
+  { ch: 'ac11', a: 'r_cook',  b: 'r_book', w: 'cookbook',  zh: '食譜',       e: '📕' },
+  { ch: 'ac11', a: 'r_work',  b: 'r_book', w: 'workbook',  zh: '練習本',     e: '📗' },
+  { ch: 'ac11', a: 'r_home',  b: 'r_work', w: 'homework',  zh: '回家功課',   e: '📝' },
+  { ch: 'ac11', a: 'r_class', b: 'r_work', w: 'classwork', zh: '課堂作業',   e: '🖊️' },
+  { ch: 'ac11', a: 'r_house', b: 'r_work', w: 'housework', zh: '家事',       e: '🧹' },
+  { ch: 'ac11', a: 'r_bath',  b: 'r_house', w: 'bathhouse', zh: '澡堂',       e: '♨️', bonus: true },
+
+  // ---- ac12: 天氣與大自然 ----
+  { ch: 'ac12', a: 'r_sun',  b: 'r_shine',   w: 'sunshine',   zh: '陽光',     e: '🌞' },
+  { ch: 'ac12', a: 'r_sun',  b: 'r_flower',  w: 'sunflower',  zh: '向日葵',   e: '🌻' },
+  { ch: 'ac12', a: 'r_sun',  b: 'r_rise',    w: 'sunrise',    zh: '日出',     e: '🌅' },
+  { ch: 'ac12', a: 'r_sun',  b: 'r_set',     w: 'sunset',     zh: '日落',     e: '🌇' },
+  { ch: 'ac12', a: 'r_sun',  b: 'r_glasses', w: 'sunglasses', zh: '太陽眼鏡', e: '🕶️' },
+  { ch: 'ac12', a: 'r_rain', b: 'r_bow',     w: 'rainbow',    zh: '彩虹',     e: '🌈' },
+  { ch: 'ac12', a: 'r_rain', b: 'r_coat',    w: 'raincoat',   zh: '雨衣',     e: '🧥' },
+  { ch: 'ac12', a: 'r_rain', b: 'r_drop',    w: 'raindrop',   zh: '雨滴',     e: '💧' },
+  { ch: 'ac12', a: 'r_snow', b: 'r_man',     w: 'snowman',    zh: '雪人',     e: '⛄' },
+  { ch: 'ac12', a: 'r_snow', b: 'r_ball',    w: 'snowball',   zh: '雪球',     e: '🥎' },
+  { ch: 'ac12', a: 'r_sea',  b: 'r_food',    w: 'seafood',    zh: '海鮮',     e: '🦐' },
+  { ch: 'ac12', a: 'r_sea',  b: 'r_side',    w: 'seaside',    zh: '海邊',     e: '🏖️' },
+  { ch: 'ac12', a: 'r_sea',  b: 'r_shell',   w: 'seashell',   zh: '貝殼',     e: '🐚' },
+  { ch: 'ac12', a: 'r_sea',  b: 'r_weed',    w: 'seaweed',    zh: '海帶',     e: '🌿' },
+  { ch: 'ac12', a: 'r_sea',  b: 'r_man',     w: 'seaman',     zh: '水手',     e: '⚓', bonus: true },
+  { ch: 'ac12', a: 'r_snow', b: 'r_drop',    w: 'snowdrop',   zh: '雪花蓮',   e: '🌱', bonus: true },
+
+  // ---- ac13: 方位字首 ----
+  { ch: 'ac13', a: 'p_out',  b: 'r_side',   w: 'outside',    zh: '外面',     e: '🌳' },
+  { ch: 'ac13', a: 'p_out',  b: 'r_door',   w: 'outdoor',    zh: '戶外的',   e: '🏕️' },
+  { ch: 'ac13', a: 'p_out',  b: 'r_line',   w: 'outline',    zh: '大綱、輪廓', e: '📝' },
+  { ch: 'ac13', a: 'p_out',  b: 'r_put',    w: 'output',     zh: '輸出',     e: '📤' },
+  { ch: 'ac13', a: 'p_up',   b: 'r_stairs', w: 'upstairs',   zh: '樓上',     e: '⬆️' },
+  { ch: 'ac13', a: 'p_up',   b: 'r_date',   w: 'update',     zh: '更新',     e: '🔄' },
+  { ch: 'ac13', a: 'p_up',   b: 'r_load',   w: 'upload',     zh: '上傳',     e: '📡' },
+  { ch: 'ac13', a: 'p_down', b: 'r_stairs', w: 'downstairs', zh: '樓下',     e: '🔽' },
+  { ch: 'ac13', a: 'p_down', b: 'r_load',   w: 'download',   zh: '下載',     e: '💾' },
+  { ch: 'ac13', a: 'p_down', b: 'r_town',   w: 'downtown',   zh: '市中心',   e: '🏙️' },
+  { ch: 'ac13', a: 'p_back', b: 'r_ground', w: 'background', zh: '背景',     e: '🖼️' },
+  { ch: 'ac13', a: 'p_back', b: 'r_pack',   w: 'backpack',   zh: '背包',     e: '🎒' },
+  { ch: 'ac13', a: 'p_in',   b: 'r_side',   w: 'inside',     zh: '裡面',     e: '🏠' },
+  { ch: 'ac13', a: 'p_in',   b: 'r_door',   w: 'indoor',     zh: '室內的',   e: '🛋️' },
+  { ch: 'ac13', a: 'p_in',   b: 'r_put',    w: 'input',      zh: '輸入',     e: '📥' },
+  { ch: 'ac13', a: 'p_up',   b: 'r_side',   w: 'upside',     zh: '上面那一面', e: '🙃', bonus: true },
+  { ch: 'ac13', a: 'p_up',   b: 'r_town',   w: 'uptown',     zh: '住宅區',   e: '🏘️', bonus: true },
+  { ch: 'ac13', a: 'p_down', b: 'r_side',   w: 'downside',   zh: '缺點',     e: '📉', bonus: true },
+  { ch: 'ac13', a: 'p_back', b: 'r_side',   w: 'backside',   zh: '背面',     e: '🔙', bonus: true },
+  { ch: 'ac13', a: 'p_back', b: 'r_door',   w: 'backdoor',   zh: '後門',     e: '🚪', bonus: true },
+  { ch: 'ac13', a: 'p_back', b: 'r_stairs', w: 'backstairs', zh: '後樓梯',   e: '🪜', bonus: true },
+  { ch: 'ac13', a: 'p_in',   b: 'r_line',   w: 'inline',     zh: '排成一直線', e: '➡️', bonus: true },
+  { ch: 'ac13', a: 'r_side', b: 'r_line',   w: 'sideline',   zh: '場邊、副業', e: '🏟️', bonus: true },
+
+  // ---- ac14: 移動的字根 ----
+  { ch: 'ac14', a: 'p_trans', b: 'r_port',   w: 'transport',  zh: '運輸',   e: '🚚' },
+  { ch: 'ac14', a: 'p_trans', b: 'r_form',   w: 'transform',  zh: '變形',   e: '🤖' },
+  { ch: 'ac14', a: 'p_sub',   b: 'r_way',    w: 'subway',     zh: '捷運',   e: '🚇' },
+  { ch: 'ac14', a: 'p_sub',   b: 'r_marine', w: 'submarine',  zh: '潛水艇', e: '🤿' },
+  { ch: 'ac14', a: 'p_sub',   b: 'r_title',  w: 'subtitle',   zh: '字幕',   e: '💬' },
+  { ch: 'ac14', a: 'r_air',   b: 'r_port',   w: 'airport',    zh: '機場',   e: '🛫' },
+  { ch: 'ac14', a: 'r_pass',  b: 'r_port',   w: 'passport',   zh: '護照',   e: '🛂' },
+  { ch: 'ac14', a: 'p_ex',    b: 'r_port',   w: 'export',     zh: '出口',   e: '📦' },
+  { ch: 'ac14', a: 'p_im',    b: 'r_port',   w: 'import',     zh: '進口',   e: '🛒' },
+  { ch: 'ac14', a: 'p_re',    b: 'r_port',   w: 'report',     zh: '報告',   e: '📄',
+    note: 're（回來）＋ port（搬運）→ 把看到的事情「搬回來」告訴大家，就是報告。' },
+  { ch: 'ac14', a: 'p_re',    b: 'r_form',   w: 'reform',     zh: '改革',   e: '🔧' },
+  { ch: 'ac14', a: 'p_in',    b: 'r_form',   w: 'inform',     zh: '通知',   e: '📢' },
+  { ch: 'ac14', a: 'p_uni',   b: 'r_form',   w: 'uniform',    zh: '制服',   e: '🎽',
+    note: 'uni（一個）＋ form（樣子）→ 大家長成同一個樣子，就是制服。' },
+  { ch: 'ac14', a: 'r_air',   b: 'r_way',    w: 'airway',     zh: '航道',   e: '🛩️', bonus: true },
+
+  // ---- ac15: 科學家的字根 ----
+  { ch: 'ac15', a: 'p_auto',   b: 's_graph',  w: 'autograph',   zh: '親筆簽名', e: '✍️' },
+  { ch: 'ac15', a: 'p_auto',   b: 's_mobile', w: 'automobile',  zh: '汽車',     e: '🚗' },
+  { ch: 'ac15', a: 'p_photo',  b: 's_graph',  w: 'photograph',  zh: '照片',     e: '📷' },
+  { ch: 'ac15', a: 'p_photo',  b: 's_graphy', w: 'photography', zh: '攝影',     e: '📸' },
+  { ch: 'ac15', a: 'p_photo',  b: 's_copy',   w: 'photocopy',   zh: '影印',     e: '🖨️' },
+  { ch: 'ac15', a: 'p_tele',   b: 's_graph',  w: 'telegraph',   zh: '電報機',   e: '📡' },
+  { ch: 'ac15', a: 'p_tele',   b: 's_gram',   w: 'telegram',    zh: '電報',     e: '📨' },
+  { ch: 'ac15', a: 'p_bio',    b: 's_logy',   w: 'biology',     zh: '生物學',   e: '🧬' },
+  { ch: 'ac15', a: 'p_bio',    b: 's_graphy', w: 'biography',   zh: '傳記',     e: '📖' },
+  { ch: 'ac15', a: 'p_geo',    b: 's_graphy', w: 'geography',   zh: '地理',     e: '🗺️' },
+  { ch: 'ac15', a: 'p_geo',    b: 's_logy',   w: 'geology',     zh: '地質學',   e: '🪨' },
+  { ch: 'ac15', a: 'p_zoo',    b: 's_logy',   w: 'zoology',     zh: '動物學',   e: '🦁' },
+  { ch: 'ac15', a: 'p_thermo', b: 's_meter',  w: 'thermometer', zh: '溫度計',   e: '🌡️' },
+  { ch: 'ac15', a: 'p_kilo',   b: 's_meter',  w: 'kilometer',   zh: '公里',     e: '🛣️' },
+  { ch: 'ac15', a: 'p_kilo',   b: 's_gram',   w: 'kilogram',    zh: '公斤',     e: '⚖️' },
+  { ch: 'ac15', a: 'p_centi',  b: 's_meter',  w: 'centimeter',  zh: '公分',     e: '📏' },
+  { ch: 'ac15', a: 'p_dia',    b: 's_meter',  w: 'diameter',    zh: '直徑',     e: '⭕' },
+  { ch: 'ac15', a: 'p_dia',    b: 's_gram',   w: 'diagram',     zh: '圖表',     e: '📊' },
+  { ch: 'ac15', a: 'p_tele',   b: 's_graphy', w: 'telegraphy',  zh: '電報術',   e: '🔌', bonus: true },
+
+  // ---- ac16: 鍊金大魔王 ----
+  { ch: 'ac16', a: 'r_friend',   b: 's_ship',  w: 'friendship',   zh: '友誼',         e: '🤝' },
+  { ch: 'ac16', a: 'r_member',   b: 's_ship',  w: 'membership',   zh: '會員資格',     e: '🎫' },
+  { ch: 'ac16', a: 'r_leader',   b: 's_ship',  w: 'leadership',   zh: '領導力',       e: '🚩' },
+  { ch: 'ac16', a: 'r_child',    b: 's_hood',  w: 'childhood',    zh: '童年',         e: '🧸' },
+  { ch: 'ac16', a: 'r_neighbor', b: 's_hood',  w: 'neighborhood', zh: '鄰里、社區',   e: '🏘️' },
+  { ch: 'ac16', a: 'r_free',     b: 's_dom',   w: 'freedom',      zh: '自由',         e: '🕊️' },
+  { ch: 'ac16', a: 'r_king',     b: 's_dom',   w: 'kingdom',      zh: '王國',         e: '🏰' },
+  { ch: 'ac16', a: 'r_bore',     b: 's_dom',   w: 'boredom',      zh: '無聊',         e: '🥱' },
+  { ch: 'ac16', a: 'p_for',      b: 's_ward',  w: 'forward',      zh: '向前',         e: '➡️' },
+  { ch: 'ac16', a: 'p_back',     b: 's_ward',  w: 'backward',     zh: '向後',         e: '⬅️' },
+  { ch: 'ac16', a: 'p_up',       b: 's_ward',  w: 'upward',       zh: '向上',         e: '⏫' },
+  { ch: 'ac16', a: 'p_down',     b: 's_ward',  w: 'downward',     zh: '向下',         e: '⏬' },
+  { ch: 'ac16', a: 'p_to',       b: 's_ward',  w: 'toward',       zh: '朝向',         e: '🧭' },
+  { ch: 'ac16', a: 'r_water',    b: 's_proof', w: 'waterproof',   zh: '防水的',       e: '☔' },
+  { ch: 'ac16', a: 'r_fire',     b: 's_proof', w: 'fireproof',    zh: '防火的',       e: '🧯' },
+  { ch: 'ac16', a: 'r_child',    b: 's_like',  w: 'childlike',    zh: '像小孩一樣的', e: '🧒' },
+  { ch: 'ac16', a: 'r_life',     b: 's_like',  w: 'lifelike',     zh: '栩栩如生的',   e: '🗿' },
+  { ch: 'ac16', a: 'r_child',    b: 's_proof', w: 'childproof',   zh: '防兒童開啟的', e: '🔐', bonus: true },
+  { ch: 'ac16', a: 'r_king',     b: 's_ship',  w: 'kingship',     zh: '王位、王權',   e: '🪑', bonus: true },
+  { ch: 'ac16', a: 'p_back',     b: 'r_fire',  w: 'backfire',     zh: '適得其反',     e: '💥', bonus: true },
 ];
+
+// Combinations a child will reasonably try that are NOT single English words —
+// but where "不是一個英文單字" alone would mislead. brew() shows these instead.
+const ALCHEMY_NEARMISS = {
+  noone:   '英文沒有 noone 這個字喔！「沒有人」要寫成兩個字：no one。',
+  ourself: '「我們自己」要用 ourselves。ourself 只有國王在講自己的時候才會用。',
+  himselves: '「他自己」只有一個人，所以要用 himself；-selves 是給很多人用的。',
+  herselves: '「她自己」只有一個人，所以要用 herself；-selves 是給很多人用的。',
+  myselves:  '「我自己」只有一個人，所以要用 myself；-selves 是給很多人用的。',
+};
