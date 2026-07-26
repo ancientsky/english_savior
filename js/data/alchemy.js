@@ -8,9 +8,20 @@
    y→i. A kid who sees "happy + ly = happily" learns a spelling exception, not
    a rule, so those words are simply left out.
 
+   Second hard rule: NEVER TELL A CHILD A REAL WORD DOESN'T EXIST. If two parts
+   on a chapter's shelf spell a real English word, it must appear here. Words
+   that are real but off-topic for the chapter carry `bonus: true`: they are
+   celebrated, spoken, rewarded and collected in the dex, but they are not ???
+   cards and do not gate chapter completion. `node validate_alchemy.js` fails
+   the build on any combination that spells a word the site teaches elsewhere;
+   `--review` lists the rest for a human pass.
+
    ALCHEMY_PARTS   { id, text, type: prefix|root|suffix, zh, e }
-   ALCHEMY_RECIPES { ch, a, b, w, zh, e }  — a/b are part ids
-   ALCHEMY_CHAPTERS{ id, name, e, rule }   — the rule shown before the chapter
+   ALCHEMY_RECIPES { ch, a, b, w, zh, e, bonus?, note? } — a/b are part ids;
+                     `note` explains the few words where the affix's usual gloss
+                     doesn't quite land (dis- in discount means "off", not "not")
+   ALCHEMY_CHAPTERS{ id, name, e, rule, compound? } — `compound` asks the
+                     validator to also review root+root pairs in that chapter
 */
 
 const ALCHEMY_PARTS = [
@@ -155,8 +166,8 @@ const ALCHEMY_CHAPTERS = [
     rule: '-y 把名詞變形容詞（rain → rainy），-ly 說明「怎麼做」（slow → slowly），-ness 把形容詞變名詞（kind → kindness）。' },
   { id: 'ac7', name: '字根大家族', e: '🔭',
     rule: 'tele- 是「遠」、micro- 是「微小」、bi- 是「二」、tri- 是「三」、uni- 是「一」。認識一個字根，一次看懂一整家族的字。' },
-  { id: 'ac8', name: '鍊金大魔王', e: '👑',
-    rule: '最後一關全部混在一起：pre-（之前）、over-（過度）、under-（之下）、super-（超級）、inter-（之間）、-able（可以被）、-ment（行為結果）。' },
+  { id: 'ac8', name: '混合大挑戰', e: '🎯',
+    rule: '這一章全部混在一起：pre-（之前）、over-（過度）、under-（之下）、super-（超級）、inter-（之間）、-able（可以被）、-ment（行為結果）。' },
 ];
 
 const ALCHEMY_RECIPES = [
@@ -222,8 +233,13 @@ const ALCHEMY_RECIPES = [
   { ch: 'ac4', a: 'r_use',    b: 's_less', w: 'useless',   zh: '沒用的',       e: '🗑️' },
   { ch: 'ac4', a: 'r_care',   b: 's_less', w: 'careless',  zh: '粗心的',       e: '😅' },
   { ch: 'ac4', a: 'r_home',   b: 's_less', w: 'homeless',  zh: '無家可歸的',   e: '🏚️' },
+  { ch: 'ac4', a: 'r_hope',   b: 's_ful',  w: 'hopeful',   zh: '有希望的',     e: '🌟' },
   { ch: 'ac4', a: 'r_hope',   b: 's_less', w: 'hopeless',  zh: '絕望的',       e: '😔' },
   { ch: 'ac4', a: 'r_end',    b: 's_less', w: 'endless',   zh: '無盡的',       e: '♾️' },
+  // ⭐ 額外發現：零件也拼得出來的真英文字
+  { ch: 'ac4', a: 'r_color',  b: 's_less', w: 'colorless', zh: '無色的',       e: '🤍', bonus: true },
+  { ch: 'ac4', a: 'r_power',  b: 's_less', w: 'powerless', zh: '無能為力的',   e: '🪫', bonus: true },
+  { ch: 'ac4', a: 'r_thank',  b: 's_less', w: 'thankless', zh: '吃力不討好的', e: '😮‍💨', bonus: true },
 
   // ---- ac5: dis- / mis- ----
   { ch: 'ac5', a: 'p_dis', b: 'r_like',    w: 'dislike',    zh: '不喜歡',   e: '👎' },
@@ -238,6 +254,10 @@ const ALCHEMY_RECIPES = [
   { ch: 'ac5', a: 'p_mis', b: 'r_lead',    w: 'mislead',    zh: '誤導',     e: '🧭' },
   { ch: 'ac5', a: 'p_mis', b: 'r_read',    w: 'misread',    zh: '讀錯',     e: '👓' },
   { ch: 'ac5', a: 'p_mis', b: 'r_count',   w: 'miscount',   zh: '數錯',     e: '🧮' },
+  // dis- 也有「去掉」的意思：把價錢算掉一部分，就是打折
+  { ch: 'ac5', a: 'p_dis', b: 'r_count',   w: 'discount',   zh: '折扣',     e: '🏷️',
+    note: '這裡的 dis- 是「去掉」的意思：把價錢「算掉」一部分，就是打折。' },
+  { ch: 'ac5', a: 'p_dis', b: 'r_use',     w: 'disuse',     zh: '廢棄不用', e: '🕸️', bonus: true },
 
   // ---- ac6: -y / -ly / -ness ----
   { ch: 'ac6', a: 'r_rain',   b: 's_y',    w: 'rainy',    zh: '下雨的',   e: '🌧️' },
@@ -258,6 +278,14 @@ const ALCHEMY_RECIPES = [
   { ch: 'ac6', a: 'r_ill',    b: 's_ness', w: 'illness',  zh: '疾病',     e: '🤒' },
   { ch: 'ac6', a: 'r_weak',   b: 's_ness', w: 'weakness', zh: '弱點',     e: '🪶' },
   { ch: 'ac6', a: 'r_sick',   b: 's_ness', w: 'sickness', zh: '生病',     e: '🏥' },
+  // ⭐ 額外發現：同樣的規則還拼得出這些真英文字
+  { ch: 'ac6', a: 'r_sick',   b: 's_ly',   w: 'sickly',    zh: '病懨懨的', e: '🤢', bonus: true },
+  { ch: 'ac6', a: 'r_weak',   b: 's_ly',   w: 'weakly',    zh: '虛弱地',   e: '🫠', bonus: true },
+  { ch: 'ac6', a: 'r_dark',   b: 's_ly',   w: 'darkly',    zh: '陰沉地',   e: '🌚', bonus: true },
+  { ch: 'ac6', a: 'r_loud',   b: 's_ness', w: 'loudness',  zh: '響度',     e: '🔊', bonus: true },
+  { ch: 'ac6', a: 'r_quiet',  b: 's_ness', w: 'quietness', zh: '寧靜',     e: '🌙', bonus: true },
+  { ch: 'ac6', a: 'r_slow',   b: 's_ness', w: 'slowness',  zh: '緩慢',     e: '🐢', bonus: true },
+  { ch: 'ac6', a: 'r_quick',  b: 's_ness', w: 'quickness', zh: '敏捷',     e: '🐆', bonus: true },
 
   // ---- ac7: tele- / micro- / bi- / tri- / uni- ----
   { ch: 'ac7', a: 'p_tele',  b: 'r_phone',   w: 'telephone',  zh: '電話',     e: '☎️' },
@@ -271,6 +299,8 @@ const ALCHEMY_RECIPES = [
   { ch: 'ac7', a: 'p_bi',    b: 'r_lingual', w: 'bilingual',  zh: '雙語的',   e: '🗣️' },
   { ch: 'ac7', a: 'p_tri',   b: 'r_cycle',   w: 'tricycle',   zh: '三輪車',   e: '🛺' },
   { ch: 'ac7', a: 'p_tri',   b: 'r_angle',   w: 'triangle',   zh: '三角形',   e: '🔺' },
+  { ch: 'ac7', a: 'p_uni',   b: 'r_cycle',   w: 'unicycle',   zh: '獨輪車',   e: '🎪' },
+  { ch: 'ac7', a: 'p_tri',   b: 'r_lingual', w: 'trilingual', zh: '三語的',   e: '🌐' },
   { ch: 'ac7', a: 'p_uni',   b: 'r_corn',    w: 'unicorn',    zh: '獨角獸',   e: '🦄' },
 
   // ---- ac8: the mixed finale ----
@@ -296,4 +326,22 @@ const ALCHEMY_RECIPES = [
   { ch: 'ac8', a: 'r_move',  b: 's_ment',     w: 'movement',     zh: '移動',         e: '🏃' },
   { ch: 'ac8', a: 'r_agree', b: 's_ment',     w: 'agreement',    zh: '協議',         e: '🤝' },
   { ch: 'ac8', a: 'r_enjoy', b: 's_ment',     w: 'enjoyment',    zh: '樂趣',         e: '🎊' },
+  { ch: 'ac8', a: 'p_inter', b: 'r_view',     w: 'interview',    zh: '面試、訪問',   e: '🎙️',
+    note: 'inter（在……之間）＋ view（看）→ 兩個人面對面互相看著談話，就是面試／訪問。' },
+  { ch: 'ac8', a: 'p_under', b: 'r_cook',     w: 'undercook',    zh: '煮不熟',       e: '🥩' },
+  { ch: 'ac8', a: 'r_net',   b: 'r_work',     w: 'network',      zh: '網路',         e: '🕸️' },
+  // ⭐ 額外發現
+  { ch: 'ac8', a: 'p_over',  b: 'r_view',     w: 'overview',     zh: '概觀',         e: '🔭', bonus: true },
+  { ch: 'ac8', a: 'p_over',  b: 'r_pay',      w: 'overpay',      zh: '付太多',       e: '💸', bonus: true },
+  { ch: 'ac8', a: 'p_under', b: 'r_pay',      w: 'underpay',     zh: '付太少',       e: '🪙', bonus: true },
+  { ch: 'ac8', a: 'p_pre',   b: 'r_cook',     w: 'precook',      zh: '預先煮好',     e: '🍲', bonus: true },
+  { ch: 'ac8', a: 'p_pre',   b: 'r_wash',     w: 'prewash',      zh: '預洗',         e: '🧺', bonus: true },
+  { ch: 'ac8', a: 'r_pay',   b: 's_able',     w: 'payable',      zh: '應付款的',     e: '🧾', bonus: true },
+  { ch: 'ac8', a: 'r_work',  b: 's_able',     w: 'workable',     zh: '行得通的',     e: '🛠️', bonus: true },
+  { ch: 'ac8', a: 'r_agree', b: 's_able',     w: 'agreeable',    zh: '令人愉快的',   e: '😊', bonus: true },
+  { ch: 'ac8', a: 'r_market', b: 's_able',    w: 'marketable',   zh: '好賣的',       e: '🏷️', bonus: true },
+  { ch: 'ac8', a: 'r_work',  b: 'r_load',     w: 'workload',     zh: '工作量',       e: '📚', bonus: true },
+  { ch: 'ac8', a: 'r_work',  b: 'r_man',      w: 'workman',      zh: '工人',         e: '👷', bonus: true },
+  { ch: 'ac8', a: 'r_school', b: 'r_work',    w: 'schoolwork',   zh: '學校功課',     e: '📝', bonus: true },
+  { ch: 'ac8', a: 'r_ground', b: 'r_water',   w: 'groundwater',  zh: '地下水',       e: '💦', bonus: true },
 ];
