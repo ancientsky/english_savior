@@ -43,8 +43,8 @@ const OrderGame = (() => {
   // 內用/外帶 is an ORDER-level answer, not a per-item one, so it lives beside
   // `order`/`tray` rather than inside them: turning those into { lines, place }
   // would touch a dozen order.forEach / tray.find call sites for no gain.
-  let orderPlace = null;   // 'for here' | 'to go' | null (this shop never asks)
-  let trayPlace = null;    // what the child picked — null means "not answered"
+  let orderAsks = {};      // { place: 'to go' } — what THIS customer asked for
+  let trayAsks = {};       // what the child picked; a missing key means "not answered"
   let customer = 0, correctCount = 0, replaysLeft = 0, retried = false;
   let running = false;
 
@@ -121,8 +121,9 @@ const OrderGame = (() => {
   // registry so adding an axis never needs this list edited — forgetting it is
   // silent (the axis simply never appears) and that is the worst kind of bug.
   const PATTERN_FEATURES = () => [...new Set([
-    'togo', 'amt',
+    'amt',
     ...Object.values(ORDER_CHOICES).map(a => a.feat),
+    ...Object.values(ORDER_ASKS).map(a => a.feat),
   ])];
 
   /* ================= save ================= */
@@ -186,7 +187,7 @@ const OrderGame = (() => {
     // third axis, so amounts get a per-order sub-cap on top of the shared budget.
     let levelsLeft = amt ? (difficulty === 'hard' ? 2 : 1) : 0;
 
-    orderPlace = makePlace();
+    orderAsks = makeAsks();
 
     return trimToBudget(chosen.map(item => {
       // Quantity only where "two ___" is real English (the data marks those)
@@ -293,12 +294,39 @@ const OrderGame = (() => {
   const canLevel = (item, x) =>
     hasFeature('amt') && (item.def || []).includes(x) && !!(ORDER_EXTRAS[x] || {}).amt;
 
-  function makePlace() {
-    if (!hasFeature('togo')) return null;
-    return Math.random() < 0.5 ? 'for here' : 'to go';
-  }
+  /* ================= order-level asks =================
+     An "ask" is one answer that belongs to the WHOLE order rather than to any
+     item: 內用/外帶, or when the customer wants to pick something up.
 
-  const PLACE_ZH = { 'for here': '內用', 'to go': '外帶' };
+     `comma` is the part that matters linguistically. "for here" / "to go" are
+     parenthetical, so ", to go, please" is right and the comma is load-bearing
+     (TTS pauses on it, which is the only way a child hears the phrase as one
+     unit). But ", tomorrow, please" is NOT how anyone speaks — that phrase runs
+     straight on, and printing a comma there would be teaching wrong English.
+     So each ask declares its own punctuation.
+  */
+  const ORDER_ASKS = {
+    place: {
+      feat: 'togo', comma: true, noun: '內用還是外帶', label: '內用還是外帶？',
+      cls: 'od-place', attr: 'data-place',
+      opts: [{ w: 'for here', zh: '內用', e: '🍽️' }, { w: 'to go', zh: '外帶', e: '🥡' }],
+    },
+  };
+
+  const asksOf = s2 => Object.keys(ORDER_ASKS).filter(id => featuresOf(s2).has(ORDER_ASKS[id].feat));
+  const askOpt = (id, w) => ORDER_ASKS[id].opts.find(o => o.w === w) || { w, zh: w };
+  // A shop may narrow the options — "for the seven o'clock show" is right at a
+  // cinema and absurd at a bank.
+  const askOpts = id => {
+    const only = (shop.askOpts || {})[id];
+    return only ? ORDER_ASKS[id].opts.filter(o => only.includes(o.w)) : ORDER_ASKS[id].opts;
+  };
+
+  function makeAsks() {
+    const out = {};
+    asksOf(shop).forEach(id => { out[id] = pick(askOpts(id)).w; });
+    return out;
+  }
 
   function listWords(arr) {
     if (arr.length <= 1) return arr.map(x => x).join('');
@@ -355,7 +383,7 @@ const OrderGame = (() => {
 
   // Items are separated by commas with a final "and", because a line can itself
   // contain "with A and B" — joining every line with "and" runs them together.
-  function buildSentence(o, place) {
+  function buildSentence(o, asks) {
     const parts = o.map(lineText);
     let body;
     if (parts.length === 1) body = parts[0];
@@ -365,9 +393,13 @@ const OrderGame = (() => {
     // "Can I have ... please." is a question wearing a full stop, and easy mode
     // shows the sentence on screen, so the punctuation is being taught too.
     const end = /^(Can|Could|May)\b/.test(opener) ? '?' : '.';
-    // The comma is load-bearing: it gives TTS a pause, which is the only way a
-    // child hears "for here" as one phrase instead of trailing off the last item.
-    const tail = place ? `, ${place}` : '';
+    // Each ask brings its own punctuation — see ORDER_ASKS. A parenthetical like
+    // "to go" is comma-wrapped; a run-on adverbial like "tomorrow" is not.
+    let tail = '';
+    Object.keys(asks || {}).forEach(id => {
+      if (!ORDER_ASKS[id]) return;
+      tail += (ORDER_ASKS[id].comma ? ', ' : ' ') + asks[id];
+    });
     return `${opener} ${body}${tail}, please${end}`;
   }
 
@@ -405,8 +437,8 @@ const OrderGame = (() => {
 
   function nextCustomer() {
     if (customer >= SHIFT_LEN) { finishShift(); return; }
-    order = makeOrder();          // also sets orderPlace
-    sentence = buildSentence(order, orderPlace);
+    order = makeOrder();          // also sets orderAsks
+    sentence = buildSentence(order, orderAsks);
     resetTray();
     // The previous customer's verdict used to stay on screen while the next one
     // was already talking — and it kept the once-per-region teaching card alive
@@ -436,14 +468,15 @@ const OrderGame = (() => {
   // the previous customer's answer sitting there for the next one.
   function resetTray() {
     tray = [];
-    trayPlace = null;   // null, not 'for here' — "not answered yet" is honest
+    trayAsks = {};      // empty, not pre-filled — "not answered yet" is honest
   }
 
-  function setPlace(p) {
-    if (!running) return;
-    trayPlace = p;
+  function setAsk(id, v) {
+    if (!running || !ORDER_ASKS[id]) return;
+    trayAsks[id] = v;
     renderTray();
   }
+  const setPlace = p => setAsk('place', p);
 
   function addToTray(w) {
     if (!running) return;
@@ -568,14 +601,17 @@ const OrderGame = (() => {
         problems.push({ rank: RANK.extra, key: t.w, msg: `多做了 ${item.e} ${item.zh}（${t.w}），客人沒有點` });
       }
     });
-    if (orderPlace && trayPlace !== orderPlace) {
+    Object.keys(orderAsks).forEach(id => {
+      const want = orderAsks[id], got = trayAsks[id];
+      if (!want || want === got) return;
+      const ax = ORDER_ASKS[id];
       problems.push({
-        rank: RANK.place, key: '__place',
-        msg: trayPlace
-          ? `客人說 ${orderPlace}（${PLACE_ZH[orderPlace]}），你按成${PLACE_ZH[trayPlace]}了`
-          : `客人說 ${orderPlace}（${PLACE_ZH[orderPlace]}），你還沒選內用還是外帶`,
+        rank: RANK.place, key: '__' + id,
+        msg: got
+          ? `客人說 ${want}（${askOpt(id, want).zh}），你按成${askOpt(id, got).zh}了`
+          : `客人說 ${want}（${askOpt(id, want).zh}），你還沒選${ax.noun}`,
       });
-    }
+    });
 
     // Worst first, but no single item may eat the whole quota — otherwise one
     // completely botched item hides the mistake on the next one entirely.
@@ -720,16 +756,19 @@ const OrderGame = (() => {
     els.tray.innerHTML = '';
     // The 內用/外帶 row belongs to the order, not to any one item, so it sits at
     // the top of the tray and stays there even while the tray is still empty.
-    if (orderPlace) {
+    Object.keys(orderAsks).forEach(id => {
+      const ax = ORDER_ASKS[id];
+      if (!ax) return;
       const row = document.createElement('div');
-      row.className = 'od-place';
-      row.innerHTML = `<span class="od-place-label">內用還是外帶？</span>
-        <button data-place="for here" class="${trayPlace === 'for here' ? 'on' : ''}">🍽️ for here<small>內用</small></button>
-        <button data-place="to go" class="${trayPlace === 'to go' ? 'on' : ''}">🥡 to go<small>外帶</small></button>`;
-      row.querySelectorAll('[data-place]').forEach(b =>
-        b.addEventListener('click', () => setPlace(b.dataset.place)));
+      // `cls` keeps each ask's original hook (.od-place) so the DOM contract holds
+      row.className = 'od-ask' + (ax.cls ? ' ' + ax.cls : '');
+      row.innerHTML = `<span class="od-place-label">${ax.label}</span>`
+        + askOpts(id).map(o => `<button data-ask="${id}" data-ask-v="${o.w}"${ax.attr ? ` ${ax.attr}="${o.w}"` : ''}
+            class="${trayAsks[id] === o.w ? 'on' : ''}">${o.e ? o.e + ' ' : ''}${o.w}<small>${o.zh}</small></button>`).join('');
+      row.querySelectorAll('[data-ask]').forEach(b =>
+        b.addEventListener('click', () => setAsk(id, b.dataset.askV)));
       els.tray.appendChild(row);
-    }
+    });
     if (!tray.length) {
       els.tray.insertAdjacentHTML('beforeend',
         '<p class="od-tray-empty">點下面的菜單，把客人要的東西做出來 👇</p>');
@@ -965,11 +1004,11 @@ const OrderGame = (() => {
 
   // Point the module at a shop without disturbing a shift that may be running.
   function withShop(i, diff, fn) {
-    const keep = { shop, shopIndex, difficulty, order, sentence, orderPlace };
+    const keep = { shop, shopIndex, difficulty, order, sentence, orderAsks };
     shopIndex = i;
     shop = ORDER_SHOPS[i];
     if (diff) difficulty = diff;
-    try { return fn(); } finally { ({ shop, shopIndex, difficulty, order, sentence, orderPlace } = keep); }
+    try { return fn(); } finally { ({ shop, shopIndex, difficulty, order, sentence, orderAsks } = keep); }
   }
 
   // Fill in whatever a test literal left out, the same way makeOrder() would.
@@ -995,22 +1034,32 @@ const OrderGame = (() => {
       sample: (i, diff, n) => withShop(i, diff, () => {
         const out = [];
         for (let k = 0; k < n; k++) {
-          const o = makeOrder();     // also sets orderPlace
-          const place = orderPlace;
-          out.push({ shop: ORDER_SHOPS[i].id, diff, place, sentence: buildSentence(o, place), order: o.map(cloneLine) });
+          const o = makeOrder();     // also sets orderAsks
+          const place = orderAsks.place || null;
+          out.push({ shop: ORDER_SHOPS[i].id, diff, place, asks: { ...orderAsks },
+                     sentence: buildSentence(o, orderAsks), order: o.map(cloneLine) });
         }
         return out;
       }),
       // one hand-written order, so a specific phrasing can be asserted
-      sentenceFor: (i, lines, place) =>
-        withShop(i, null, () => buildSentence(lines.map(l => normalizeLine(i, l)), place || null)),
+      // `place` may be a bare string (the 內用/外帶 shorthand the tests use) or a
+      // full ask map — both are accepted so the older signature keeps working.
+      sentenceFor: (i, lines, place) => withShop(i, null, () => buildSentence(
+        lines.map(l => normalizeLine(i, l)),
+        typeof place === 'string' ? { place } : (place || {}))),
     },
 
     state: () => ({
       shop: shop && shop.id,
       customer, correctCount, running,
       served: save.served, shops: save.shops,
-      difficulty, sentence, orderPlace, trayPlace,
+      difficulty, sentence,
+      // `place` stays in the surface as a derived alias: it is what the tests
+      // written against the 內用/外帶 pattern speak, and there is no reason to
+      // make them learn the generalised map.
+      orderPlace: orderAsks.place || null,
+      trayPlace: trayAsks.place || null,
+      orderAsks: { ...orderAsks }, trayAsks: { ...trayAsks },
       order: order && order.map(cloneLine),
       tray: tray.map(cloneLine),
     }),
@@ -1022,8 +1071,11 @@ const OrderGame = (() => {
     setOrder: (lines, place) => {
       resetTray();     // a new order means a new customer — same as nextCustomer
       order = lines.map(l => normalizeLine(shopIndex, l));
-      if (place !== undefined) orderPlace = place;
-      sentence = buildSentence(order, orderPlace);
+      if (place !== undefined) {
+        if (place) orderAsks = { place };
+        else delete orderAsks.place;
+      }
+      sentence = buildSentence(order, orderAsks);
       renderAll();
     },
     // Build the tray exactly as the order asks — the "perfect employee" path.
@@ -1037,7 +1089,7 @@ const OrderGame = (() => {
         ing: o.ing.slice(),
         lv: { ...(o.lv || {}) },
       }));
-      trayPlace = orderPlace;
+      trayAsks = { ...orderAsks };
       renderTray();
     },
     autoServe: () => { TestHooks.autoTray(); serve(); },
