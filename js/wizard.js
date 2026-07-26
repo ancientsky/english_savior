@@ -5,8 +5,20 @@
 
    The design point: a level never has one right answer. Each obstacle lists
    every tag that beats it, so "know more words" literally means "have more
-   ways through". Replaying a level with a *different* kind of solution is what
-   earns the 2nd and 3rd star, which is what sends kids back to the spellbook.
+   ways through".
+
+   Two award tracks, deliberately separate:
+     ⭐ stars      how well THIS run went — no hint, no wasted summons, magic
+                   left over. Efficiency.
+     📖 solutions  how many different tags you have ever used to clear the
+                   level. Collection, across runs, and the reason to come back
+                   with a new idea.
+   Collapsing them (e.g. "3★ = clear in 3 summons") would delete the only
+   incentive to look for a second answer, which is the whole game.
+
+   Magic (mana) is the one way to lose: 3 + obstacles per level, one per
+   summon, hit or miss. Without it, browsing the spellbook and casting
+   everything was strictly better than thinking.
 
    Physics is deliberately not a rigid-body engine: summoned objects fall to a
    resting spot chosen by what they solved. It reads as physical, is fully
@@ -58,6 +70,13 @@ const WizardGame = (() => {
   let walkAnim = null;      // { fromX, toX, t, dur }
   let runFoundTags = null;  // Set of tags used successfully this level
   let finished = false;
+  // ---- W2: mana. Every summon costs one, hit or miss. Running out is the
+  // only way to lose, and it's what makes "which word do I pick" a decision
+  // instead of a shopping trip through the spellbook.
+  let mana = 0, manaMax = 0;
+  let runHintUsed = false;  // ⭐⭐ requires clearing without opening a hint
+  let runWasted = 0;        // summons that solved nothing — blocks ⭐⭐⭐
+  let hintShown = false;    // hint text currently revealed for this obstacle
   let effects = [];         // transient puffs/sparkles
   let deco = [];            // background scenery positions for this level
 
@@ -111,13 +130,24 @@ const WizardGame = (() => {
   }
   function starTarget(l) { return Math.min(4, levelTags(l).length); }
 
-  function starsFor(l) {
-    if (save.cleared[l.id] === undefined) return 0;
-    const found = (save.found[l.id] || []).length;
-    if (found >= starTarget(l)) return 3;
-    if (found >= 2) return 2;
-    return 1;
+  // W2: how much magic this level gives you. A little more than the number of
+  // blockers, so one wrong guess per obstacle is survivable but browsing isn't.
+  function manaFor(l) { return l.mana ?? (3 + l.obs.length); }
+
+  // W5: two tracks that measure different things and must not be collapsed.
+  //   ⭐ stars    — how well you played THIS run (efficiency)
+  //   📖 solutions — how many different ways you have ever found (collection)
+  // Merging them would kill the only reason to replay a level with a new idea,
+  // which is the whole reason the obstacles list several solving tags.
+  function starsFor(l) { return save.cleared[l.id] || 0; }
+
+  function runStars() {
+    if (runHintUsed) return 1;      // a hint was opened
+    if (runWasted > 0) return 2;    // cleared, no hints, but some summons missed
+    return mana > 0 ? 3 : 2;        // perfect line, with magic to spare
   }
+
+  function foundCount(l) { return (save.found[l.id] || []).length; }
 
   function isUnlocked(i) { return i === 0 || save.cleared[WIZARD_LEVELS[i - 1].id] !== undefined; }
 
@@ -186,6 +216,11 @@ const WizardGame = (() => {
     walkAnim = null;
     finished = false;
     runFoundTags = new Set();
+    manaMax = manaFor(level);
+    mana = manaMax;
+    runHintUsed = false;
+    runWasted = 0;
+    hintShown = false;
 
     // Scenery: deterministic-ish scatter so the scene doesn't re-shuffle on redraw
     const ch = chapterOf(level);
@@ -264,6 +299,11 @@ const WizardGame = (() => {
 
     if (typeof TTSManager !== 'undefined') TTSManager.speak(word.w);
 
+    // Magic is spent whether or not the summon helps — that is what makes
+    // stopping to think worth more than trying the next card.
+    mana = Math.max(0, mana - 1);
+    if (!solveTag) runWasted++;
+
     // ---- spelling reward (the learning act, independent of whether it worked) ----
     const cfg = DIFFS[difficulty];
     if (spellFlawed) {
@@ -283,6 +323,7 @@ const WizardGame = (() => {
       o.solveWord = word;
       o.solveObj = obj;
       o.anim = 0;
+      hintShown = false;
       burst(o.cx, GROUND_Y - 60, 14);
 
       // ---- new way of solving this level? ----
@@ -304,12 +345,48 @@ const WizardGame = (() => {
       setTimeout(startWalk, 720);
     } else {
       SoundManager.playWrong();
-      const hint = o ? WIZARD_OBSTACLES[o.type] : null;
-      toast('🤔 沒有用…', hint
-        ? `${word.e} ${word.w}（${word.zh}）幫不上忙。${hint.tip}`
+      const info = o ? WIZARD_OBSTACLES[o.type] : null;
+      // Still no answer here — just the situation again, plus what it cost.
+      toast('🤔 沒有用…', info
+        ? `${word.e} ${word.w}（${word.zh}）幫不上忙。${info.tip}　剩下 ${mana} 點魔力。`
         : `${word.e} ${word.w}（${word.zh}）掉出來了！`, 3200);
+      if (mana <= 0 && !finished) { setTimeout(outOfMana, 900); }
     }
+    renderHUD();
     renderTask();
+  }
+
+  // W2: magic ran out with the path still blocked. Nothing already earned is
+  // taken back — the level simply has to be started again.
+  function outOfMana() {
+    if (finished || currentObstacle() === null) return;
+    finished = true;
+    wizard.state = 'idle';
+    SoundManager.playWrong();
+    GameEngine.setDeferLevelUp(false);
+    GameEngine.flushPendingLevelUps();
+    const o = currentObstacle();
+    const info = WIZARD_OBSTACLES[o.type];
+    els.doneBody.innerHTML = `
+      <div class="wz-done-icon">🪫</div>
+      <h3>魔力用完了</h3>
+      <p class="wz-done-line">還剩「${info.icon} ${info.name}」沒有解決。</p>
+      <p class="wz-done-line">${info.tip}</p>
+      <p class="wz-done-tip">💡 這一關有 <strong>${manaMax}</strong> 點魔力，每召喚一次就用掉一點——
+        先想好哪個東西真的有用，再拼它。剛才賺到的 XP 和 💎 都留著喔！</p>
+      <div class="wz-done-row">
+        <button class="wz-btn wz-btn-main wz-btn-big" id="wz-retry">🔄 再試一次</button>
+        <button class="wz-btn" id="wz-map">🗺️ 關卡</button>
+      </div>`;
+    els.done.classList.add('open');
+    els.doneBody.querySelector('#wz-retry').addEventListener('click', () => {
+      els.done.classList.remove('open');
+      startLevel(levelIndex);
+    });
+    els.doneBody.querySelector('#wz-map').addEventListener('click', () => {
+      els.done.classList.remove('open');
+      openLevels();
+    });
   }
 
   /* ================= wizard movement ================= */
@@ -360,9 +437,9 @@ const WizardGame = (() => {
     } else {
       GameEngine.addXP(Math.floor(reward.xp / 2));
     }
-    const found = (save.found[level.id] || []).length;
-    const stars = found >= starTarget(level) ? 3 : (found >= 2 ? 2 : 1);
-    save.cleared[level.id] = stars;
+    // ⭐ measures THIS run; the record keeps the best run ever.
+    const stars = runStars();
+    save.cleared[level.id] = Math.max(save.cleared[level.id] || 0, stars);
     persist();
 
     GameEngine.setDeferLevelUp(false);
@@ -594,6 +671,7 @@ const WizardGame = (() => {
         <canvas id="wz-canvas" width="${W}" height="${H}"></canvas>
         <div class="wz-hud">
           <span class="wz-chip" id="wz-hud-level">—</span>
+          <span class="wz-chip wz-chip-mana" id="wz-hud-mana"></span>
           <span class="wz-chip" id="wz-hud-found"></span>
           <span class="wz-chip" id="wz-hud-book"></span>
         </div>
@@ -607,6 +685,8 @@ const WizardGame = (() => {
             <div class="wz-task-name" id="wz-task-name">選一個關卡開始</div>
             <div class="wz-task-tip" id="wz-task-tip"></div>
           </div>
+          <button class="wz-btn wz-btn-ghost wz-hint-btn" id="wz-hint-btn"
+                  title="會少一顆星">💡 想不出來</button>
         </div>
         <div class="wz-actions">
           <button class="wz-btn wz-btn-main" id="wz-book-btn">📖 魔法書</button>
@@ -618,8 +698,11 @@ const WizardGame = (() => {
       <div class="wz-screen" id="wz-start">
         <h3>🪄 單字魔法師</h3>
         <p>小巫師被困住了！<strong>拼出英文單字就能把那個東西召喚出來</strong>，用它想辦法讓小巫師走到 ⭐。</p>
-        <p>⛵ 船會浮在水上、🪨 石頭會把坑填平、🪜 梯子可以爬、🎈 氣球帶你飛、🧊 冰塊把水凍起來……</p>
-        <p><strong>每一關都不只一種解法</strong>，找到愈多種，星星愈多！</p>
+        <p>⛵ 船會浮在水上、🪨 石頭會把坑填平、🪜 梯子可以爬、🎈 氣球帶你飛、🧊 冰塊把水凍起來……
+          <strong>什麼東西有什麼用，要自己想</strong>——魔法書是照「種類」排的，不會告訴你答案。</p>
+        <p>每一關的 🔮 <strong>魔力有限</strong>，召喚一次就用掉一點，用完就得重來，所以先想清楚再拼。</p>
+        <p>⭐ 看你這一次玩得多漂亮（沒看提示 ⭐⭐、每個難關都一次解掉又有魔力剩下 ⭐⭐⭐）；
+          📖 記錄你<strong>總共想到幾種不同的解法</strong>——每一關都不只一種喔！</p>
         <div class="wz-diff" id="wz-diff"></div>
         <button class="wz-btn wz-btn-main wz-btn-big" id="wz-start-btn">🗺️ 打開關卡地圖</button>
       </div>
@@ -667,12 +750,14 @@ const WizardGame = (() => {
     els = {
       root,
       hudLevel: root.querySelector('#wz-hud-level'),
+      hudMana: root.querySelector('#wz-hud-mana'),
       hudFound: root.querySelector('#wz-hud-found'),
       hudBook: root.querySelector('#wz-hud-book'),
       toast: root.querySelector('#wz-toast'),
       taskIcon: root.querySelector('#wz-task-icon'),
       taskName: root.querySelector('#wz-task-name'),
       taskTip: root.querySelector('#wz-task-tip'),
+      hintBtn: root.querySelector('#wz-hint-btn'),
       start: root.querySelector('#wz-start'),
       diffRow: root.querySelector('#wz-diff'),
       levels: root.querySelector('#wz-levels'),
@@ -703,6 +788,7 @@ const WizardGame = (() => {
     root.querySelector('#wz-map-btn').addEventListener('click', openLevels);
     root.querySelector('#wz-book-btn').addEventListener('click', openBook);
     root.querySelector('#wz-retry-btn').addEventListener('click', () => { if (level) startLevel(levelIndex); });
+    els.hintBtn.addEventListener('click', revealHint);
     return true;
   }
 
@@ -720,19 +806,24 @@ const WizardGame = (() => {
   function renderHUD() {
     if (!level) {
       els.hudLevel.textContent = `🪄 ${clearedCount()} / ${WIZARD_LEVELS.length} 關`;
+      els.hudMana.textContent = '';
+      els.hudMana.classList.remove('low');
       els.hudFound.textContent = '';
       els.hudBook.textContent = `📖 第 ${bookTier()} 頁`;
       return;
     }
     const n = levelIndex + 1;
     els.hudLevel.textContent = `${chapterOf(level).icon} 第 ${n} 關　${level.name}`;
-    const found = (save.found[level.id] || []).length;
+    els.hudMana.textContent = `🔮 魔力 ${'●'.repeat(mana)}${'○'.repeat(Math.max(0, manaMax - mana))}`;
+    els.hudMana.classList.toggle('low', mana <= 1);
     const target = starTarget(level);
-    els.hudFound.textContent = `✨ 解法 ${Math.min(found, target)}/${target}　${'⭐'.repeat(starsFor(level)) || '☆'}`;
+    els.hudFound.textContent =
+      `${'⭐'.repeat(starsFor(level)) || '☆☆☆'}　📖 ${Math.min(foundCount(level), target)}/${target} 種解法`;
     els.hudBook.textContent = `📖 第 ${bookTier()} 頁（${unlockedWords().length} 字）`;
   }
 
   function renderTask() {
+    els.hintBtn.style.display = 'none';
     if (!level) {
       els.taskIcon.textContent = '🪄';
       els.taskName.textContent = '選一個關卡開始';
@@ -749,7 +840,20 @@ const WizardGame = (() => {
     const info = WIZARD_OBSTACLES[o.type];
     els.taskIcon.textContent = info.icon;
     els.taskName.textContent = `${info.name} — ${info.zh}`;
-    els.taskTip.textContent = info.tip;
+    // W1: the situation is always visible, the ways through never are — the
+    // whole puzzle used to be printed here, so the game was "read, then tap".
+    els.taskTip.textContent = hintShown ? info.hint : info.tip;
+    els.taskTip.classList.toggle('revealed', hintShown);
+    els.hintBtn.style.display = hintShown ? 'none' : '';
+  }
+
+  function revealHint() {
+    const o = currentObstacle();
+    if (!o) return;
+    hintShown = true;
+    runHintUsed = true;
+    renderTask();
+    toast('💡 提示', `${WIZARD_OBSTACLES[o.type].hint}（這一次最多 ⭐，但 📖 解法收集不受影響）`, 4000);
   }
 
   /* ================= DOM: level map ================= */
@@ -773,8 +877,10 @@ const WizardGame = (() => {
         btn.innerHTML = open
           ? `<span class="wz-level-no">${i + 1}${l.boss ? ' 👑' : ''}</span>
              <span class="wz-level-name">${l.name}</span>
-             <span class="wz-level-stars">${stars ? '⭐'.repeat(stars) + '☆'.repeat(3 - stars) : '☆☆☆'}</span>`
-          : `<span class="wz-level-no">🔒</span><span class="wz-level-name">???</span><span class="wz-level-stars">☆☆☆</span>`;
+             <span class="wz-level-stars">${stars ? '⭐'.repeat(stars) + '☆'.repeat(3 - stars) : '☆☆☆'}</span>
+             <span class="wz-level-found">📖 ${Math.min(foundCount(l), starTarget(l))}/${starTarget(l)}　🔮 ${manaFor(l)}</span>`
+          : `<span class="wz-level-no">🔒</span><span class="wz-level-name">???</span>
+             <span class="wz-level-stars">☆☆☆</span><span class="wz-level-found"></span>`;
         if (open) btn.addEventListener('click', () => { els.levels.classList.remove('open'); startLevel(i); });
         grid.appendChild(btn);
       });
@@ -810,22 +916,30 @@ const WizardGame = (() => {
     els.book.classList.add('open');
   }
 
+  // W1: browse by KIND of thing, not by ability. Filtering by "會浮" handed a
+  // child the answer to every river level — the point of the game is to look
+  // at a boat and work out that boats float.
   function renderFilters() {
     els.filters.innerHTML = '';
-    const mk = (id, label, title) => {
+    const mk = (id, label) => {
       const b = document.createElement('button');
       b.className = 'wz-filter' + (bookFilter === id ? ' active' : '');
       b.textContent = label;
-      if (title) b.title = title;
       b.addEventListener('click', () => { bookFilter = id; renderFilters(); renderCards(); });
       els.filters.appendChild(b);
     };
     mk('all', '全部');
-    Object.entries(WIZARD_TAGS).forEach(([id, t]) => mk(id, `${t.icon} ${t.name}`, t.verb));
+    // Only offer tabs that have something behind them at this tier — an empty
+    // ✨魔法 tab on page 1 reads as a broken button.
+    const pool = unlockedWords();
+    Object.entries(WIZARD_CATS).forEach(([id, c]) => {
+      const n = pool.filter(w => w.cat === id).length;
+      if (n) mk(id, `${c.icon} ${c.name} ${n}`);
+    });
   }
 
   function renderCards() {
-    const pool = unlockedWords().filter(w => bookFilter === 'all' || w.tags.includes(bookFilter));
+    const pool = unlockedWords().filter(w => bookFilter === 'all' || w.cat === bookFilter);
     els.cards.innerHTML = '';
     if (!pool.length) {
       els.cards.innerHTML = '<p class="wz-empty">這一頁還沒有這種咒語，先去通關解鎖更多單字吧！</p>';
@@ -835,12 +949,14 @@ const WizardGame = (() => {
       const card = document.createElement('button');
       const known = save.learned.includes(w.w);
       card.className = 'wz-card' + (known ? ' known' : ' fresh');
+      // Abilities show only once you've actually summoned the thing. Printing
+      // them up front turned the spellbook into an answer key you could scan.
       card.innerHTML = `
         <span class="wz-card-e">${w.e}</span>
         <span class="wz-card-zh">${w.zh}</span>
         <span class="wz-card-dots">${'●'.repeat(w.w.length)}</span>
-        <span class="wz-card-tags">${w.tags.map(t => WIZARD_TAGS[t].icon).join('')}</span>`;
-      card.title = known ? `${w.zh}（${w.w.length} 個字母）` : '新咒語！點開會先教你唸一次';
+        <span class="wz-card-tags">${known ? w.tags.map(t => WIZARD_TAGS[t].icon).join('') : '❓'}</span>`;
+      card.title = known ? `${w.zh}（${w.w.length} 個字母）` : '新咒語！召喚過一次就會記下它的能力';
       card.addEventListener('click', () => openSpell(w));
       els.cards.appendChild(card);
     });
@@ -883,7 +999,9 @@ const WizardGame = (() => {
         <span class="wz-spell-e">${w.e}</span>
         <div>
           <div class="wz-spell-zh">${w.zh}</div>
-          <div class="wz-spell-meta">${w.w.length} 個字母　${w.tags.map(t => `${WIZARD_TAGS[t].icon}${WIZARD_TAGS[t].name}`).join('・')}</div>
+          <div class="wz-spell-meta">${w.w.length} 個字母　${save.learned.includes(w.w)
+            ? w.tags.map(t => `${WIZARD_TAGS[t].icon}${WIZARD_TAGS[t].name}`).join('・')
+            : '召喚看看它會做什麼'}</div>
         </div>
       </div>`;
     const foot = `
@@ -1015,16 +1133,26 @@ const WizardGame = (() => {
     const missing = all.filter(t => !found.includes(t)).slice(0, 4);
     const last = levelIndex >= WIZARD_LEVELS.length - 1;
 
+    const best = save.cleared[level.id] || stars;
+    const pct = Math.round(Math.min(found.length, target) / target * 100);
     els.doneBody.innerHTML = `
       <div class="wz-done-stars">${'⭐'.repeat(stars)}${'☆'.repeat(3 - stars)}</div>
       <h3>${level.name} 完成！</h3>
+      <p class="wz-done-why">${
+        stars === 3 ? `一次到位、還剩 ${mana} 點魔力 — 滿星！`
+        : stars === 2 ? `${runWasted} 次召喚沒派上用場${mana ? '' : '、魔力也剛好用完'}，這次是 ⭐⭐`
+        : '這次看了提示，所以是 ⭐（📖 解法收集照算）'}${
+        best > stars ? `　最佳紀錄 ${'⭐'.repeat(best)}` : ''}</p>
       <p class="wz-done-reward">${firstClear
         ? `首次通關 +${reward.xp} XP　+${reward.gems} 💎`
         : `再次通關 +${Math.floor(reward.xp / 2)} XP`}</p>
-      <p class="wz-done-found">這一關你已經找到 <strong>${Math.min(found.length, target)} / ${target}</strong> 種解法
-        ${found.map(t => `<span class="wz-done-tag">${WIZARD_TAGS[t].icon} ${WIZARD_TAGS[t].name}</span>`).join('')}</p>
-      ${stars < 3 && missing.length
-        ? `<p class="wz-done-hint">💡 再玩一次，換一種方法就能拿到更多星星！還沒試過：
+      <div class="wz-collect">
+        <div class="wz-collect-head">📖 解法收集　<strong>${Math.min(found.length, target)} / ${target}</strong></div>
+        <div class="wz-collect-bar"><span style="width:${pct}%"></span></div>
+        <div class="wz-collect-tags">${found.map(t => `<span class="wz-done-tag">${WIZARD_TAGS[t].icon} ${WIZARD_TAGS[t].name}</span>`).join('')}</div>
+      </div>
+      ${missing.length
+        ? `<p class="wz-done-hint">💡 換一種方法再過一次，每找到一種新解法 +${NEW_SOLUTION_XP} XP +${NEW_SOLUTION_GEMS} 💎。還沒試過：
              ${missing.map(t => `<span class="wz-done-tag dim">${WIZARD_TAGS[t].icon} ${WIZARD_TAGS[t].name}</span>`).join('')}</p>`
         : '<p class="wz-done-hint">🏆 這一關的解法你全部找到了！</p>'}
       <div class="wz-done-row">
@@ -1068,8 +1196,14 @@ const WizardGame = (() => {
         finished,
         tier: bookTier(),
         cleared: clearedCount(),
+        mana, manaMax, hintUsed: runHintUsed, wasted: runWasted,
+        stars: level ? starsFor(level) : 0,
+        runStars: level ? runStars() : 0,
+        found: level ? foundCount(level) : 0,
+        target: level ? starTarget(level) : 0,
       }),
       start: i => startLevel(i),
+      hint: () => revealHint(),
       cast: word => {
         const entry = unlockedWords().find(w => w.w === word);
         if (!entry) return false;
