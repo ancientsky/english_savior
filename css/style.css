@@ -913,6 +913,13 @@ body.game-max #item-bar {
   .hub-welcome h1 { font-size: 14px; }
   .inventory-grid { grid-template-columns: repeat(4, 1fr); }
   #hud { flex-wrap: wrap; justify-content: center; }
+  /* Wrapping #hud only lets the three groups take their own line — .hud-right
+     is itself a nowrap flex row of nine unshrinkable children (💎, 🔥 and
+     seven 40px buttons ≈ 377px). Centred inside a 360px line it hung 8.5px off
+     BOTH edges, which pushed the 💎 gem count completely off the left of the
+     screen. body{overflow-x:hidden} hid the scrollbar so nobody noticed. */
+  .hud-left, .hud-right { flex-wrap: wrap; justify-content: center; }
+  .hud-right { gap: 6px; }
   .nav-tab { padding: 6px 10px; }
 
   /* Item bar responsive */
