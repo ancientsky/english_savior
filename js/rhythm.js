@@ -91,6 +91,14 @@ const RhythmGame = (() => {
   let popups = [];           // floating PERFECT/GOOD/MISS text
   let flash = { hi: 0, lo: 0 };
   let lastBeat = -1;
+  // Momentum gauge — the only way this game can be lost, and the reason a
+  // stretch of misses now costs something instead of just scrolling past.
+  let gauge = 50;
+  const GAUGE_START = 50, GAUGE_CLEAR = 60;
+  const GAUGE_DELTA = { perfect: 3, good: 1, miss: -6, lane: -4 };
+  let parts = [], rings = [], shake = 0;
+  let dancer = { mood: 'idle', until: 0 };
+  let previewTimers = [], previewIndex = 0;
   // Judgement windows are per-chart, not per-game — see buildChart().
   let perfectMs = PERFECT_MS, goodMs = GOOD_MS;
   let bSectionT = 0;         // when the denser B section starts
@@ -212,20 +220,41 @@ const RhythmGame = (() => {
 
   /* ================= audio ================= */
 
-  function tick(freq, vol) {
+  // One tone with an optional pitch slide. `to = 0` holds the pitch.
+  function blip(from, to, type, vol, dur, delay = 0) {
     if (typeof SoundManager !== 'undefined' && !SoundManager.isEnabled()) return;
     try {
       if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const t0 = audioCtx.currentTime + delay;
       const osc = audioCtx.createOscillator();
       const gain = audioCtx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.value = freq;
-      gain.gain.setValueAtTime(vol, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.09);
+      osc.type = type;
+      osc.frequency.setValueAtTime(from, t0);
+      if (to) osc.frequency.exponentialRampToValueAtTime(Math.max(30, to), t0 + dur);
+      gain.gain.setValueAtTime(vol, t0);
+      gain.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
       osc.connect(gain).connect(audioCtx.destination);
-      osc.start();
-      osc.stop(audioCtx.currentTime + 0.1);
+      osc.start(t0);
+      osc.stop(t0 + dur + 0.03);
     } catch { /* audio unavailable — the game is still fully playable */ }
+  }
+
+  function tick(freq, vol) { blip(freq, 0, 'triangle', vol, 0.09); }
+
+  // The three verdicts have to be tellable apart with your eyes on the notes:
+  // a rising chime, a flat blip, and a falling thud are different enough that a
+  // child hears they are drifting before they read it.
+  function judgeSound(verdict, stressed) {
+    if (verdict === 'perfect') {
+      blip(stressed ? 1046 : 784, stressed ? 1568 : 1175, 'triangle', 0.15, 0.12);
+      blip(stressed ? 2093 : 1568, 0, 'sine', 0.07, 0.22, 0.03);
+    } else if (verdict === 'good') {
+      blip(stressed ? 660 : 523, 0, 'triangle', 0.12, 0.11);
+    } else if (verdict === 'lane') {
+      blip(440, 262, 'square', 0.09, 0.17);       // buzzy "wrong door"
+    } else {
+      blip(190, 70, 'sawtooth', 0.11, 0.24);      // falling thud
+    }
   }
 
   /* ================= canvas ================= */
@@ -270,14 +299,30 @@ const RhythmGame = (() => {
     return lane === 1 ? LANE_HI : LANE_LO;
   }
 
+  function burst(x, y, color, n) {
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2, sp = 70 + Math.random() * 200;
+      parts.push({
+        x, y, color,
+        vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 50,
+        life: 0.45 + Math.random() * 0.35, r: 2 + Math.random() * 3.5,
+      });
+    }
+    if (parts.length > 300) parts.splice(0, parts.length - 300);
+  }
+
   /* ================= gameplay ================= */
 
   function startSong(i) {
+    clearPreviewTimers();
     songIndex = i;
     song = RHYTHM_SONGS[i];
     buildChart(song);
     stats = { perfect: 0, good: 0, miss: 0, combo: 0, maxCombo: 0, score: 0, wrongLane: 0 };
     popups = [];
+    parts = []; rings = []; shake = 0;
+    dancer = { mood: 'idle', until: 0 };
+    gauge = GAUGE_START;
     lastBeat = -1;
     bAnnounced = false;
     sectionFlash = 0;
@@ -339,21 +384,30 @@ const RhythmGame = (() => {
     n.judged = true;
     n.verdict = verdict;
     const y = laneY(n.lane);
+    judgeSound(verdict, n.stressed);
+    gauge = Math.max(0, Math.min(100, gauge + (GAUGE_DELTA[verdict] || 0)));
     if (verdict === 'perfect') {
       stats.perfect++; stats.score += 100; stats.combo++;
-      tick(n.stressed ? 880 : 660, 0.14);
       popups.push({ text: 'PERFECT', y, life: 0.7, color: '#ffd166' });
+      burst(HIT_X, y, '#ffd166', n.stressed ? 16 : 11);
+      rings.push({ y, r: n.stressed ? 26 : 18, life: 1, color: '#ffd166' });
+      dancer = { mood: 'great', until: 0.45 };
     } else if (verdict === 'good') {
       stats.good++; stats.score += 60; stats.combo++;
-      tick(n.stressed ? 740 : 560, 0.11);
       popups.push({ text: 'GOOD', y, life: 0.7, color: '#7fd4ff' });
+      burst(HIT_X, y, '#7fd4ff', 7);
+      rings.push({ y, r: 18, life: 1, color: '#7fd4ff' });
+      if (dancer.mood !== 'great') dancer = { mood: 'ok', until: 0.3 };
     } else {
       if (verdict === 'lane') { stats.wrongLane++; popups.push({ text: '重音錯了', y, life: 0.9, color: '#ff8fa3' }); }
       else popups.push({ text: 'MISS', y, life: 0.7, color: '#ff6b81' });
       stats.miss++; stats.combo = 0;
-      tick(150, 0.07);
+      shake = 1;
+      dancer = { mood: 'bad', until: 0.6 };
     }
     stats.maxCombo = Math.max(stats.maxCombo, stats.combo);
+    // Out of momentum — the song stops rather than scrolling on unheard.
+    if (gauge <= 0 && playing) { failSong(); return; }
 
     // A word counts as learned once every one of its syllables landed
     const span = wordSpans[n.wordIdx];
@@ -371,38 +425,60 @@ const RhythmGame = (() => {
     renderHUD();
   }
 
-  function finishSong() {
-    playing = false;
+  function stopBand() {
     if (typeof MusicManager !== 'undefined' && MusicManager.stopGameTrack) MusicManager.stopGameTrack();
     band = null;
+  }
+
+  // Momentum ran out. Nothing is written to the save and no bonus is paid, but
+  // the XP already earned word-by-word stays — practice is never punished.
+  function failSong() {
+    playing = false;
+    stopBand();
+    GameEngine.setDeferLevelUp(false);
+    GameEngine.flushPendingLevelUps();
+    blip(300, 90, 'sawtooth', 0.16, 0.7);
+    showFailed();
+  }
+
+  function finishSong() {
+    playing = false;
+    stopBand();
     const total = notes.length;
     const acc = total ? Math.round(((stats.perfect + stats.good * 0.6) / total) * 100) : 0;
     const fc = stats.miss === 0;
     const rank = acc >= 95 ? 'S' : acc >= 85 ? 'A' : acc >= 70 ? 'B' : 'C';
     const cfg = DIFFS[difficulty];
+    // A run that limped to the end on a near-empty gauge isn't a clear. XP is
+    // still paid — the point is to make the gauge worth watching, not to take
+    // rewards away from a child who kept playing.
+    const clear = gauge >= GAUGE_CLEAR;
 
     const prev = save.best[song.id];
-    const first = !prev;
+    const first = clear && !prev;
     if (first) GameEngine.recordRhythmSong();
-    if (fc) GameEngine.recordRhythmFC();
+    if (fc && clear) GameEngine.recordRhythmFC();
 
     let gems = 0;
     if (first) { gems += cfg.bonus; }
-    if (fc) gems += 5;
+    if (fc && clear) gems += 5;
     if (gems) GameEngine.addGems(gems);
     GameEngine.addXP(first ? 30 : 12);
 
-    if (!prev || stats.score > prev.score) {
-      save.best[song.id] = { score: stats.score, acc, rank, fc: fc || (prev && prev.fc) || false };
-    } else if (fc && prev && !prev.fc) {
-      save.best[song.id].fc = true;
+    if (clear) {
+      if (!prev || stats.score > prev.score) {
+        save.best[song.id] = { score: stats.score, acc, rank, gauge, fc: fc || (prev && prev.fc) || false };
+      } else {
+        if (fc && !prev.fc) save.best[song.id].fc = true;
+        save.best[song.id].gauge = Math.max(prev.gauge || 0, gauge);
+      }
+      persist();
     }
-    persist();
 
     GameEngine.setDeferLevelUp(false);
     GameEngine.flushPendingLevelUps();
-    SoundManager.playQuestComplete();
-    showDone({ acc, rank, fc, gems, first });
+    if (clear) SoundManager.playQuestComplete();
+    showDone({ acc, rank, fc, gems, first, clear });
   }
 
   /* ================= loop ================= */
@@ -421,12 +497,30 @@ const RhythmGame = (() => {
     // Only click when there's no band — the drum kit is the metronome now.
     if (b !== lastBeat && t > 0) { lastBeat = b; if (!band) tick(300, 0.03); }
 
-    wordSpans.forEach(sp => {
-      if (!sp.spoken && sp.startT - t <= LEAD_MS) {
-        sp.spoken = true;
-        if (typeof TTSManager !== 'undefined') TTSManager.speak(sp.word.w);
-      }
+    // Speech during play used to run over the beat on every difficulty, which
+    // is the one thing a rhythm game cannot do. Easy and medium now hear the
+    // words once on the preview screen and then play in silence. Blind hard
+    // mode still needs the word — it arrives in the rest before the note and
+    // the band ducks under it instead of fighting it.
+    if (difficulty === 'hard') {
+      wordSpans.forEach(sp => {
+        if (!sp.spoken && sp.startT - t <= LEAD_MS) {
+          sp.spoken = true;
+          if (typeof TTSManager !== 'undefined') TTSManager.speak(sp.word.w);
+          if (typeof MusicManager !== 'undefined' && MusicManager.duck) MusicManager.duck(1.1);
+        }
+      });
+    }
+
+    parts.forEach(p => {
+      p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 520 * dt; p.life -= dt;
     });
+    parts = parts.filter(p => p.life > 0);
+    rings.forEach(r => { r.r += 260 * dt; r.life -= dt * 1.8; });
+    rings = rings.filter(r => r.life > 0);
+    shake = Math.max(0, shake - dt * 5);
+    dancer.until = Math.max(0, dancer.until - dt);
+    if (dancer.until === 0) dancer.mood = 'idle';
 
     // The chorus gets its own announcement — the chart visibly tightens here
     // and a child should know it's coming rather than just start missing.
@@ -448,12 +542,22 @@ const RhythmGame = (() => {
     const t = now();
     const lanes = DIFFS[difficulty].lanes;
     const pxPerMs = (W - HIT_X) / LEAD_MS;
+    const beat = song ? 60000 / songTempo(song) : 500;
+    const combo = stats ? stats.combo : 0;
 
+    ctx.save();
+    // A miss you can feel. Three frames of jitter, then it settles.
+    if (shake > 0) ctx.translate((Math.random() - 0.5) * 9 * shake, (Math.random() - 0.5) * 7 * shake);
+
+    // The stage lights up as the combo climbs — the reward for a long clean
+    // run is that the whole screen looks different, not a bigger number.
+    // Warmer, not brighter — the notes have to stay readable at combo 40.
+    const heat = Math.min(1, combo / 20);
     const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, '#1b1236');
-    g.addColorStop(1, '#3a1f5c');
+    g.addColorStop(0, heat > 0.5 ? `rgb(${27 + heat * 28},${18 + heat * 4},${54 + heat * 12})` : '#1b1236');
+    g.addColorStop(1, heat > 0.5 ? `rgb(${58 + heat * 34},${31 + heat * 8},${92 + heat * 16})` : '#3a1f5c');
     ctx.fillStyle = g;
-    ctx.fillRect(0, 0, W, H);
+    ctx.fillRect(-20, -20, W + 40, H + 40);
 
     // lanes
     const rows = lanes === 1 ? [{ y: laneY(0), lane: 0 }]
@@ -465,6 +569,43 @@ const RhythmGame = (() => {
       ctx.strokeStyle = 'rgba(255,255,255,.14)';
       ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(0, r.y + 40); ctx.lineTo(W, r.y + 40); ctx.stroke();
+    });
+
+    // combo ≥10: the lane edges catch fire and flicker on the beat
+    if (combo >= 10) {
+      const flick = 0.55 + 0.45 * Math.sin(t / 55);
+      rows.forEach(r => {
+        [r.y - 40, r.y + 40].forEach((edge, k) => {
+          const fg = ctx.createLinearGradient(0, edge, 0, edge + (k ? 16 : -16));
+          fg.addColorStop(0, `rgba(255,${140 + flick * 70},60,${0.42 + flick * 0.3})`);
+          fg.addColorStop(1, 'rgba(255,90,40,0)');
+          ctx.fillStyle = fg;
+          ctx.fillRect(0, k ? edge : edge - 16, W, 16);
+        });
+      });
+      // licks of flame along the judgement line
+      for (let i = 0; i < 7; i++) {
+        const fx = HIT_X - 34 + i * 11;
+        const h = 12 + Math.abs(Math.sin(t / 90 + i * 1.7)) * (combo >= 20 ? 26 : 16);
+        ctx.fillStyle = `rgba(255,${170 + i * 8},70,.5)`;
+        ctx.beginPath();
+        ctx.moveTo(fx, rows[rows.length - 1].y + 42);
+        ctx.quadraticCurveTo(fx + 5, rows[rows.length - 1].y + 42 - h * 0.6, fx + 2, rows[rows.length - 1].y + 42 - h);
+        ctx.quadraticCurveTo(fx - 2, rows[rows.length - 1].y + 42 - h * 0.6, fx - 5, rows[rows.length - 1].y + 42);
+        ctx.fill();
+      }
+    }
+
+    // expanding judgement rings
+    rings.forEach(r => {
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, r.life) * 0.7;
+      ctx.strokeStyle = r.color;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(HIT_X, r.y, r.r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
     });
 
     // hit line + pads
@@ -517,6 +658,17 @@ const RhythmGame = (() => {
       ctx.restore();
     });
 
+    // hit sparks
+    parts.forEach(p => {
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, Math.min(1, p.life * 2.2));
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    });
+
     // the word being sung right now
     const cur = wordSpans.find(sp => !sp.cleared) || wordSpans[wordSpans.length - 1];
     if (cur) {
@@ -533,14 +685,20 @@ const RhythmGame = (() => {
       ctx.fillText(cur.word.zh, 92, 56);
     }
 
-    // combo
+    // Combo sits bottom-right, clear of the HUD chips that float over the
+    // canvas's top-right corner — it was unreadable underneath them.
     if (stats.combo >= 3) {
+      const pop = 1 + Math.max(0, 0.35 - (Date.now() % 1000) / 3000) * (combo >= 10 ? 1 : 0);
+      ctx.save();
       ctx.textAlign = 'right';
-      ctx.fillStyle = '#ffd166';
-      ctx.font = 'bold 30px system-ui, sans-serif';
-      ctx.fillText(`${stats.combo}`, W - 22, 46);
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillStyle = combo >= 20 ? '#ffb347' : '#ffd166';
       ctx.font = 'bold 13px system-ui, sans-serif';
-      ctx.fillText('COMBO', W - 22, 64);
+      ctx.fillText('COMBO', W - 24, 276);
+      ctx.font = `bold ${Math.round(32 * pop)}px system-ui, sans-serif`;
+      if (combo >= 10) { ctx.shadowColor = 'rgba(255,140,60,.9)'; ctx.shadowBlur = 14; }
+      ctx.fillText(`${stats.combo}`, W - 86, 278);
+      ctx.restore();
     }
 
     popups.forEach(p => {
@@ -567,6 +725,9 @@ const RhythmGame = (() => {
       ctx.restore();
     }
 
+    drawDancer(t, beat);
+    drawGauge();
+
     // 3-2-1 during the lead-in, so nobody is dropped straight into a beat
     const firstT = notes.length ? notes[0].t : 0;
     if (t < firstT) {
@@ -580,6 +741,59 @@ const RhythmGame = (() => {
       ctx.fillText(left <= 3 ? String(left) : '準備', W / 2, H / 2);
       ctx.restore();
     }
+
+    ctx.restore();
+  }
+
+  // A partner who is dancing to the same beat. It hops every beat, leaps on a
+  // PERFECT and face-plants on a MISS — feedback you catch out of the corner
+  // of your eye while your attention is on the notes.
+  function drawDancer(t, beat) {
+    const phase = ((t % beat) + beat) % beat / beat;
+    const hop = Math.abs(Math.sin(phase * Math.PI));
+    const mood = dancer.mood;
+    const lift = mood === 'great' ? 10 + hop * 16 : mood === 'bad' ? 0 : hop * 9;
+    const face = mood === 'bad' ? '😵' : mood === 'great' ? '🤩' : '🕺';
+    const size = mood === 'bad' ? 34 : 38 + hop * 5;
+    drawEmoji(face, 52, 274 - lift, size, 0.95);
+    if (mood === 'great') drawEmoji('✨', 82, 252 - lift, 20, 0.9);
+  }
+
+  // Momentum. Empty means the song stops, and the CLEAR line is drawn on the
+  // bar itself so "60" is somewhere you can see, not a number in the rules.
+  function drawGauge() {
+    const x = 68, y = 298, w = W - x - 22, h = 13;
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,.4)';
+    roundRect(x, y, w, h, 7); ctx.fill();
+    const low = gauge < 25;
+    const fw = Math.max(0, w * gauge / 100);
+    if (fw > 2) {
+      const gg = ctx.createLinearGradient(x, 0, x + w, 0);
+      gg.addColorStop(0, low ? '#ff5c78' : '#7fd4ff');
+      gg.addColorStop(1, low ? '#ff9db1' : gauge >= GAUGE_CLEAR ? '#ffd166' : '#a8b8ff');
+      ctx.fillStyle = gg;
+      // pulse when the gauge is nearly out, so it can't be missed
+      ctx.globalAlpha = low ? 0.65 + 0.35 * Math.abs(Math.sin(Date.now() / 140)) : 1;
+      roundRect(x, y, fw, h, 7); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    // the CLEAR line
+    const cx = x + w * GAUGE_CLEAR / 100;
+    ctx.strokeStyle = 'rgba(255,255,255,.75)';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(cx, y - 3); ctx.lineTo(cx, y + h + 3); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.85)';
+    ctx.font = 'bold 12px system-ui, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('氣勢', 22, y + h / 2);
+    ctx.fillText(`${Math.round(gauge)}`, 68, y + h / 2);
+    ctx.font = 'bold 10px system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,.6)';
+    ctx.textAlign = 'center';
+    ctx.fillText('過關線', cx, y - 9);
+    ctx.restore();
   }
 
   let lastFrame = 0;
@@ -604,10 +818,13 @@ const RhythmGame = (() => {
     rafId = null;
     // Navigating away mid-song would otherwise leave the band playing under
     // whatever zone the player moved to.
-    if (band && !document.getElementById('zone-rhythm').classList.contains('active')) {
-      if (typeof MusicManager !== 'undefined') MusicManager.stopGameTrack();
-      band = null;
-      playing = false;
+    if (!document.getElementById('zone-rhythm').classList.contains('active')) {
+      clearPreviewTimers();
+      if (band) {
+        if (typeof MusicManager !== 'undefined') MusicManager.stopGameTrack();
+        band = null;
+        playing = false;
+      }
     }
   }
 
@@ -638,6 +855,7 @@ const RhythmGame = (() => {
         <p>英文單字有<strong>節拍</strong>！一個<strong>音節</strong>就是一拍，其中一個音節唸得比較<strong>重、長、大聲</strong>——那就是重音。</p>
         <p>ba-<strong>NA</strong>-na 是「短-<strong>長</strong>-短」，不是「B-A-N-A-N-A」六拍喔！</p>
         <p>大顆的重音是<strong>長音</strong>、小顆的輕音是<strong>短音</strong>；唱到一半會進 <strong>B 段</strong>，節奏變密，最後還有三下 ♪ 連打收尾。</p>
+        <p>下面那條是<strong>氣勢條</strong>：敲中會漲、漏掉會掉，掉光歌就停了；要超過過關線才算過關。</p>
         <div class="rh-diff" id="rh-diff"></div>
         <button class="rh-btn rh-btn-main rh-btn-big" id="rh-start-btn">🎼 打開選歌清單</button>
       </div>
@@ -651,6 +869,23 @@ const RhythmGame = (() => {
           </div>
           <div class="rh-diff" id="rh-diff2"></div>
           <div class="rh-song-grid" id="rh-song-grid"></div>
+        </div>
+      </div>
+
+      <div class="rh-overlay" id="rh-preview">
+        <div class="rh-panel rh-panel-narrow">
+          <div class="rh-panel-head">
+            <h3>🔊 試聽</h3>
+            <span class="rh-panel-sub" id="rh-preview-sub"></span>
+          </div>
+          <div class="rh-preview-body">
+            <p class="rh-preview-tip">先聽一次這八個字，等一下歌一開始就<strong>不會再唸了</strong>。</p>
+            <div class="rh-preview-grid" id="rh-preview-grid"></div>
+            <div class="rh-done-row">
+              <button class="rh-btn" id="rh-preview-back">← 換一首</button>
+              <button class="rh-btn rh-btn-main rh-btn-big" id="rh-preview-go">▶️ 開始！</button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -672,6 +907,10 @@ const RhythmGame = (() => {
       songs: root.querySelector('#rh-songs'),
       songsSub: root.querySelector('#rh-songs-sub'),
       songGrid: root.querySelector('#rh-song-grid'),
+      preview: root.querySelector('#rh-preview'),
+      previewSub: root.querySelector('#rh-preview-sub'),
+      previewGrid: root.querySelector('#rh-preview-grid'),
+      stage: root.querySelector('.rh-stage'),
       done: root.querySelector('#rh-done'),
       doneBody: root.querySelector('#rh-done-body'),
     };
@@ -710,7 +949,76 @@ const RhythmGame = (() => {
     root.querySelector('#rh-start-btn').addEventListener('click', openSongs);
     root.querySelector('#rh-list-btn').addEventListener('click', openSongs);
     root.querySelector('#rh-retry-btn').addEventListener('click', () => { if (song) startSong(songIndex); });
+    root.querySelector('#rh-preview-go').addEventListener('click', () => {
+      clearPreviewTimers();
+      els.preview.classList.remove('open');
+      startSong(previewIndex);
+    });
+    root.querySelector('#rh-preview-back').addEventListener('click', () => {
+      clearPreviewTimers();
+      els.preview.classList.remove('open');
+      openSongs();
+    });
     return true;
+  }
+
+  /* ---------- preview (R5: the only place words are spoken) ---------- */
+
+  function clearPreviewTimers() {
+    previewTimers.forEach(clearTimeout);
+    previewTimers = [];
+    if (typeof TTSManager !== 'undefined' && TTSManager.stop) TTSManager.stop();
+  }
+
+  // Speaking a word while the beat is running is the one thing a rhythm game
+  // must not do, so every word gets heard here instead — once, before the
+  // music starts. "開始！" is live from the first frame for anyone who'd
+  // rather not wait.
+  function openPreview(i) {
+    clearPreviewTimers();
+    previewIndex = i;
+    const s = RHYTHM_SONGS[i];
+    els.previewSub.textContent = `${s.e} ${s.name}　${DIFFS[difficulty].label}`;
+    els.previewGrid.innerHTML = '';
+    s.words.forEach((w, wi) => {
+      const card = document.createElement('button');
+      card.className = 'rh-pv-card';
+      card.innerHTML =
+        `<span class="rh-pv-e">${w.e}</span>` +
+        `<span class="rh-pv-w">${w.syl.map((x, k) => k === w.stress
+          ? `<b>${x.toUpperCase()}</b>` : x).join('<i>·</i>')}</span>` +
+        `<span class="rh-pv-zh">${w.zh}</span>`;
+      card.addEventListener('click', () => {
+        if (typeof TTSManager !== 'undefined') TTSManager.speak(w.w);
+      });
+      els.previewGrid.appendChild(card);
+      previewTimers.push(setTimeout(() => {
+        if (typeof TTSManager !== 'undefined') TTSManager.speak(w.w);
+        [...els.previewGrid.children].forEach(c => c.classList.remove('now'));
+        card.classList.add('now');
+      }, 350 + wi * 1050));
+    });
+    previewTimers.push(setTimeout(() => {
+      [...els.previewGrid.children].forEach(c => c.classList.remove('now'));
+    }, 350 + s.words.length * 1050));
+    els.songs.classList.remove('open');
+    els.done.classList.remove('open');
+    els.preview.classList.add('open');
+  }
+
+  function rhConfetti(n = 30) {
+    if (!els.stage) return;
+    const colors = ['#ffd166', '#ff6b81', '#7fd4ff', '#c77dff', '#8ce8a8', '#fff'];
+    for (let i = 0; i < n; i++) {
+      const c = document.createElement('div');
+      c.className = 'rh-confetti';
+      c.style.left = 5 + Math.random() * 90 + '%';
+      c.style.background = colors[i % colors.length];
+      c.style.animationDelay = Math.random() * 0.4 + 's';
+      c.style.animationDuration = 1.3 + Math.random() * 0.9 + 's';
+      els.stage.appendChild(c);
+      setTimeout(() => c.remove(), 2600);
+    }
   }
 
   function renderKeys() {
@@ -766,22 +1074,44 @@ const RhythmGame = (() => {
            <span class="rh-song-best">${best ? `${best.rank}　${best.acc}%${best.fc ? '　💯' : ''}` : '未挑戰'}</span>`
         : `<span class="rh-song-e">🔒</span><span class="rh-song-name">???</span>
            <span class="rh-song-meta">先完成上一首</span><span class="rh-song-best"></span>`;
-      if (open) btn.addEventListener('click', () => startSong(i));
+      if (open) btn.addEventListener('click', () => openPreview(i));
       els.songGrid.appendChild(btn);
     });
     els.songs.classList.add('open');
   }
 
+  function showFailed() {
+    els.doneBody.innerHTML = `
+      <div class="rh-rank rank-fail">💔</div>
+      <h3>${song.e} ${song.name}</h3>
+      <p class="rh-done-line">氣勢用完了，這首先停在這裡。</p>
+      <p class="rh-done-line">敲中一個音符氣勢就會回來——<strong>重音敲上排、輕音敲下排</strong>，
+        抓穩了就不會掉。</p>
+      <p class="rh-done-line">PERFECT ${stats.perfect}　GOOD ${stats.good}　MISS ${stats.miss}${stats.wrongLane ? `（其中重音敲錯 ${stats.wrongLane}）` : ''}</p>
+      <p class="rh-done-tip">💡 覺得太快的話，換到<strong>簡單</strong>難度：重音是兩拍的長音，好抓很多。</p>
+      <div class="rh-done-row">
+        <button class="rh-btn rh-btn-main rh-btn-big" id="rh-again">🔄 再挑戰一次</button>
+        <button class="rh-btn" id="rh-tolist">🎼 選歌</button>
+      </div>`;
+    els.done.classList.add('open');
+    els.doneBody.querySelector('#rh-again').addEventListener('click', () => startSong(songIndex));
+    els.doneBody.querySelector('#rh-tolist').addEventListener('click', () => { els.done.classList.remove('open'); openSongs(); });
+    renderHUD();
+  }
+
   function showDone(r) {
     const last = songIndex >= RHYTHM_SONGS.length - 1;
     const stressWords = song.words.filter(w => w.syl.length > 1 && w.stress > 0);
+    if (r.fc && r.clear) rhConfetti(34);
     els.doneBody.innerHTML = `
-      <div class="rh-rank rank-${r.rank}">${r.rank}</div>
+      <div class="rh-rank rank-${r.clear ? r.rank : 'fail'}">${r.clear ? r.rank : '—'}</div>
       <h3>${song.e} ${song.name}</h3>
+      <p class="rh-done-line rh-gauge-line ${r.clear ? 'ok' : 'no'}">氣勢 <strong>${Math.round(gauge)}</strong> / 100　${
+        r.clear ? '✅ 過關！' : `未達過關線 ${GAUGE_CLEAR}，成績不列入紀錄（XP 照給）`}</p>
       <p class="rh-done-line">正確率 <strong>${r.acc}%</strong>　分數 <strong>${stats.score}</strong>　最高連擊 <strong>${stats.maxCombo}</strong></p>
       <p class="rh-done-line">PERFECT ${stats.perfect}　GOOD ${stats.good}　MISS ${stats.miss}${stats.wrongLane ? `（其中重音敲錯 ${stats.wrongLane}）` : ''}</p>
       ${r.fc ? '<p class="rh-fc">💯 FULL COMBO！</p>' : ''}
-      <p class="rh-done-reward">${r.first ? `首次完成 +30 XP` : '再次挑戰 +12 XP'}${r.gems ? `　+${r.gems} 💎` : ''}</p>
+      <p class="rh-done-reward">${r.first ? `首次完成 +30 XP` : '練習 +12 XP'}${r.gems ? `　+${r.gems} 💎` : ''}</p>
       ${stressWords.length
         ? `<p class="rh-done-tip">💡 這首歌裡重音不在第一個音節的字：
              ${stressWords.map(w => `<span class="rh-tag">${w.syl.map((s, i) => i === w.stress ? s.toUpperCase() : s).join('-')}</span>`).join('')}</p>`
@@ -789,13 +1119,14 @@ const RhythmGame = (() => {
       <div class="rh-done-row">
         <button class="rh-btn" id="rh-again">🔄 再挑戰</button>
         <button class="rh-btn" id="rh-tolist">🎼 選歌</button>
-        ${last ? '' : '<button class="rh-btn rh-btn-main" id="rh-next">➡️ 下一首</button>'}
+        ${last || !r.clear ? '' : '<button class="rh-btn rh-btn-main" id="rh-next">➡️ 下一首</button>'}
       </div>`;
     els.done.classList.add('open');
     els.doneBody.querySelector('#rh-again').addEventListener('click', () => startSong(songIndex));
     els.doneBody.querySelector('#rh-tolist').addEventListener('click', () => { els.done.classList.remove('open'); openSongs(); });
     const next = els.doneBody.querySelector('#rh-next');
-    if (next) next.addEventListener('click', () => startSong(songIndex + 1));
+    // A new song means new words, so the next one goes through the preview.
+    if (next) next.addEventListener('click', () => openPreview(songIndex + 1));
     renderHUD();
   }
 
@@ -815,9 +1146,13 @@ const RhythmGame = (() => {
         notes: notes.length,
         judged: notes.filter(n => n.judged).length,
         stats: stats && { ...stats },
+        gauge: Math.round(gauge),
         cleared: clearedCount(),
+        failed: !playing && !!song && notes.some(n => !n.judged),
       }),
       start: i => startSong(i),
+      preview: i => openPreview(i),
+      setGauge: v => { gauge = v; },
       // Play the whole chart perfectly by judging every note on the beat.
       autoPlay: () => { notes.forEach(n => { if (!n.judged) judge(n, 'perfect'); }); },
       hit: lane => hit(lane),

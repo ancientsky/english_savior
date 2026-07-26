@@ -263,6 +263,64 @@
 .rh-song-meta { font-size: 11px; opacity: .65; }
 .rh-song-best { font-size: 12px; color: var(--rh-gold); font-weight: 700; }
 
+/* ---------- preview screen (R5) ---------- */
+
+.rh-preview-body { padding: 14px 18px 20px; overflow-y: auto; }
+
+.rh-preview-tip { margin: 0 0 12px; font-size: 14px; line-height: 1.8; text-align: center; opacity: .9; }
+
+.rh-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.rh-pv-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 4px;
+  background: rgba(255, 255, 255, .07);
+  border: 2px solid rgba(255, 255, 255, .16);
+  border-radius: 10px;
+  color: var(--rh-ink);
+  cursor: pointer;
+  transition: transform .15s, border-color .15s, background .15s;
+}
+
+.rh-pv-card:hover { transform: translateY(-2px); }
+
+.rh-pv-card.now {
+  background: rgba(255, 209, 102, .22);
+  border-color: var(--rh-gold);
+  transform: scale(1.07);
+}
+
+.rh-pv-e { font-size: 28px; line-height: 1.1; }
+.rh-pv-w { font-size: 13px; font-weight: 700; letter-spacing: .3px; }
+.rh-pv-w b { color: var(--rh-hot); font-size: 15px; }
+.rh-pv-w i { opacity: .4; font-style: normal; margin: 0 1px; }
+.rh-pv-zh { font-size: 11px; opacity: .7; }
+
+/* ---------- full-combo confetti ---------- */
+
+.rh-confetti {
+  position: absolute;
+  top: -14px;
+  width: 9px;
+  height: 15px;
+  border-radius: 2px;
+  pointer-events: none;
+  z-index: 3;
+  animation: rh-fall linear forwards;
+}
+
+@keyframes rh-fall {
+  0%   { transform: translateY(0) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(340px) rotate(560deg); opacity: 0; }
+}
+
 /* ---------- results ---------- */
 
 .rh-done-body { padding: 22px 20px; text-align: center; }
@@ -278,6 +336,11 @@
 .rh-rank.rank-A { color: #7fd4ff; }
 .rh-rank.rank-B { color: #a0e6a0; }
 .rh-rank.rank-C { color: #cbb8e8; }
+.rh-rank.rank-fail { color: #ff8fa3; font-size: 52px; }
+
+.rh-gauge-line { font-weight: 700; }
+.rh-gauge-line.ok { color: #8ce8a8; }
+.rh-gauge-line.no { color: #ffb3c0; }
 
 .rh-done-body h3 { margin: 6px 0 12px; font-size: 20px; }
 .rh-done-line { font-size: 14px; margin: 5px 0; line-height: 1.7; }
@@ -314,5 +377,6 @@ body.game-max #zone-rhythm .rh-screen { max-width: 720px; margin: 12px auto; }
   .rh-btn { padding: 7px 11px; font-size: 13px; }
   .rh-diff-btn { min-width: 100%; }
   .rh-song-grid { grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); }
+  .rh-preview-grid { grid-template-columns: repeat(2, 1fr); }
   .rh-rank { font-size: 48px; }
 }
