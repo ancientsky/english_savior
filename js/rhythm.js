@@ -9,6 +9,11 @@
      medium  two lanes — stressed goes up, unstressed goes down (word shown)
      hard    two lanes — blind: only the emoji and Chinese, listen to the TTS
 
+   The chart itself teaches the rule: a stressed syllable is a LONG note and an
+   unstressed one is short, so the contour is something the hands play rather
+   than a colour on the screen. The eight words split into an A section and a
+   denser B section (the chorus), and the song signs off with a three-note roll.
+
    Every song has a real backing track (MusicManager.startGameTrack) and the
    whole game runs off the AUDIO clock, not performance.now(). That matters:
    performance.now() drifts against the audio hardware, so over a song the notes
@@ -31,12 +36,38 @@ const RhythmGame = (() => {
 
   const DIFFS = {
     easy:   { label: '簡單', lanes: 1, rate: 0.85, xp: 10, gem: 1, bonus: 10,
-              desc: '單軌：敲出音節數（會標出音節與重音）' },
+              desc: '單軌：重音是長音、輕音是短音（會標出音節）' },
     medium: { label: '中等', lanes: 2, rate: 1.0,  xp: 14, gem: 1, bonus: 15,
-              desc: '雙軌：重音敲上排、輕音敲下排（顯示單字）' },
+              desc: '雙軌：重音敲上排、輕音敲下排（附點節奏）' },
     hard:   { label: '困難', lanes: 2, rate: 1.18, xp: 18, gem: 2, bonus: 20,
-              desc: '雙軌盲奏：只看圖和中文，用聽的判斷' },
+              desc: '雙軌盲奏：套用歌曲的節奏型，只看圖和中文' },
   };
+
+  // Note LENGTH is the lesson. A stressed syllable is a long note and an
+  // unstressed one is short, so "ba-NA-na" is something the hands play, not
+  // just a colour on the screen. The first version gave every syllable one
+  // beat — which is why all 20 songs felt like the same chart at 20 speeds.
+  const FEEL = {
+    easy:   { s: 2,   u: 1,   rest: 1 },   // clearest rule: long is twice short
+    medium: { s: 1.5, u: 0.5, rest: 1 },   // dotted — the real English contour
+  };
+  // Hard takes its lengths from the song's groove, so a ballad and a chiptune
+  // song genuinely play differently. Every entry keeps s > u — the teaching
+  // point survives whichever groove a song uses.
+  const GROOVE_FEEL = {
+    pop:      { s: 1.5,     u: 0.5,     rest: 1    },
+    rock:     { s: 1.5,     u: 0.5,     rest: 0.5  },
+    march:    { s: 1,       u: 0.5,     rest: 1    },
+    swing:    { s: 4 / 3,   u: 2 / 3,   rest: 4 / 3 },  // triplet feel, like its hats
+    latin:    { s: 1,       u: 0.5,     rest: 0.5  },
+    chiptune: { s: 1,       u: 0.5,     rest: 0.75 },   // lands on 16ths, like its kick
+    ballad:   { s: 2,       u: 1,       rest: 1.5  },
+    bossa:    { s: 1.5,     u: 0.5,     rest: 1.5  },
+  };
+  function feelOf(s) {
+    if (difficulty !== 'hard') return FEEL[difficulty] || FEEL.easy;
+    return GROOVE_FEEL[s.groove] || GROOVE_FEEL.pop;
+  }
 
   let canvas = null, ctx = null, rafId = null;
   let els = {};
@@ -60,6 +91,10 @@ const RhythmGame = (() => {
   let popups = [];           // floating PERFECT/GOOD/MISS text
   let flash = { hi: 0, lo: 0 };
   let lastBeat = -1;
+  // Judgement windows are per-chart, not per-game — see buildChart().
+  let perfectMs = PERFECT_MS, goodMs = GOOD_MS;
+  let bSectionT = 0;         // when the denser B section starts
+  let bAnnounced = false, sectionFlash = 0;
 
   /* ================= save ================= */
 
@@ -86,10 +121,13 @@ const RhythmGame = (() => {
 
   /* ================= chart building ================= */
 
-  // One note per syllable, one beat apart, with a one-beat rest between words.
+  // One note per syllable, its LENGTH set by the stress, with the eight words
+  // split into an A section and a denser B section and a drum roll to finish.
   function buildChart(s) {
     const beat = 60000 / songTempo(s);
     const lanes = DIFFS[difficulty].lanes;
+    const feel = feelOf(s);
+    const bStart = Math.ceil(s.words.length / 2);   // first word of the B section
     notes = [];
     wordSpans = [];
     // Lead-in is a whole number of bars so the first note falls on a downbeat
@@ -98,18 +136,46 @@ const RhythmGame = (() => {
     let t = barMs * Math.max(2, Math.ceil(2600 / barMs));
     s.words.forEach((word, wi) => {
       const from = notes.length;
+      const section = wi >= bStart ? 'B' : 'A';
       word.syl.forEach((_, si) => {
+        const stressed = si === word.stress;
         notes.push({
           t, wordIdx: wi, sylIdx: si,
-          lane: lanes === 1 ? 0 : (si === word.stress ? 1 : 0),   // 1 = upper/stressed
-          stressed: si === word.stress,
+          lane: lanes === 1 ? 0 : (stressed ? 1 : 0),   // 1 = upper/stressed
+          stressed, roll: false,
           judged: false, verdict: null,
         });
-        t += beat;
+        t += beat * (stressed ? feel.s : feel.u);
       });
-      wordSpans.push({ word, from, to: notes.length - 1, startT: notes[from].t, spoken: false, cleared: false });
-      t += beat;   // one beat of rest between words
+      wordSpans.push({ word, section, from, to: notes.length - 1, startT: notes[from].t, spoken: false, cleared: false });
+      // The B section is the chorus: half the breathing room between words, so
+      // the song builds instead of ticking along at one density throughout.
+      // The last word gets no trailing rest — the roll below follows it.
+      if (wi < s.words.length - 1) t += beat * feel.rest * (section === 'B' ? 0.5 : 1);
     });
+    bSectionT = wordSpans[bStart] ? wordSpans[bStart].startT : 0;
+    // Finish on a roll: three quick taps on the lane the song ended on, so the
+    // last thing a child does is a flourish rather than a fade-out. They sit
+    // outside the last word's span, so they can't affect its reward.
+    if (notes.length) {
+      const last = notes[notes.length - 1];
+      const w = s.words[last.wordIdx];
+      t += beat * 0.5;
+      for (let i = 0; i < 3; i++) {
+        notes.push({
+          t, wordIdx: last.wordIdx, sylIdx: w.stress,
+          lane: last.lane, stressed: false, roll: true,
+          judged: false, verdict: null,
+        });
+        t += beat * 0.5;
+      }
+    }
+    // Judgement windows follow the chart's density: the fixed 195ms GOOD window
+    // would swallow two notes at once on the tightest hard charts.
+    let minGap = Infinity;
+    for (let i = 1; i < notes.length; i++) minGap = Math.min(minGap, notes[i].t - notes[i - 1].t);
+    goodMs = Math.max(110, Math.min(GOOD_MS, minGap * 0.45));
+    perfectMs = Math.max(60, Math.min(PERFECT_MS, goodMs * 0.55));
     return beat;
   }
 
@@ -213,6 +279,8 @@ const RhythmGame = (() => {
     stats = { perfect: 0, good: 0, miss: 0, combo: 0, maxCombo: 0, score: 0, wrongLane: 0 };
     popups = [];
     lastBeat = -1;
+    bAnnounced = false;
+    sectionFlash = 0;
     playing = true;
     // Hand the speakers over from the zone BGM and take its clock. Playing a
     // 92 BPM zone track underneath a 76 BPM chart is what made this feel wrong.
@@ -246,9 +314,9 @@ const RhythmGame = (() => {
       if (n.judged) continue;
       const d = Math.abs(n.t - t);
       if (d < bestAbs) { bestAbs = d; best = n; }
-      if (n.t - t > GOOD_MS) break;    // notes are in time order
+      if (n.t - t > goodMs) break;    // notes are in time order
     }
-    return bestAbs <= GOOD_MS ? best : null;
+    return bestAbs <= goodMs ? best : null;
   }
 
   function hit(lane) {
@@ -264,7 +332,7 @@ const RhythmGame = (() => {
       return;
     }
     const d = Math.abs(n.t - now());
-    judge(n, d <= PERFECT_MS ? 'perfect' : 'good');
+    judge(n, d <= perfectMs ? 'perfect' : 'good');
   }
 
   function judge(n, verdict) {
@@ -344,7 +412,7 @@ const RhythmGame = (() => {
 
     // auto-MISS anything that sailed past the window
     notes.forEach(n => {
-      if (!n.judged && t - n.t > GOOD_MS) judge(n, 'miss');
+      if (!n.judged && t - n.t > goodMs) judge(n, 'miss');
     });
 
     // metronome + speak each word as it comes into view
@@ -359,6 +427,14 @@ const RhythmGame = (() => {
         if (typeof TTSManager !== 'undefined') TTSManager.speak(sp.word.w);
       }
     });
+
+    // The chorus gets its own announcement — the chart visibly tightens here
+    // and a child should know it's coming rather than just start missing.
+    if (!bAnnounced && bSectionT > 0 && t >= bSectionT - LEAD_MS) {
+      bAnnounced = true;
+      sectionFlash = 1.4;
+    }
+    sectionFlash = Math.max(0, sectionFlash - dt);
 
     popups.forEach(p => { p.life -= dt; });
     popups = popups.filter(p => p.life > 0);
@@ -414,10 +490,10 @@ const RhythmGame = (() => {
       const x = HIT_X + (n.t - t) * pxPerMs;
       if (x < -60 || x > W + 60) return;
       const y = laneY(n.lane);
-      const r = n.stressed ? 26 : 17;
+      const r = n.roll ? 13 : n.stressed ? 26 : 17;
       ctx.save();
       if (n.judged) ctx.globalAlpha = 0.25;
-      ctx.fillStyle = n.stressed ? '#ff6b81' : '#4aa8e0';
+      ctx.fillStyle = n.roll ? '#ffd166' : n.stressed ? '#ff6b81' : '#4aa8e0';
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.fill();
@@ -425,7 +501,13 @@ const RhythmGame = (() => {
       ctx.lineWidth = 2;
       ctx.stroke();
       // the syllable text rides on the note (hidden in blind mode)
-      if (difficulty === 'easy') {
+      if (n.roll) {
+        ctx.fillStyle = '#5b3b00';
+        ctx.font = 'bold 13px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('♪', x, y + 1);
+      } else if (difficulty === 'easy') {
         ctx.fillStyle = '#fff';
         ctx.font = `bold ${n.stressed ? 15 : 12}px system-ui, sans-serif`;
         ctx.textAlign = 'center';
@@ -470,6 +552,20 @@ const RhythmGame = (() => {
       ctx.fillText(p.text, HIT_X, p.y - 44 - (0.7 - p.life) * 22);
       ctx.restore();
     });
+
+    if (sectionFlash > 0) {
+      const rise = (1.4 - sectionFlash) * 16;
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, sectionFlash * 1.6);
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#ffd166';
+      ctx.font = 'bold 40px system-ui, sans-serif';
+      ctx.fillText('♪ B 段', W / 2, 74 - rise);
+      ctx.fillStyle = 'rgba(255,255,255,.85)';
+      ctx.font = 'bold 15px system-ui, sans-serif';
+      ctx.fillText('節奏變密了！', W / 2, 98 - rise);
+      ctx.restore();
+    }
 
     // 3-2-1 during the lead-in, so nobody is dropped straight into a beat
     const firstT = notes.length ? notes[0].t : 0;
@@ -540,8 +636,8 @@ const RhythmGame = (() => {
       <div class="rh-screen" id="rh-start">
         <h3>🎵 英語節奏星</h3>
         <p>英文單字有<strong>節拍</strong>！一個<strong>音節</strong>就是一拍，其中一個音節唸得比較<strong>重、長、大聲</strong>——那就是重音。</p>
-        <p>ba-<strong>NA</strong>-na 是「小-<strong>大</strong>-小」，不是「B-A-N-A-N-A」六拍喔！</p>
-        <p>跟著節奏敲下去，抓到英文真正的節奏感。</p>
+        <p>ba-<strong>NA</strong>-na 是「短-<strong>長</strong>-短」，不是「B-A-N-A-N-A」六拍喔！</p>
+        <p>大顆的重音是<strong>長音</strong>、小顆的輕音是<strong>短音</strong>；唱到一半會進 <strong>B 段</strong>，節奏變密，最後還有三下 ♪ 連打收尾。</p>
         <div class="rh-diff" id="rh-diff"></div>
         <button class="rh-btn rh-btn-main rh-btn-big" id="rh-start-btn">🎼 打開選歌清單</button>
       </div>
@@ -726,7 +822,9 @@ const RhythmGame = (() => {
       autoPlay: () => { notes.forEach(n => { if (!n.judged) judge(n, 'perfect'); }); },
       hit: lane => hit(lane),
       elapsed: () => (song ? now() : 0),
-      chart: () => notes.map(n => ({ t: Math.round(n.t), lane: n.lane, stressed: n.stressed })),
+      chart: () => notes.map(n => ({ t: Math.round(n.t), lane: n.lane, stressed: n.stressed, roll: !!n.roll, wordIdx: n.wordIdx })),
+      spans: () => wordSpans.map(sp => ({ w: sp.word.w, section: sp.section, from: sp.from, to: sp.to, startT: Math.round(sp.startT) })),
+      windows: () => ({ perfectMs: Math.round(perfectMs), goodMs: Math.round(goodMs) }),
       save: () => JSON.parse(JSON.stringify(save)),
       finish: () => finishSong(),
     };
