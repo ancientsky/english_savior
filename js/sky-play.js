@@ -870,9 +870,11 @@ const SkyPlay = (() => {
     const sx = fz, sz = -fx;                       // hero's right (screen right)
     const ex = stand.x + fx * 3.2 + sx * 1.9, ez = stand.z + fz * 3.2 + sz * 1.9;
     ctx.setPlayerPos(px, top + 0.05, pz, yaw + Math.PI);
-    ctx.cam.theta = yaw;            // camera behind the player, looking at the stand
-    ctx.cam.phi = 0.2;
-    ctx.cam.radius = 6;
+    // AVATAR owns the camera: ask it for a framed shot on the egg from the egg's side (hero
+    // three-quarter on the left, stand behind) and release it in endHatch — the player's own
+    // orbit and zoom come back untouched
+    if (ctx.cameraShot) ctx.cameraShot({ x: ex, y: top + 1.15, z: ez, theta: yaw + 0.45, phi: 0.17, radius: 7.6 });
+    else { ctx.cam.theta = yaw; ctx.cam.phi = 0.2; ctx.cam.radius = 6; }
     const mesh = makeEgg(egg, 1.5);
     mesh.position.set(ex, top + 2.0, ez);
     ctx.scene.add(mesh);
@@ -1064,6 +1066,7 @@ const SkyPlay = (() => {
     for (const o of [h.mesh, h.beam, h.petMesh, ...(h.halves || [])]) if (o) ctx.scene.remove(o);
     hatch = null;
     lockedFlag = false;
+    if (ctx.cameraShot) ctx.cameraShot(null);
   }
   function perkText(d, stars) {
     const k = 1 + 0.1 * ((stars || 1) - 1);
@@ -1560,7 +1563,8 @@ const SkyPlay = (() => {
       g.exit.play.m.depthWrite = true;
       g.exit.play.m.needsUpdate = true;
       g.popT = 1;
-      ctx.toast(`✨ 正確！${g.entry.word} — ${zhShort(g.entry)}　+${r.xp} XP${r.gems ? ' +1 💎' : ''}`);
+      ctx.toast(`✨ 正確！${g.entry.word} — ${zhShort(g.entry)}`);
+      if (ctx.ui) { ctx.ui.pop('xp', r.xp); if (r.gems) ctx.ui.pop('gem', r.gems); }
       ctx.emitFx('gate', { ok: true, word: g.entry.word });
       gateBanner(nextGate());
     } else if (!g.down[i]) {
@@ -1594,6 +1598,7 @@ const SkyPlay = (() => {
     const r = ctx.playClear(diffPool(C.def.diff), first);
     persistNow();
     hudCoins(true);
+    if (ctx.ui) { ctx.ui.pop('xp', r.xp); if (r.gems) ctx.ui.pop('gem', r.gems); ctx.ui.pop('coin', bonus); }
     refreshArchLabel(C);
     SoundManager.playQuestComplete();
     fanfare();
@@ -1911,7 +1916,7 @@ const SkyPlay = (() => {
       case 'say': if (hatch && hatch.q) TTSManager.speak(hatch.q.ans.word, 'en-US'); break;
       case 'later': {
         // keep the paid egg for later (P.pendingEgg stays set)
-        if (hatch) { ctx.scene.remove(hatch.mesh); hatch = null; }
+        if (hatch) { ctx.scene.remove(hatch.mesh); hatch = null; if (ctx.cameraShot) ctx.cameraShot(null); }
         closePanel();
         ctx.toast('🥚 蛋寶寶會等你！回到寵物蛋商店就能繼續孵化');
         break;
@@ -2055,6 +2060,24 @@ const SkyPlay = (() => {
     refreshFollowers();
     ctx.onFx((name) => { if (name === 'jump' || name === 'airjump') for (const f of followers) f.hop = 1; });
     ready = true;
+  }
+  // cover + controls guide (UI's ctx.ui) — registered from sky.js init(), before the 3D world
+  // exists, so it only reads the save
+  function registerUi(c) {
+    if (!c.ui) return;
+    c.ui.addControl({ id: 'dash', icon: '💨', kbd: ['C'], text: '衝刺（地上、空中都能用）', touch: '💨 鈕＝衝刺（地上、空中都能用）', isNew: true });
+    c.ui.addControl({ id: 'pets', icon: '🐾', kbd: ['P'], text: '寵物圖鑑', touch: '🐾 鈕＝寵物圖鑑', isNew: true });
+    c.ui.addStartStat(() => {
+      const p = c.save && c.save.play;
+      const coins = p && typeof p.coins === 'number' ? p.coins : 0;
+      const pets = p && p.pets ? Object.keys(p.pets).length : 0;
+      const runs = p && p.courses ? Object.values(p.courses).filter(x => x && x.clears).length : 0;
+      const nC = typeof SKY_COURSES !== 'undefined' ? SKY_COURSES.length : 0;
+      const nP = typeof SKY_PETS !== 'undefined' ? SKY_PETS.length : 0;
+      return `<div class="aw-stat"><span>⭐</span><div><b>${coins}</b><small>星幣</small></div></div>` +
+        `<div class="aw-stat"><span>🐾</span><div><b>${pets} / ${nP}</b><small>寵物</small></div></div>` +
+        `<div class="aw-stat"><span>🏁</span><div><b>${runs} / ${nC}</b><small>空中跑酷</small></div></div>`;
+    });
   }
   function onAdventureStart() {
     if (!ready) return;
@@ -2214,5 +2237,5 @@ const SkyPlay = (() => {
 
   function inRun() { return !!(run && !run.done); }
 
-  return { init, update, onGround, onVoid, target, tracker, drawMinimap, locked, onEscape, togglePets, onAdventureStart, inRun, test };
+  return { init, registerUi, update, onGround, onVoid, target, tracker, drawMinimap, locked, onEscape, togglePets, onAdventureStart, inRun, test };
 })();

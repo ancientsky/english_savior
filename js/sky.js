@@ -121,14 +121,15 @@ const SkyGame = (() => {
   // ===================== module contract (sky-art / sky-avatar / sky-play) =====================
   // Per-frame movement snapshot: WRITTEN by the physics half of updatePlayer(),
   // READ by avatar animation, camera feel and FX. Never write it from a reader.
-  const motion = { speed: 0, moving: false, sprint: false, vy: 0, grounded: true, airJumps: 0, dashing: false, riding: null };
+  const motion = { speed: 0, moving: false, sprint: false, vy: 0, grounded: true, airJumps: 0, dashing: false, riding: null, gliding: false };
   // One-shot gameplay events -> visual/audio feedback. Emit from gameplay code,
   // listen from presentation code. Known names (add more, document them here):
   //   'jump' 'airjump'{n} 'land'{v} 'pad' 'hurt' 'respawn' 'arrive'{isle}
   //   'start' (adventure begins → camera reveal + wave) 'teleport' (camera snaps)
   //   PLAY: 'dash'{x,z,grounded} 'coin'{x,y,z,combo} 'checkpoint'{x,y,z} 'gate'{ok,word}
   //         'courseStart'{id} 'courseFinish'{id,time,best} 'hatch'{pet,rarity} 'respawn'{course:true}
-  // motion.airJumps = air jumps used this airtime; motion.dashing; motion.platform
+  // motion.airJumps = air jumps used this airtime; motion.dashing; motion.gliding (glide title /
+  // 🪂 glider held at the capped fall speed); motion.platform
   // (standing on a moving obby platform).
   const fxListeners = [];
   function emitFx(name, data) {
@@ -236,6 +237,7 @@ const SkyGame = (() => {
     if (!els.zone) return;
 
     uiInit();
+    SkyPlay.registerUi?.(ctx);   // PLAY's cover stats (⭐ / 🐾 / 🏁) + dash / pets rows in the controls guide
     loadSave();
     renderStartScreen();
     if (els.minimap) minimapCtx = els.minimap.getContext('2d');
@@ -569,7 +571,7 @@ const SkyGame = (() => {
       row('🦘', `${kbd('Space')} 跳躍`),
       row('🦘', `空中再按一次 ${kbd('Space')} ＝ 二段跳`, true),
       ...extraK,
-      row('💨', `按住 ${kbd('Shift')} 奔跑`),
+      row('👟', `按住 ${kbd('Shift')} 奔跑`),
       row('⚡', `${kbd('E')} 互動／攻擊怪物`),
       row('🖱️', '拖曳畫面轉視角、滾輪縮放'),
     ].join('');
@@ -3329,6 +3331,7 @@ const SkyGame = (() => {
   }
   Object.assign(ctx, {
     setPlayerPos, playReward, playClear, requestDash,
+    cameraShot: shot => SkyAvatar.cameraShot && SkyAvatar.cameraShot(shot),   // AVATAR camera owns the framing
     setDeferLevelUp: v => { if (!quizOpen) GameEngine.setDeferLevelUp(v); if (!v && !quizOpen) GameEngine.flushPendingLevelUps(); },
     flash: () => { els.flash.classList.add('on'); setTimeout(() => els.flash.classList.remove('on'), 420); },
   });
@@ -3528,6 +3531,7 @@ const SkyGame = (() => {
 
     // vertical (hold jump to glide with 傳說勇者 title or 🪂 glider)
     const prevFeet = pos.y;
+    let glidingNow = false;
     if (mountT > 0) {
       // ☁️ 飛天雲: free flight — hold jump to ascend, release to sink gently;
       // the entire gravity/collision/jump/void block below is skipped while mounted
@@ -3540,7 +3544,7 @@ const SkyGame = (() => {
       vy = 0;
     } else {
       vy += SKY_CONFIG.gravity * dt;
-      if (jumpHeld && vy < -3.2 && (perks.glide || gliderOn)) vy = -3.2;
+      if (jumpHeld && vy < -3.2 && (perks.glide || gliderOn)) { vy = -3.2; glidingNow = true; }
     }
     pos.y += vy * dt;
 
@@ -3630,6 +3634,7 @@ const SkyGame = (() => {
     motion.grounded = grounded;
     motion.airJumps = airJumpsUsed;
     motion.dashing = dashT > 0;
+    motion.gliding = glidingNow && !grounded;   // explicit (AVATAR used to infer it from vy)
     motion.riding = mountT > 0 ? 'cloud' : null;
     motion.platform = !!(groundCol && groundCol.moving);   // standing on a moving obby platform
 

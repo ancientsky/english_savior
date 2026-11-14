@@ -14,6 +14,8 @@
      animatePlayer(dt, info)        — presentation half of updatePlayer ({ yaw, quiz })
      update(dt)                     — FX pools, NPC idle/turning, auras, mob shadows
      updateCamera(dt)               — third-person camera (collision, lag, FOV kick, shake, reveal)
+     cameraShot(s | null)           — framed cinematic shot {x,y,z,theta,phi,radius}; null releases
+                                      (blends in/out; never writes the player's own cam orbit)
      makeNpc(emoji, tint)           — a little NPC character (registered for idle animation)
      makeMob(def)                   — creature mesh (slime / wisp / bat / flyer + variants)
      animateMob(mob, dt) / mobHit(mob) / mobDying(mob, dt) — creature presentation
@@ -927,7 +929,7 @@ const SkyAvatar = (() => {
     const moving = M.moving && !quiz;
     P.sprintF = lerp(P.sprintF, M.sprint ? 1 : 0, damp(dt, 6));
     if (moving && grounded) P.phase += dt * (M.speed * 2.0 + 6);
-    const gliding = !!M.gliding || (air && M.vy > -3.45 && M.vy < -2.95 && !M.riding);
+    const gliding = !!M.gliding;   // set explicitly by sky.js updatePlayer
     P.glideT = gliding ? P.glideT + dt : 0;
     P.hurtT = Math.max(0, P.hurtT - dt);
     P.cheerT = Math.max(0, P.cheerT - dt);
@@ -1326,7 +1328,7 @@ const SkyAvatar = (() => {
   // ===================== camera =====================
   const CAM = {
     fx: 0, fy: 0, fz: 0, init: false, curR: 9, trauma: 0, fov: 55, fovKick: 0,
-    reveal: -1, snap: true, frame: 0, hitR: 99, lift: 0, liftT: 0,
+    reveal: -1, snap: true, frame: 0, hitR: 99, lift: 0, liftT: 0, shot: null, sp: null, shotK: 0,
     ray: null, dir: new THREE.Vector3(), org: new THREE.Vector3(), look: new THREE.Vector3(),
     hits: [], solids: new Map(), list: [],
   };
@@ -1431,6 +1433,20 @@ const SkyAvatar = (() => {
         radius = lerp(cam.radius * 2.8 + 6, cam.radius, e);
       }
     }
+    // ---- cinematic hand-off (cameraShot): blend focus + orbit to a framed shot and back ----
+    // The player's own orbit (cam.theta/phi/radius) is never written, so their zoom/angle
+    // comes back untouched when the shot is released.
+    CAM.shotK += ((CAM.shot ? 1 : 0) - CAM.shotK) * damp(dt, 2.6);
+    const hfx = CAM.fx, hfy = CAM.fy, hfz = CAM.fz;
+    const shotOn = !!CAM.sp && CAM.shotK > 0.003;
+    if (shotOn) {
+      const k = easeIO(clamp(CAM.shotK, 0, 1)), sp = CAM.sp;
+      CAM.fx = lerp(hfx, sp.x, k); CAM.fy = lerp(hfy, sp.y, k); CAM.fz = lerp(hfz, sp.z, k);
+      let d = sp.theta - theta;
+      while (d > Math.PI) d -= TAU;
+      while (d < -Math.PI) d += TAU;
+      theta += d * k; phi = lerp(phi, sp.phi, k); radius = lerp(radius, sp.radius, k);
+    }
     // ---- collision ----
     // 1) probe the orbit the player chose; if scenery blocks it, probe a higher
     //    orbit — rising over a tree reads much better than zooming into the face.
@@ -1482,6 +1498,13 @@ const SkyAvatar = (() => {
     const targetFov = BASE_FOV + (M.sprint ? 7 : 0) + (M.dashing ? 9 : 0) + CAM.fovKick * 6 + (M.riding ? 4 : 0) + (P.padT > 0 ? 5 : 0);
     CAM.fov = lerp(CAM.fov, targetFov, damp(dt, M.dashing ? 12 : 5));
     if (Math.abs(camera.fov - CAM.fov) > 0.02) { camera.fov = CAM.fov; camera.updateProjectionMatrix(); }
+    if (shotOn) { CAM.fx = hfx; CAM.fy = hfy; CAM.fz = hfz; }
+    else if (!CAM.shot) CAM.sp = null;
+  }
+  // framed shot for a scripted moment (egg hatch): { x, y, z, theta, phi, radius } or null to release
+  function cameraShot(s) {
+    if (s) { CAM.shot = s; CAM.sp = { x: s.x, y: s.y, z: s.z, theta: s.theta, phi: s.phi, radius: s.radius }; }
+    else CAM.shot = null;
   }
 
   // ===================== NPCs =====================
@@ -2226,7 +2249,7 @@ const SkyAvatar = (() => {
   }
 
   return {
-    init, buildPlayer, refreshLook, animatePlayer, update, updateCamera,
+    init, buildPlayer, refreshLook, animatePlayer, update, updateCamera, cameraShot,
     makeNpc, makeMob, animateMob, mobHit, mobDying, makeBoss, animateBoss,
     makeShield, makeMount, makeBolt, boltTrail, lightning, celebrate, burst, debug, debugForce,
     _dbgMobs: () => mobMeshes,
