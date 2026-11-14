@@ -2222,7 +2222,7 @@ const SkyAvatar = (() => {
       FX.shadow.visible = true;
       FX.shadow.position.set(pos.x, sup.y + 0.04, pos.z);
       FX.shadow.scale.setScalar(1.5 * (0.45 + 0.55 * k));
-      FX.shadow.material.opacity = (low() ? 0.6 : 0.42) * k;
+      FX.shadow.material.opacity = (C.shadowsOn ? !C.shadowsOn() : low()) ? 0.6 * k : 0.42 * k;   // no shadow map: the blob is the only grounding
     } else FX.shadow.visible = false;
     // creature blob shadows
     let n = 0;
