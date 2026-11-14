@@ -168,6 +168,12 @@ const SkyGame = (() => {
   };
 
   // ===================== helpers =====================
+  // colour canvas texture (three r152+ colour management: canvas pixels are sRGB)
+  function canvasTex(cv) {
+    const t = new THREE.CanvasTexture(cv);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  }
   function mulberry32(seed) {
     let a = seed >>> 0;
     return () => {
@@ -462,7 +468,7 @@ const SkyGame = (() => {
     renderer.setPixelRatio(lowPower() ? 1 : Math.min(window.devicePixelRatio, 2));
     renderer.setSize(w, h);
     renderer.shadowMap.enabled = !lowPower();
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
     renderer.domElement.className = 'aw-canvas';
     els.wrap.insertBefore(renderer.domElement, els.wrap.firstChild);
     els.wrap.style.height = h + 'px';
@@ -501,7 +507,7 @@ const SkyGame = (() => {
     buildPlayer();
     setupPointerControls();
 
-    clock = new THREE.Clock();
+    clock = new THREE.Timer();
     threeReady = true;
   }
 
@@ -517,7 +523,7 @@ const SkyGame = (() => {
     grad.addColorStop(1, '#fdf0d5');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, 64, 512);
-    const tex = new THREE.CanvasTexture(cv);
+    const tex = canvasTex(cv);
     skyDome = new THREE.Mesh(
       new THREE.SphereGeometry(820, 24, 16),
       new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, fog: false })
@@ -535,7 +541,7 @@ const SkyGame = (() => {
     sctx.fillStyle = g;
     sctx.fillRect(0, 0, 128, 128);
     const sun = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: new THREE.CanvasTexture(sc), transparent: true, fog: false,
+      map: canvasTex(sc), transparent: true, fog: false,
     }));
     sun.scale.set(220, 220, 1);
     sun.position.set(420, 460, -520);
@@ -543,9 +549,9 @@ const SkyGame = (() => {
   }
 
   function buildLights() {
-    hemiLight = new THREE.HemisphereLight(0xdfefff, 0x8a9db5, 0.75);
+    hemiLight = new THREE.HemisphereLight(0xdfefff, 0x8a9db5, 0.75 * Math.PI);
     scene.add(hemiLight);
-    sunLight = new THREE.DirectionalLight(0xfff3d6, 1.05);
+    sunLight = new THREE.DirectionalLight(0xfff3d6, 1.05 * Math.PI);
     sunLight.position.set(40, 60, 20);
     sunLight.castShadow = true;
     sunLight.shadow.mapSize.set(1024, 1024);
@@ -650,7 +656,7 @@ const SkyGame = (() => {
       }
     }
     ctx.globalAlpha = 1;
-    const tex = new THREE.CanvasTexture(cv);
+    const tex = canvasTex(cv);
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
     tex.repeat.set(opts.repeat || 4, opts.repeat || 4);
     TEX[key] = tex;
@@ -1598,7 +1604,7 @@ const SkyGame = (() => {
     ctx.shadowBlur = 8;
     ctx.fillStyle = color;
     ctx.fillText(symbol, 48, 52);
-    return new THREE.CanvasTexture(cv);
+    return canvasTex(cv);
   }
 
   function markerState(q) {
@@ -3149,7 +3155,7 @@ const SkyGame = (() => {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(letter, 48, 50);
-    return new THREE.CanvasTexture(cv);
+    return canvasTex(cv);
   }
 
   function startRunes(q) {
@@ -3305,7 +3311,7 @@ const SkyGame = (() => {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(text, w / 2, h / 2 + 2);
-    return new THREE.CanvasTexture(cv);
+    return canvasTex(cv);
   }
 
   function pickOrderSentence() {
@@ -4084,7 +4090,7 @@ const SkyGame = (() => {
     grad.addColorStop(1, 'rgba(255,230,102,0)');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, 64, 64);
-    _shardGlowTex = new THREE.CanvasTexture(cv);
+    _shardGlowTex = canvasTex(cv);
     return _shardGlowTex;
   }
 
@@ -4250,7 +4256,7 @@ const SkyGame = (() => {
     grad.addColorStop(1, 'rgba(255,255,255,1)');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, 128, 16);
-    _streakTex = new THREE.CanvasTexture(cv);
+    _streakTex = canvasTex(cv);
     return _streakTex;
   }
   function resetStreak(s, immediate) {
@@ -4378,7 +4384,7 @@ const SkyGame = (() => {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(emoji, 64, 72);
-    return new THREE.CanvasTexture(cv);
+    return canvasTex(cv);
   }
 
   function badgeTexture(text) {
@@ -4399,7 +4405,7 @@ const SkyGame = (() => {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(text, 256, 66);
-    return new THREE.CanvasTexture(cv);
+    return canvasTex(cv);
   }
 
   function buildPlayer() {
@@ -5520,7 +5526,7 @@ const SkyGame = (() => {
     if (!zoneActive()) { rafId = null; return; }
     rafId = requestAnimationFrame(animate);
 
-    const dt = Math.min(0.1, clock.getDelta());
+    const dt = Math.min(0.1, (clock.update(), clock.getDelta()));
     if (playing) {
       updateWorld(dt);
       updatePlayer(dt);
