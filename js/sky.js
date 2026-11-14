@@ -4,6 +4,7 @@
    and title perks arrive in later parts. */
 
 const SkyGame = (() => {
+  const CPU2D = { willReadFrequently: true };   // texture canvases survive a GPU crash (see js/sky-art.js)
   const SAVE_KEY = 'english_savior_sky';
 
   // ----- persistent progress (quests fill this in Part 2+) -----
@@ -274,6 +275,21 @@ const SkyGame = (() => {
       els.location.addEventListener('contextmenu', e => e.preventDefault());
     }
     els.startBtn.addEventListener('click', startAdventure);
+    // owner diagnostics before any world exists (?skydebug=1, or a 🧪 probe interrupted by a crash)
+    if (/[?&]skydebug=1\b/.test(location.search) || (typeof SkyProbe !== 'undefined' && SkyProbe.interrupted())) SkyArt.showDiag();
+    // SkyArt reloaded the page after a GPU crash to rebuild the world at a safer quality tier:
+    // reopen 天空之城 and carry on with the adventure
+    const resume = SkyArt.takeResume();
+    if (resume) {
+      setTimeout(() => {
+        const tab = document.querySelector('.nav-tab[data-zone="sky"]');
+        if (tab && !zoneActive()) tab.click();
+        startAdventure();
+        // CSS maximize only — a script can't re-enter browser fullscreen without a tap
+        if (resume.max && !document.body.classList.contains('game-max') && typeof setGameMax === 'function') setGameMax(true);
+        showWorldToast('🔧 已自動調整畫質，繼續冒險！');
+      }, 0);
+    }
     els.camReset?.addEventListener('click', () => { cam.theta = heroYaw + Math.PI; cam.phi = 0.42; cam.radius = SKY_CONFIG.camRadius; });
     window.addEventListener('resize', resizeRenderer);
     setupKeyboard();
@@ -2100,7 +2116,7 @@ const SkyGame = (() => {
   function letterTexture(letter) {
     const cv = document.createElement('canvas');
     cv.width = cv.height = 96;
-    const ctx = cv.getContext('2d');
+    const ctx = cv.getContext('2d', CPU2D);
     ctx.fillStyle = 'rgba(80, 40, 160, 0.9)';
     ctx.beginPath();
     ctx.arc(48, 48, 42, 0, Math.PI * 2);
@@ -2250,7 +2266,7 @@ const SkyGame = (() => {
     const h = 84;
     const cv = document.createElement('canvas');
     cv.width = w; cv.height = h;
-    const ctx = cv.getContext('2d');
+    const ctx = cv.getContext('2d', CPU2D);
     const r = 18;
     ctx.fillStyle = 'rgba(45, 30, 75, 0.9)';
     ctx.beginPath();
@@ -3147,7 +3163,7 @@ const SkyGame = (() => {
     if (_streakTex) return _streakTex;
     const cv = document.createElement('canvas');
     cv.width = 128; cv.height = 16;
-    const ctx = cv.getContext('2d');
+    const ctx = cv.getContext('2d', CPU2D);
     const grad = ctx.createLinearGradient(0, 0, 128, 0);
     grad.addColorStop(0, 'rgba(255,255,255,0)');
     grad.addColorStop(0.7, 'rgba(255,240,180,0.9)');
@@ -4472,7 +4488,7 @@ const SkyGame = (() => {
     rafId = requestAnimationFrame(animate);
 
     const dt = Math.min(0.1, (clock.update(), clock.getDelta()));
-    if (playing) {
+    if (playing && !SkyArt.warming) {   // the world holds still while its shaders warm up behind the cover
       updateWorld(dt);
       updatePlayer(dt);
       updateCamera(dt);
