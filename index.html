@@ -3,6 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Content-Security-Policy: GitHub Pages can't send headers, so it lives
+       here. Scripts may only come from this site and Google's sign-in
+       component (lazy-loaded by js/cloud.js); data may only be sent to Google
+       Drive. 'unsafe-inline' is still needed for the inline onclick handlers. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/client; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com/gsi/style; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' https://www.googleapis.com https://accounts.google.com/gsi/; frame-src https://accounts.google.com/gsi/; worker-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none'">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
   <meta name="description" content="English Savior 英語救星 - 專為熱愛 Minecraft、Roblox 和 YouTube 的孩子設計的遊戲化英語學習平台。透過有趣的遊戲學習單字、文法和閱讀理解！">
   <meta name="keywords" content="英語學習, English learning, Minecraft, Roblox, YouTube, 遊戲化學習, 兒童英語, 單字, 文法">
   <meta name="author" content="English Savior">
@@ -89,30 +95,30 @@
   </script>
 
   <title>English Savior — 英語救星</title>
-  <link rel="stylesheet" href="css/style.css?v=56">
-  <link rel="stylesheet" href="css/hub.css?v=56">
-  <link rel="stylesheet" href="css/minecraft.css?v=56">
-  <link rel="stylesheet" href="css/roblox.css?v=56">
-  <link rel="stylesheet" href="css/youtube.css?v=56">
-  <link rel="stylesheet" href="css/spelling.css?v=56">
-  <link rel="stylesheet" href="css/listening.css?v=56">
-  <link rel="stylesheet" href="css/pets.css?v=56">
-  <link rel="stylesheet" href="css/typing.css?v=56">
-  <link rel="stylesheet" href="css/tutor.css?v=56">
-  <link rel="stylesheet" href="css/detective.css?v=56">
-  <link rel="stylesheet" href="css/fishing.css?v=56">
-  <link rel="stylesheet" href="css/empire.css?v=56">
-  <link rel="stylesheet" href="css/candy.css?v=56">
-  <link rel="stylesheet" href="css/sling.css?v=56">
-  <link rel="stylesheet" href="css/builder.css?v=56">
-  <link rel="stylesheet" href="css/speak.css?v=56">
-  <link rel="stylesheet" href="css/tower.css?v=56">
-  <link rel="stylesheet" href="css/rpg.css?v=56">
-  <link rel="stylesheet" href="css/sky.css?v=56">
-  <link rel="stylesheet" href="css/wizard.css?v=56">
-  <link rel="stylesheet" href="css/rhythm.css?v=56">
-  <link rel="stylesheet" href="css/alchemy.css?v=56">
-  <link rel="stylesheet" href="css/order.css?v=56">
+  <link rel="stylesheet" href="css/style.css?v=57">
+  <link rel="stylesheet" href="css/hub.css?v=57">
+  <link rel="stylesheet" href="css/minecraft.css?v=57">
+  <link rel="stylesheet" href="css/roblox.css?v=57">
+  <link rel="stylesheet" href="css/youtube.css?v=57">
+  <link rel="stylesheet" href="css/spelling.css?v=57">
+  <link rel="stylesheet" href="css/listening.css?v=57">
+  <link rel="stylesheet" href="css/pets.css?v=57">
+  <link rel="stylesheet" href="css/typing.css?v=57">
+  <link rel="stylesheet" href="css/tutor.css?v=57">
+  <link rel="stylesheet" href="css/detective.css?v=57">
+  <link rel="stylesheet" href="css/fishing.css?v=57">
+  <link rel="stylesheet" href="css/empire.css?v=57">
+  <link rel="stylesheet" href="css/candy.css?v=57">
+  <link rel="stylesheet" href="css/sling.css?v=57">
+  <link rel="stylesheet" href="css/builder.css?v=57">
+  <link rel="stylesheet" href="css/speak.css?v=57">
+  <link rel="stylesheet" href="css/tower.css?v=57">
+  <link rel="stylesheet" href="css/rpg.css?v=57">
+  <link rel="stylesheet" href="css/sky.css?v=57">
+  <link rel="stylesheet" href="css/wizard.css?v=57">
+  <link rel="stylesheet" href="css/rhythm.css?v=57">
+  <link rel="stylesheet" href="css/alchemy.css?v=57">
+  <link rel="stylesheet" href="css/order.css?v=57">
 </head>
 <body>
   <!-- Top HUD Bar -->
@@ -1619,60 +1625,60 @@
   <!-- Toast notifications -->
   <div id="toast-container"></div>
 
-  <script src="js/vendor/three.min.js?v=56"></script>
-  <script src="js/tts.js?v=56"></script>
-  <script src="js/data/vocab.js?v=56"></script>
-  <script src="js/data/vocab2.js?v=56"></script>
-  <script src="js/data/grammar.js?v=56"></script>
-  <script src="js/data/grammar2.js?v=56"></script>
-  <script src="js/data/video.js?v=56"></script>
-  <script src="js/data/game.js?v=56"></script>
-  <script src="js/data/empire.js?v=56"></script>
-  <script src="js/data/empire2.js?v=56"></script>
-  <script src="js/data/rpg.js?v=56"></script>
-  <script src="js/data/rpg2.js?v=56"></script>
-  <script src="js/data/rpg3.js?v=56"></script>
-  <script src="js/data/rpg4.js?v=56"></script>
-  <script src="js/data/sky.js?v=56"></script>
-  <script src="js/data/pets.js?v=56"></script>
-  <script src="js/data/detective.js?v=56"></script>
-  <script src="js/data/detective2.js?v=56"></script>
-  <script src="js/data/detective3.js?v=56"></script>
-  <script src="js/data/detective4.js?v=56"></script>
-  <script src="js/data/fishing.js?v=56"></script>
-  <script src="js/data/wizard.js?v=56"></script>
-  <script src="js/data/rhythm.js?v=56"></script>
-  <script src="js/data/alchemy.js?v=56"></script>
-  <script src="js/data/order.js?v=56"></script>
-  <script src="js/data/order2.js?v=56"></script>
-  <script src="js/data/order3.js?v=56"></script>
-  <script src="js/engine.js?v=56"></script>
-  <script src="js/music.js?v=56"></script>
-  <script src="js/minecraft.js?v=56"></script>
-  <script src="js/roblox.js?v=56"></script>
-  <script src="js/youtube.js?v=56"></script>
-  <script src="js/spelling.js?v=56"></script>
-  <script src="js/listening.js?v=56"></script>
-  <script src="js/empire.js?v=56"></script>
-  <script src="js/candy.js?v=56"></script>
-  <script src="js/sling.js?v=56"></script>
-  <script src="js/builder.js?v=56"></script>
-  <script src="js/speak.js?v=56"></script>
-  <script src="js/tower.js?v=56"></script>
-  <script src="js/rpg.js?v=56"></script>
-  <script src="js/sky.js?v=56"></script>
-  <script src="js/pets.js?v=56"></script>
-  <script src="js/typing.js?v=56"></script>
-  <script src="js/tutor.js?v=56"></script>
-  <script src="js/detective.js?v=56"></script>
-  <script src="js/fishing.js?v=56"></script>
-  <script src="js/wizard.js?v=56"></script>
-  <script src="js/rhythm.js?v=56"></script>
-  <script src="js/alchemy.js?v=56"></script>
-  <script src="js/order.js?v=56"></script>
-  <script src="js/cloud.js?v=56"></script>
-  <script src="js/daily.js?v=56"></script>
-  <script src="js/hub.js?v=56"></script>
-  <script src="js/app.js?v=56"></script>
+  <script src="js/vendor/three.min.js?v=57"></script>
+  <script src="js/tts.js?v=57"></script>
+  <script src="js/data/vocab.js?v=57"></script>
+  <script src="js/data/vocab2.js?v=57"></script>
+  <script src="js/data/grammar.js?v=57"></script>
+  <script src="js/data/grammar2.js?v=57"></script>
+  <script src="js/data/video.js?v=57"></script>
+  <script src="js/data/game.js?v=57"></script>
+  <script src="js/data/empire.js?v=57"></script>
+  <script src="js/data/empire2.js?v=57"></script>
+  <script src="js/data/rpg.js?v=57"></script>
+  <script src="js/data/rpg2.js?v=57"></script>
+  <script src="js/data/rpg3.js?v=57"></script>
+  <script src="js/data/rpg4.js?v=57"></script>
+  <script src="js/data/sky.js?v=57"></script>
+  <script src="js/data/pets.js?v=57"></script>
+  <script src="js/data/detective.js?v=57"></script>
+  <script src="js/data/detective2.js?v=57"></script>
+  <script src="js/data/detective3.js?v=57"></script>
+  <script src="js/data/detective4.js?v=57"></script>
+  <script src="js/data/fishing.js?v=57"></script>
+  <script src="js/data/wizard.js?v=57"></script>
+  <script src="js/data/rhythm.js?v=57"></script>
+  <script src="js/data/alchemy.js?v=57"></script>
+  <script src="js/data/order.js?v=57"></script>
+  <script src="js/data/order2.js?v=57"></script>
+  <script src="js/data/order3.js?v=57"></script>
+  <script src="js/engine.js?v=57"></script>
+  <script src="js/music.js?v=57"></script>
+  <script src="js/minecraft.js?v=57"></script>
+  <script src="js/roblox.js?v=57"></script>
+  <script src="js/youtube.js?v=57"></script>
+  <script src="js/spelling.js?v=57"></script>
+  <script src="js/listening.js?v=57"></script>
+  <script src="js/empire.js?v=57"></script>
+  <script src="js/candy.js?v=57"></script>
+  <script src="js/sling.js?v=57"></script>
+  <script src="js/builder.js?v=57"></script>
+  <script src="js/speak.js?v=57"></script>
+  <script src="js/tower.js?v=57"></script>
+  <script src="js/rpg.js?v=57"></script>
+  <script src="js/sky.js?v=57"></script>
+  <script src="js/pets.js?v=57"></script>
+  <script src="js/typing.js?v=57"></script>
+  <script src="js/tutor.js?v=57"></script>
+  <script src="js/detective.js?v=57"></script>
+  <script src="js/fishing.js?v=57"></script>
+  <script src="js/wizard.js?v=57"></script>
+  <script src="js/rhythm.js?v=57"></script>
+  <script src="js/alchemy.js?v=57"></script>
+  <script src="js/order.js?v=57"></script>
+  <script src="js/cloud.js?v=57"></script>
+  <script src="js/daily.js?v=57"></script>
+  <script src="js/hub.js?v=57"></script>
+  <script src="js/app.js?v=57"></script>
 </body>
 </html>

@@ -1,0 +1,56 @@
+# Lightweight checks for pull requests (the site has no build step, so this
+# just makes sure nothing ships that the browser can't parse).
+name: CI
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Syntax-check every JS file
+        run: |
+          set -e
+          find js -name '*.js' -print0 | xargs -0 -n1 node --check
+          echo "All JS files parse."
+
+      - name: Every script/stylesheet referenced by index.html exists
+        run: |
+          set -e
+          missing=0
+          for f in $(grep -oE '(src|href)="(js|css)/[^"?]+' index.html | sed -E 's/^(src|href)="//'); do
+            [ -f "$f" ] || { echo "::error::index.html references missing file $f"; missing=1; }
+          done
+          exit $missing
+
+      - name: Cache-busting versions are consistent
+        run: |
+          n=$(grep -oE '\?v=[0-9]+' index.html | sort -u | wc -l)
+          if [ "$n" -ne 1 ]; then
+            echo "::error::index.html mixes several ?v= versions:"; grep -oE '\?v=[0-9]+' index.html | sort | uniq -c
+            exit 1
+          fi
+
+      - name: No secrets or OAuth client ID committed
+        run: |
+          if grep -nE "const GOOGLE_CLIENT_ID = '[^']+'" js/cloud.js; then
+            echo "::error::GOOGLE_CLIENT_ID must stay empty in source (it is injected at deploy time)"; exit 1
+          fi
+          if grep -rnE 'AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|ghp_[0-9A-Za-z]{36}|-----BEGIN [A-Z ]*PRIVATE KEY-----' --include='*.js' --include='*.html' --include='*.css' --include='*.yml' . ; then
+            echo "::error::Possible secret committed"; exit 1
+          fi

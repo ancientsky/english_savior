@@ -35,7 +35,7 @@ const CloudSave = (() => {
     'english_savior_rhythm',
     'english_savior_alchemy',
     'english_savior_order',
-  'english_savior_life',
+    'english_savior_life',
     'sound_enabled',
     'music_enabled',
   ];
@@ -79,7 +79,10 @@ const CloudSave = (() => {
       els.restoreBtn.addEventListener('click', restore);
     }
 
-    // Test hook: lets automated tests exercise Drive flows without network
+    // Test hook: lets automated tests exercise Drive flows without network.
+    // Only exposed on a local dev server / file:// — on the live site it
+    // would let any script swap fetch() and read the Drive Bearer token.
+    if (!isLocalDev()) return;
     window.__cloudTest = {
       collectPayload,
       applyPayload,
@@ -89,6 +92,11 @@ const CloudSave = (() => {
       restore,
       getStatus: () => els.status.textContent,
     };
+  }
+
+  function isLocalDev() {
+    const h = location.hostname;
+    return location.protocol === 'file:' || h === 'localhost' || h === '127.0.0.1' || h === '[::1]';
   }
 
   function showModal() {
@@ -105,22 +113,79 @@ const CloudSave = (() => {
 
   function payloadLevel(payload) {
     try {
-      return JSON.parse(payload.keys.english_savior_save).level || 1;
+      return Math.floor(Number(JSON.parse(payload.keys.english_savior_save).level)) || 1;
     } catch {
       return 1;
     }
   }
 
+  // ===== Untrusted-input check =====
+  // An imported file (or a Drive file) may come from someone else — a
+  // classmate can hand a child a "存檔". Game modules render save fields
+  // with innerHTML, so a value carrying markup would run as code on this
+  // site. No legitimate save ever contains `<`, `>` or a backtick (saves only
+  // hold ids, numbers and words), and a `"` is only dangerous when it is
+  // followed by an attribute (`" onerror=`), which no real text needs — the
+  // detective cases do quote words ("TRAINEE"), so a bare quote must pass.
+  const MAX_PAYLOAD_CHARS = 4 * 1024 * 1024;
+  const UNSAFE_TEXT = /[<>`]|"\s*[a-z][\w:-]*\s*=/i;
+  const RAW_KEYS = { sound_enabled: /^[01]$|^(true|false)$/, music_enabled: /^[01]$|^(true|false)$/,
+    english_savior_typing_best: /^\d{1,4}(\.\d+)?$/ };
+
+  function unsafeValue(v, depth = 0) {
+    if (depth > 20) return true;
+    if (typeof v === 'string') return UNSAFE_TEXT.test(v);
+    if (v === null || typeof v === 'number' || typeof v === 'boolean') return false;
+    if (typeof v !== 'object') return true;
+    return Object.keys(v).some(k => UNSAFE_TEXT.test(k) || unsafeValue(v[k], depth + 1));
+  }
+
+  // Returns the list of keys to write, or null when the payload is rejected.
+  function validatePayload(payload) {
+    if (!payload || typeof payload !== 'object' || payload.version !== 1 ||
+        !payload.keys || typeof payload.keys !== 'object') return null;
+    let total = 0;
+    const ok = [];
+    for (const k of SAVE_KEYS) {
+      const v = payload.keys[k];
+      if (v === null || v === undefined) continue;
+      if (typeof v !== 'string') return null;
+      total += v.length;
+      if (total > MAX_PAYLOAD_CHARS) return null;
+      if (RAW_KEYS[k]) {
+        if (!RAW_KEYS[k].test(v)) return null;
+      } else {
+        let parsed;
+        try { parsed = JSON.parse(v); } catch { return null; }
+        if (unsafeValue(parsed)) return null;
+      }
+      ok.push(k);
+    }
+    return ok;
+  }
+
   function applyPayload(payload) {
-    if (!payload || payload.version !== 1 || !payload.keys) {
-      GameEngine.showToast('❌ 存檔格式不正確', 'error');
+    const keys = validatePayload(payload);
+    if (!keys) {
+      GameEngine.showToast('❌ 存檔格式不正確或內容不安全，已拒絕匯入', 'error');
       return false;
     }
-    SAVE_KEYS.forEach(k => {
-      if (payload.keys[k] !== null && payload.keys[k] !== undefined) {
-        localStorage.setItem(k, payload.keys[k]);
-      }
-    });
+    // Write all-or-nothing: a quota error halfway would otherwise leave a
+    // mix of two different players' progress.
+    const before = {};
+    keys.forEach(k => { before[k] = localStorage.getItem(k); });
+    try {
+      keys.forEach(k => localStorage.setItem(k, payload.keys[k]));
+    } catch {
+      keys.forEach(k => {
+        try {
+          if (before[k] === null) localStorage.removeItem(k);
+          else localStorage.setItem(k, before[k]);
+        } catch { /* best effort */ }
+      });
+      GameEngine.showToast('❌ 儲存空間不足，存檔沒有還原', 'error');
+      return false;
+    }
     GameEngine.showToast('✅ 存檔已還原，重新載入中…', 'achievement');
     setTimeout(() => location.reload(), 800);
     return true;
@@ -128,7 +193,8 @@ const CloudSave = (() => {
 
   function confirmOverwrite(payload, sourceZh) {
     const cur = GameEngine.getState();
-    const when = new Date(payload.savedAt).toLocaleString('zh-TW');
+    const d = new Date(payload.savedAt);
+    const when = isNaN(d) ? '（未知時間）' : d.toLocaleString('zh-TW');
     return confirm(
       `${sourceZh}存檔：${when}（Lv.${payloadLevel(payload)}）\n` +
       `目前本機進度：Lv.${cur.level}\n\n` +
@@ -156,7 +222,7 @@ const CloudSave = (() => {
     reader.onload = () => {
       try {
         const payload = JSON.parse(reader.result);
-        if (!payload.keys || payload.version !== 1) throw new Error('bad format');
+        if (!validatePayload(payload)) throw new Error('bad format');
         if (confirmOverwrite(payload, '檔案')) applyPayload(payload);
       } catch {
         GameEngine.showToast('❌ 這不是有效的存檔檔案', 'error');
@@ -285,7 +351,7 @@ const CloudSave = (() => {
       const resp = await driveFetch(`${DRIVE_API}/files/${existing.id}?alt=media`);
       if (!resp.ok) throw new Error('下載失敗（' + resp.status + '）');
       const payload = await resp.json();
-      if (!payload.keys || payload.version !== 1) throw new Error('雲端存檔格式不正確');
+      if (!validatePayload(payload)) throw new Error('雲端存檔格式不正確或內容不安全');
       if (confirmOverwrite(payload, '雲端')) {
         applyPayload(payload);
       } else {

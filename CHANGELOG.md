@@ -6,6 +6,14 @@ All notable changes to the English Savior project will be documented in this fil
 
 ## [Unreleased]
 
+### 安全性 | Security
+- **匯入存檔不再能夾帶程式碼** — 存檔檔案可能來自別人（同學傳來的「存檔」），而各遊戲用 `innerHTML` 顯示存檔欄位，原本 `applyPayload` 會把任何內容原封不動寫進 localStorage。現在匯入檔案與 Google 雲端還原都會先檢查：每個值必須是字串、JSON 必須能解析、音效開關與打字紀錄必須是預期的格式，任何含 `<`／`>`／反引號或 `" 屬性=` 的字串（包括物件的 key）一律拒絕。正常存檔不會有這些字元（偵探題目裡的 `"TRAINEE"` 這種引號照樣通過）。寫入改成全有或全無：空間不足時會回復原本的進度，不會留下兩個玩家混在一起的存檔
+- **加上 Content-Security-Policy**（GitHub Pages 不能送 header，所以放在 `<meta>`）：程式只能從本站和 Google 登入元件載入，資料只能送往 Google Drive API，禁止 `<object>`、`<base>` 與表單送出。站內還有 86 個 inline `onclick`，所以 `script-src` 暫時保留 `'unsafe-inline'`。實測 24 個分頁與 Google 登入元件在 CSP 下都沒有違規
+- **`window.__cloudTest` 測試掛勾只在 localhost／file:// 才存在** — 線上網站任何腳本都可以透過它把 `fetch` 換掉，攔下 Google Drive 的 Bearer token
+- **部署 workflow**：注入 `GOOGLE_CLIENT_ID` 前先檢查格式（值是用 sed 塞進 JS 原始碼的，奇怪的引號或 `|` 會讓網站壞掉或被注入程式碼），checkout 不保留 git 憑證
+- **新增 PR 用的 CI**（`.github/workflows/ci.yml`）：所有 JS 語法檢查、index.html 引用的檔案都存在、`?v=` 版本一致、原始碼裡沒有 Client ID 或常見金鑰
+- 版本檢查：Three.js r149 沒有已知 CVE（已知的兩個只影響 0.125／0.137 以前），GitHub Actions 都是目前的大版本。`?v=57`
+
 ### 新增 | Added
 - **🍜 英語餐廳大亂鬥 → 🛎️ 英語打工大亂鬥：同一個分頁裡開出第二個世界，🏪 生活服務 20 個櫃台** — 分頁維持 24 個（手機上已經兩排），生活服務用開場／換場景畫面的世界切換鈕進入：
   - **🏪 生活小舖**（郵局、影印店、花店、照相館、銀行）數量與 with／no 的基本功，順便把 `three copies` 交付掉 → **🚉 出門辦事**（火車站、客運站、電影院、叫車、美髮）時間 `today`／`tomorrow`／`at three o'clock` ＋ 車票的 `one-way`／`round-trip` → **👕 挑選與試穿**（服飾、眼鏡、手機配件、文具背包、寵物用品）尺寸 ＋ 顏色 → **🛎️ 服務與等待**（民宿、單車租借、KTV、運動中心、停車場）期間 `for two nights`／`for two hours`，並集大成前三區。共 100 個品項、39 種新配料
