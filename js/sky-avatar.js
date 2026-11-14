@@ -22,9 +22,9 @@
      celebrate(n)                   — 3D confetti burst + hero cheer
      burst(kind, x, y, z, n, color) — generic one-shot FX ('puff' | 'spark' | 'ring' | 'confetti')
 
-   Camera collision: anything inside an island group (islandGroups[id]) that is a
-   Mesh / InstancedMesh (≤ 64 instances) with an opaque-ish material blocks the
-   camera. Opt an object out with `obj.userData.camIgnore = true`. */
+   Camera collision: only meshes inside an island group (islandGroups[id]) flagged
+   `obj.userData.camSolid = true` block the camera (SkyArt flags island terrain).
+   `obj.userData.camIgnore = true` still opts a flagged object out. */
 const SkyAvatar = (() => {
   'use strict';
   let C = null;                 // shared sky.js context (set by init)
@@ -1331,20 +1331,18 @@ const SkyAvatar = (() => {
     hits: [], solids: new Map(), list: [],
   };
   const BASE_FOV = 55;
+  // Only TERRAIN blocks the camera (meshes flagged userData.camSolid — SkyArt marks each
+  // island's cliff body and painted top). Props, foliage, quest objects, coins, arches and
+  // NPCs never do: a camera that zooms into the hero's back or jerks top-down every time a
+  // grass tuft or a tree crosses the line of sight felt far worse than briefly seeing
+  // through a bush. Opt a big structure in with `obj.userData.camSolid = true`.
   function solidsOf(g) {
     let e = CAM.solids.get(g);
     if (e && e.n === g.children.length) return e.list;
     const list = [];
     g.traverse(o => {
-      if (o.userData.camIgnore) return;
-      if (!(o.isMesh) || o.isSprite || o.isPoints || o.isLine) return;
-      if (o.isInstancedMesh && o.count > 64) return;
-      const m = o.material;
-      if (!m || Array.isArray(m)) { if (m) list.push(o); return; }
-      if (m.transparent && m.opacity < 0.5) return;
-      if (m.visible === false) return;
+      if (o.userData.camIgnore || !o.userData.camSolid || !o.isMesh) return;
       if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere();
-      if (o.geometry.boundingSphere && o.geometry.boundingSphere.radius < 0.5) return; // pebbles, flowers, fence posts
       list.push(o);
     });
     e = { n: g.children.length, list };

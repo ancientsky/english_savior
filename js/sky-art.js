@@ -2264,6 +2264,7 @@ const SkyArt = (() => {
     bg.geo.dispose();
     buildUnder(body, isle, st, R, rng, depth, bg.taper, bg.top);
     const bodyMesh = body.mesh(propMat, false);
+    bodyMesh.userData.camSolid = true;    // terrain blocks the camera (SkyAvatar.updateCamera); props do not
     g.add(bodyMesh);
 
     // props
@@ -2294,6 +2295,7 @@ const SkyArt = (() => {
     topMat.customProgramCacheKey = () => 'skyart-top';
     const top = new THREE.Mesh(topGeometry(isle, R, Rm), topMat);
     top.receiveShadow = true;
+    top.userData.camSolid = true;
     top.matrixAutoUpdate = false; top.updateMatrix();
     g.add(top);
 
