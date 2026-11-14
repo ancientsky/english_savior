@@ -124,6 +124,49 @@ const SkyGame = (() => {
   // reused temp vectors (zero allocation inside animate)
   let _v1, _v2;
 
+  // ===================== module contract (sky-art / sky-avatar / sky-play) =====================
+  // Per-frame movement snapshot: WRITTEN by the physics half of updatePlayer(),
+  // READ by avatar animation, camera feel and FX. Never write it from a reader.
+  const motion = { speed: 0, moving: false, sprint: false, vy: 0, grounded: true, airJumps: 0, dashing: false, riding: null };
+  // One-shot gameplay events -> visual/audio feedback. Emit from gameplay code,
+  // listen from presentation code. Known names (add more, document them here):
+  //   'jump' 'airjump' 'land'{v} 'pad' 'hurt' 'respawn' 'arrive'{isle}
+  const fxListeners = [];
+  function emitFx(name, data) {
+    for (let i = 0; i < fxListeners.length; i++) {
+      try { fxListeners[i](name, data || {}); } catch (e) { console.error('[sky fx]', name, e); }
+    }
+  }
+  // Shared context handed to the companion modules (SkyArt / SkyAvatar / SkyPlay).
+  // Getters because several of these are assigned after this object is created.
+  // Extend it from YOUR OWN section with Object.assign(ctx, {...}) /
+  // Object.defineProperty — do not edit this literal (keeps merges clean).
+  const ctx = {
+    get THREE() { return THREE; },
+    get scene() { return scene; },
+    get camera() { return camera; },
+    get renderer() { return renderer; },
+    get player() { return player; },
+    get playerParts() { return playerParts; },
+    get save() { return save; },
+    get perks() { return perks; },
+    get simTime() { return simTime; },
+    get playing() { return playing; },
+    get currentIsland() { return currentIsland; },
+    get hearts() { return hearts; },
+    pos, cam, motion, colliders, islandGroups, isTouch,
+    onFx: fn => fxListeners.push(fn),
+    emitFx,
+    persist: () => persist(),
+    lowPower: () => lowPower(),
+    toast: msg => showWorldToast(msg),
+    matOf: (color, emissive, texKey) => matOf(color, emissive, texKey),
+    isleById: id => isleById(id),
+    bobOf: id => bobOf(id),
+    supportAt: (x, z, maxTop) => supportAt(x, z, maxTop),
+    mulberry32: seed => mulberry32(seed),
+  };
+
   // ===================== helpers =====================
   function mulberry32(seed) {
     let a = seed >>> 0;
@@ -2482,6 +2525,7 @@ const SkyGame = (() => {
     }
     hearts -= n;
     lastDamageAt = simTime;
+    emitFx('hurt', { n });
     els.flash.classList.add('red', 'on');
     setTimeout(() => els.flash.classList.remove('on', 'red'), 350);
     SoundManager.playWrong();
@@ -4483,6 +4527,7 @@ const SkyGame = (() => {
     lastDamageAt = simTime;
     const isle = isleById(lastGroundIsland) || SKY_ISLANDS[0];
     respawnAt(isle, true);
+    emitFx('respawn');
   }
 
   function updateHudHearts() {
@@ -4578,16 +4623,19 @@ const SkyGame = (() => {
               save.lastIsland = currentIsland;
               persist();
               showWorldToast(`🏝️ 抵達「${isle.name}」！`);
+              emitFx('arrive', { isle });
               SoundManager.playCorrect();
             }
           }
         }
       }
+      if (!motion.grounded && motion.vy < -4) emitFx('land', { v: -motion.vy });
       // bouncy jump pad
       if (sup.col.kind === 'pad') {
         vy = sup.col.launch * (perks.padMult || 1);
         grounded = false;
         SoundManager.playCorrect();
+        emitFx('pad');
       }
       airJumpUsed = false;
     } else {
@@ -4603,11 +4651,13 @@ const SkyGame = (() => {
         grounded = false;
         jumpBufferedAt = -10;
         lastGroundedAt = -10;
+        emitFx('jump');
       } else if (perks.doubleJump && !airJumpUsed && vy < jumpV * 0.5) {
         // 傳說勇者 double jump
         vy = jumpV * 0.92;
         airJumpUsed = true;
         jumpBufferedAt = -10;
+        emitFx('airjump');
       }
     }
     }
@@ -4618,6 +4668,16 @@ const SkyGame = (() => {
     // interrupted by a stray void check.
     if (mountT <= 0 && pos.y < (regionUnderground ? SKY_CONFIG.undergroundVoidY : SKY_CONFIG.voidY)) voidFall();
 
+    // movement snapshot for avatar / camera / FX (see `motion` contract at the top)
+    motion.moving = mlen > 0.001;
+    motion.sprint = motion.moving && sprint;
+    motion.speed = motion.moving ? SKY_CONFIG.walkSpeed * (sprint ? SKY_CONFIG.sprintMult : 1) : 0;
+    motion.vy = vy;
+    motion.grounded = grounded;
+    motion.airJumps = airJumpUsed ? 1 : 0;
+    motion.riding = mountT > 0 ? 'cloud' : null;
+
+    // ---- presentation half (avatar animation) below; physics above ----
     // apply to mesh
     player.position.set(pos.x, pos.y, pos.z);
     player.rotation.y = heroYaw;
