@@ -366,7 +366,7 @@ const SkyAvatar = (() => {
       map: f.map, transparent: true, roughness: 0.6, depthWrite: false,
       polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
     });
-    if (f.glow) { mat.emissiveMap = f.glow; mat.emissive.setScalar(1); mat.emissiveIntensity = 2.2; }
+    if (f.glow) { mat.emissiveMap = f.glow; mat.emissive.setScalar(1); mat.emissiveIntensity = style === 'ender' ? 1.5 : 2.2; }
     mat.userData.style = style;
     return mat;
   }
@@ -393,7 +393,7 @@ const SkyAvatar = (() => {
     pixel_robot: { shirt: 0xa8b4c6, pants: 0x6c788c, shoes: 0x3e4658, skin: 0xb8c4d4, hair: 0, hairStyle: 'none', hat: 'robot', head: 'box', face: 'robot', emblem: 'panel', glow: 0x6ff6ff, aura: 'pixel', auraColor: 0x6ff6ff },
     dragon_master: { shirt: 0x47a862, pants: 0x2f6a3e, shoes: 0x7a4a22, hair: 0x2a1a10, hairStyle: 'messy', hat: 'dragon', face: 'kid', emblem: 'scales', glow: 0xffc24a, aura: 'ember', auraColor: 0xffd060, wings: 0x5ccf7a, tail: 0x47a862 },
     blocky_miner: { shirt: 0x8a5a32, pants: 0x2f4f8a, shoes: 0x4a3020, hair: 0x3a2414, hairStyle: 'messy', hat: 'miner', face: 'kid', emblem: 'overalls', glow: 0xfff2a0, back: 'pickaxe' },
-    ender_wizard: { shirt: 0x3a2266, pants: 0x22143e, shoes: 0x140c24, skin: 0xd8c4f0, hair: 0x1a1030, hairStyle: 'none', hat: 'hood', hatColor: 0x2a1650, face: 'ender', emblem: 'eye', glow: 0xd07aff, aura: 'smoke', auraColor: 0xc06aff, orbs: 0xb45cff, robe: true },
+    ender_wizard: { shirt: 0x3a2266, pants: 0x22143e, shoes: 0x140c24, skin: 0x7a6a9c, hair: 0x1a1030, hairStyle: 'none', hat: 'hood', hatColor: 0x2a1650, face: 'ender', emblem: 'eye', glow: 0xd07aff, aura: 'smoke', auraColor: 0xc06aff, orbs: 0xb45cff, robe: true },
     star_savior: { shirt: 0xfff2c2, pants: 0x3a5ad8, shoes: 0xffd34a, hair: 0xffd34a, hairStyle: 'messy', hat: 'halo', face: 'kid', emblem: 'star', glow: 0xffe066, aura: 'star', auraColor: 0xffe680, cape: 0x3a5ad8 },
     golden_champion: { shirt: 0xf5c518, pants: 0xc8961a, shoes: 0x8a5a10, hair: 0x5b3a24, hairStyle: 'messy', hat: 'crown', face: 'kid', emblem: 'medal', glow: 0xffe27a, aura: 'gold', auraColor: 0xffd34a, cape: 0xd82a3a, pauldrons: 0xffd34a },
   };
@@ -1285,7 +1285,7 @@ const SkyAvatar = (() => {
         burst('spark', pos.x, pos.y + 0.3, pos.z, 18, 0xfff0a0, 1.1);
         break;
       case 'hurt':
-        P.hurtT = 0.5; P.flash = 1;
+        P.hurtT = 0.6; P.flash = 1;
         CAM.trauma = Math.min(1, CAM.trauma + 0.6);
         burst('spark', pos.x, pos.y + 1.2, pos.z, 8, 0xff6a6a, 0.7);
         break;
@@ -1508,8 +1508,8 @@ const SkyAvatar = (() => {
       const y = HEAD_Y;
       if (kind === 'grandma') {
         K.head.add(sph(0.17, 12, 10), L.hair, 0, y + 0.42, -0.14);
-        K.armR.add(cyl(0.035, 0.035, 0.9, 8), 0x8a5a2a, 0, -0.75, 0.12);
-        K.armR.add(torus(0.08, 0.035, 6, 10, Math.PI), 0x8a5a2a, 0, -0.3, 0.12, 0, Math.PI / 2);
+        K.armL.add(cyl(0.035, 0.035, 0.9, 8), 0x8a5a2a, 0, -0.75, 0.16);
+        K.armL.add(torus(0.08, 0.035, 6, 10, Math.PI), 0x8a5a2a, 0, -0.3, 0.16, 0, Math.PI / 2);
         K.torso.add(rbox(0.6, 0.12, 0.47, 0.05), 0xffd0e0, 0, 0.66, 0);
       } else if (kind === 'fairy') {
         K.gHead.add(sph(0.05, 8, 6), L.glow, 0.12, y + 0.62, 0);
@@ -2136,7 +2136,7 @@ const SkyAvatar = (() => {
   // jagged glowing ribbon between two points (built once per strike, disposed by sky.js)
   function lightning(ax, ay, az, bx, by, bz) {
     const N = 9, pos = [], idx = [];
-    const w = 0.09;
+    const w = 0.16;
     for (let i = 0; i <= N; i++) {
       const t = i / N;
       const j = i === 0 || i === N ? 0 : 0.45;
