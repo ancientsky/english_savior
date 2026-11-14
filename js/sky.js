@@ -247,14 +247,32 @@ const SkyGame = (() => {
       els.lowPower.checked = lowPower();
       els.lowPower.addEventListener('change', () => {
         save.settings.lowPower = els.lowPower.checked;
+        // asking for high quality again also forgets an automatic step-down on this device
+        if (!els.lowPower.checked) SkyArt.gfxReset();
         persist();
         if (threeReady) {
-          renderer.setPixelRatio(lowPower() ? 1 : Math.min(window.devicePixelRatio, 2));
+          resizeRenderer();
           showWorldToast(lowPower() ? '🔋 省電模式開啟（陰影下次進入時關閉）' : '✨ 高畫質模式（下次進入完整生效）');
         }
       });
     }
 
+    // owner diagnostics (kid-invisible): hold the island-name pill ~1.2 s, or open with ?skydebug=1
+    if (els.location) {
+      let lpT = 0, lpX = 0, lpY = 0, lpAt = 0;
+      const open = () => { if (threeReady) SkyArt.showDiag(); };
+      const cancel = () => { clearTimeout(lpT); lpT = 0; lpAt = 0; };
+      els.location.addEventListener('pointerdown', e => {
+        cancel();
+        lpX = e.clientX; lpY = e.clientY; lpAt = performance.now();
+        lpT = setTimeout(() => { lpT = 0; lpAt = 0; open(); }, 1200);
+      });
+      els.location.addEventListener('pointermove', e => { if (Math.hypot(e.clientX - lpX, e.clientY - lpY) > 12) cancel(); });
+      // a busy main thread can starve the timer — judge the hold by the clock on release too
+      els.location.addEventListener('pointerup', () => { const held = lpAt && performance.now() - lpAt >= 1200; cancel(); if (held) open(); });
+      ['pointercancel', 'pointerleave'].forEach(t => els.location.addEventListener(t, cancel));
+      els.location.addEventListener('contextmenu', e => e.preventDefault());
+    }
     els.startBtn.addEventListener('click', startAdventure);
     els.camReset?.addEventListener('click', () => { cam.theta = heroYaw + Math.PI; cam.phi = 0.42; cam.radius = SKY_CONFIG.camRadius; });
     window.addEventListener('resize', resizeRenderer);
@@ -632,7 +650,9 @@ const SkyGame = (() => {
         initThree();
       } catch (err) {
         console.error('Sky 3D init failed:', err);
-        els.wrap.innerHTML = '<p style="padding:30px;text-align:center;color:#fff">😢 你的裝置不支援 3D 顯示（WebGL）。</p>';
+        els.wrap.innerHTML = '<p style="padding:30px;text-align:center;color:#fff">😢 3D 畫面（WebGL）現在無法啟動。<br>' +
+          '請把瀏覽器完全關掉再打開一次；如果還是不行，代表這台裝置不支援 3D 顯示。<br><small style="opacity:.7">' +
+          String(err && err.message || err).replace(/[<>&]/g, '') + '</small></p>';
         return;
       }
     }
@@ -1101,7 +1121,9 @@ const SkyGame = (() => {
     bonecave: '#cfc4b0', coretemple: '#3a2410',
   };
 
-  function lowPower() { return !!save.settings.lowPower; }
+  // the player's 省電模式 checkbox, or a device that already proved it needs the low path
+  // (SkyArt's quality tiers, stored outside the save in english_savior_sky_gfx)
+  function lowPower() { return !!save.settings.lowPower || SkyArt.gfxLow(); }
 
   function drawMinimap() {
     if (!minimapCtx) return;
@@ -4446,7 +4468,7 @@ const SkyGame = (() => {
   // ===================== main loop =====================
   function animate() {
     // stop rendering while another zone is visible; onShow() restarts us
-    if (!zoneActive()) { rafId = null; return; }
+    if (!zoneActive()) { rafId = null; SkyArt.idle(); return; }
     rafId = requestAnimationFrame(animate);
 
     const dt = Math.min(0.1, (clock.update(), clock.getDelta()));

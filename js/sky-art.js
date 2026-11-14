@@ -60,31 +60,155 @@ const SkyArt = (() => {
   // world-space sun direction (towards the sun)
   const SUN_DIR = new THREE.Vector3(0.62, 0.58, 0.36).normalize();
   // light balance (physical units, r155+): warm key sun, cool sky fill, PMREM sky ambient
-  const SUN_I = () => (low ? 2.5 : 2.35), HEMI_I = () => (low ? 1.7 : 0.75), ENV_I = 0.42;
+  const SUN_I = () => (low ? 2.5 : 2.35), HEMI_I = () => (low ? 1.7 : (envOk ? 0.75 : 1.1)), ENV_I = 0.42;
 
   // ============================== renderer & post ==============================
-  function pixelRatio() {
+  // Quality tiers — the fancy path must never cost a child the world. Each step only switches
+  // something off; nothing here touches the sky save (english_savior_sky).
+  //   0 full      composer (HalfFloat MSAA + UnrealBloom + OutputPass) + PCF shadows + PBR
+  //   1 nopost    direct render, renderer tone mapping (same look minus bloom)
+  //   2 noshadow  + shadow maps off
+  //   3 low       the lowPower() path (Lambert, DPR 1, fewer props) — needs a fresh world, so it
+  //               applies from the next adventure / page load
+  // Steps come from capability checks before anything is built (no float colour buffer,
+  // incomplete framebuffer) and from a runtime self-check (shader/program errors, GL
+  // OUT_OF_MEMORY / INVALID_FRAMEBUFFER_OPERATION, a composed frame that reads back as one flat
+  // colour, a WebGL context lost while the tier was still unproven). The lowest tier this device
+  // needed is remembered per device in localStorage `english_savior_sky_gfx` (not a save key,
+  // never exported). A tier is "pending" until it has rendered ~10 s cleanly, so a GPU-process
+  // crash that kills the page mid-attempt still steps down on the next visit (crash-loop breaker).
+  const TIERS = ['full', 'nopost', 'noshadow', 'low'];
+  const GFX_KEY = 'english_savior_sky_gfx';
+  const diag = { tier: 0, steps: [], errors: [], lost: 0, restored: 0, caps: {}, frames: 0, healthy: false, startTier: 0 };
+  let gfx = null, tierStart = 0, lastStepAt = -10, pendingStep = null, lostOverlay = null, lostTimer = 0;
+  let envOk = true;
+  let diagEl = null, diagTimer = 0;
+  function gfxRead() {
+    if (gfx) return gfx;
+    try { gfx = JSON.parse(localStorage.getItem(GFX_KEY) || 'null'); } catch (e) { gfx = null; }
+    if (!gfx || typeof gfx !== 'object') gfx = {};
+    gfx.tier = Math.max(0, Math.min(3, gfx.tier | 0));
+    // crash-loop breaker: the last attempt at `pending` never proved healthy → start below it
+    if (typeof gfx.pending === 'number' && gfx.pending >= gfx.tier && gfx.pending < 3) {
+      gfx.tier = gfx.pending + 1;
+      gfx.why = '上次 ' + TIERS[gfx.pending] + ' 沒有撐過開頭（頁面當掉或 WebGL 遺失）';
+    }
+    return gfx;
+  }
+  function gfxWrite() {
+    try { localStorage.setItem(GFX_KEY, JSON.stringify(gfx)); } catch (e) { /* storage blocked: tiers still work for this visit */ }
+  }
+  // the stored tier says "this device needs the low path" — sky.js folds it into lowPower()
+  function gfxLow() { return gfxRead().tier >= 3; }
+  function gfxReset() { gfx = {}; try { localStorage.removeItem(GFX_KEY); } catch (e) { /* ignore */ } }
+
+  function logErr(kind, msg) {
+    const t = new Date().toTimeString().slice(0, 8);
+    diag.errors.push(t + ' [' + kind + '] ' + String(msg).slice(0, 400));
+    if (diag.errors.length > 24) diag.errors.shift();
+    if (diagEl) renderDiag();
+  }
+  if (typeof window !== 'undefined') {
+    window.addEventListener('error', e => logErr('js', (e.message || e) + (e.filename ? ' @' + e.filename.split('/').pop() + ':' + e.lineno : '')));
+    window.addEventListener('unhandledrejection', e => logErr('promise', e.reason && (e.reason.stack || e.reason.message) || e.reason));
+  }
+
+  function pixelRatio(w, h) {
     const d = window.devicePixelRatio || 1;
-    return low ? 1 : Math.min(d, isTouch ? 1.5 : 2);
+    let pr = (low || (ctx && ctx.lowPower())) ? 1 : Math.min(d, isTouch ? 1.5 : 2);
+    // phones/tablets: keep the drawing buffer near a megapixel — a DPR-3.5 phone or a big tablet
+    // otherwise asks a mobile GPU for multi-megapixel HDR MSAA targets (desktop unchanged)
+    if (isTouch && w && h) pr = Math.min(pr, Math.max(1, Math.sqrt(1.1e6 / (w * h))));
+    // never exceed what the GPU can allocate
+    const lim = diag.caps.maxRb || 0;
+    if (lim && w && h) pr = Math.min(pr, (lim - 1) / Math.max(w, h));
+    return Math.max(0.5, pr);
+  }
+
+  function probeCaps(gl) {
+    const c = diag.caps;
+    const ext = n => !!gl.getExtension(n);
+    c.webgl2 = typeof WebGL2RenderingContext !== 'undefined' && gl instanceof WebGL2RenderingContext;
+    c.maxTex = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+    c.maxRb = gl.getParameter(gl.MAX_RENDERBUFFER_SIZE);
+    c.maxVp = Array.from(gl.getParameter(gl.MAX_VIEWPORT_DIMS) || []).join('×');
+    c.maxSamples = c.webgl2 ? gl.getParameter(gl.MAX_SAMPLES) : 0;
+    const hp = gl.getShaderPrecisionFormat(gl.FRAGMENT_SHADER, gl.HIGH_FLOAT);
+    c.fragHighp = hp ? hp.precision : 0;
+    c.cbHalf = ext('EXT_color_buffer_half_float');
+    c.cbFloat = ext('EXT_color_buffer_float');
+    c.floatLinear = ext('OES_texture_float_linear');
+    c.parallel = ext('KHR_parallel_shader_compile');
+    c.vendor = gl.getParameter(gl.VENDOR);
+    c.gpu = gl.getParameter(gl.RENDERER);
+    if (ext('WEBGL_debug_renderer_info')) {
+      const di = gl.getExtension('WEBGL_debug_renderer_info');
+      c.vendor = gl.getParameter(di.UNMASKED_VENDOR_WEBGL) || c.vendor;
+      c.gpu = gl.getParameter(di.UNMASKED_RENDERER_WEBGL) || c.gpu;
+    }
+    c.floatTargets = c.webgl2 && (c.cbHalf || c.cbFloat);
+    // MSAA sample counts the GPU really offers for RGBA16F (can be lower than MAX_SAMPLES, or none)
+    c.f16Samples = [];
+    if (c.floatTargets) {
+      try { c.f16Samples = Array.from(gl.getInternalformatParameter(gl.RENDERBUFFER, gl.RGBA16F, gl.SAMPLES) || []); } catch (e) { c.f16Samples = []; }
+    }
   }
 
   function createRenderer(w, h, lowPower) {
     low = !!lowPower;
     renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
-    renderer.setPixelRatio(pixelRatio());
+    const gl = renderer.getContext();
+    try { probeCaps(gl); } catch (e) { logErr('caps', e); }
+    const g = gfxRead();
+    diag.startTier = diag.tier = low ? 3 : g.tier;
+    if (g.why) diag.steps.push('啟動於 ' + TIERS[diag.tier] + '：' + g.why);
+    if (!low && diag.tier < 1 && !diag.caps.floatTargets) noteStep(1, 'no EXT_color_buffer_(half_)float → 不開 composer');
+    renderer.setPixelRatio(pixelRatio(w, h));
     renderer.setSize(w, h);
     renderer.toneMapping = THREE.NeutralToneMapping;   // Khronos PBR Neutral: filmic shoulder that keeps toy colours saturated
     renderer.toneMappingExposure = 0.95;
-    renderer.shadowMap.enabled = !low;
+    renderer.shadowMap.enabled = !low && diag.tier < 2;
     renderer.shadowMap.type = THREE.PCFShadowMap;
     renderer.info.autoReset = false;   // count shadow + main + post passes together (renderInfo())
+    renderer.debug.onShaderError = (gl2, program, vs, fs) => {
+      const log = s => (s && gl2.getShaderInfoLog(s) || '').trim();
+      const msg = (gl2.getProgramInfoLog(program) || '').trim() + ' | VS ' + log(vs) + ' | FS ' + log(fs);
+      console.error('[SkyArt] shader error', msg);
+      logErr('shader', msg);
+      requestStep('shader/program error');
+    };
+    const cv = renderer.domElement;
+    cv.addEventListener('webglcontextlost', onContextLost);
+    cv.addEventListener('webglcontextrestored', onContextRestored);
+    tierStart = performance.now();
+    if (!low && diag.tier < 3) { g.pending = diag.tier; gfxWrite(); }
     return renderer;
   }
 
+  // record a step that happens before/without a live renderer change
+  function noteStep(t, why) {
+    if (t <= diag.tier) return;
+    diag.tier = t;
+    diag.steps.push('→ ' + TIERS[t] + '：' + why);
+    const g = gfxRead();
+    if (t > g.tier) { g.tier = t; g.why = why; }
+    gfxWrite();
+  }
+
+  function fbComplete(rt) {
+    const gl = renderer.getContext();
+    renderer.setRenderTarget(rt);
+    const st = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+    renderer.setRenderTarget(null);
+    return st === gl.FRAMEBUFFER_COMPLETE ? 0 : st;
+  }
+
   function setupComposer(w, h) {
-    if (low) return;
+    if (low || diag.tier >= 1) return;
     try {
-      const rt = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: 4 });
+      const samples = (diag.caps.f16Samples || []).filter(n => n <= 4).reduce((a, n) => Math.max(a, n), 0);
+      diag.caps.composerSamples = samples;
+      const rt = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples });
       composer = new THREE.EffectComposer(renderer, rt);
       composer.setPixelRatio(renderer.getPixelRatio());
       composer.setSize(w, h);
@@ -92,20 +216,211 @@ const SkyArt = (() => {
       bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(w, h), 0.32, 0.5, 1.0);
       composer.addPass(bloomPass);
       composer.addPass(new THREE.OutputPass());
+      // every target the composer writes must be complete on THIS GPU before we trust it
+      const bad = fbComplete(composer.renderTarget1) || fbComplete(composer.renderTarget2) ||
+        (bloomPass.renderTargetBright && fbComplete(bloomPass.renderTargetBright)) ||
+        (bloomPass.renderTargetsHorizontal && fbComplete(bloomPass.renderTargetsHorizontal[0]));
+      if (bad) throw new Error('framebuffer incomplete 0x' + bad.toString(16));
     } catch (e) {
-      console.error('[SkyArt] post-processing unavailable, rendering directly', e);
-      composer = null;
+      logErr('composer', e && e.message || e);
+      dropComposer();
+      noteStep(1, 'composer 無法使用（' + (e && e.message || e) + '）');
     }
   }
+  // `dead`: the GL objects died with a lost context — just forget them (deleting would warn)
+  function dropComposer(dead) {
+    if (!dead && composer) { try { composer.dispose(); } catch (e) { /* ignore */ } }
+    if (!dead && bloomPass) { try { bloomPass.dispose(); } catch (e) { /* ignore */ } }
+    composer = null; bloomPass = null;
+  }
+
+  // apply a tier to the live renderer (everything except `low`, which needs a fresh world)
+  function applyTier() {
+    if (diag.tier >= 1) dropComposer();
+    if (diag.tier >= 2 && renderer.shadowMap.enabled) {
+      renderer.shadowMap.enabled = false;
+      if (sun) sun.castShadow = false;
+      scene.traverse(o => {
+        if (!o.material) return;
+        (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { m.needsUpdate = true; });
+      });
+    }
+    if (diag.tier >= 3 && !low) {
+      const sz = renderer.getSize(new THREE.Vector2());
+      renderer.setPixelRatio(1);
+      renderer.setSize(sz.x, sz.y);
+    }
+  }
+  // runtime failure → step one tier down at the end of this frame (never mid-render)
+  function requestStep(why) { if (!pendingStep) pendingStep = why; }
+  function stepDown(why) {
+    if (low || diag.tier >= 3) return;
+    const now = performance.now() / 1000;
+    if (now - lastStepAt < 1) return;   // one burst of failing programs = one step
+    lastStepAt = now;
+    noteStep(diag.tier + 1, why);
+    applyTier();
+    restartChecks();
+  }
+
+  // ---- runtime self-check: a few read-backs right after a frame is composed ----
+  let checkAt = [], flatHits = 0;
+  function restartChecks() {
+    tierStart = performance.now();
+    diag.frames = 0; diag.healthy = false; flatHits = 0;
+    checkAt = [6, 30, 90];
+    const g = gfxRead();
+    if (!low && diag.tier < 3) { g.pending = diag.tier; gfxWrite(); }
+  }
+  const _px = new Uint8Array(4);
+  function selfCheck() {
+    const gl = renderer.getContext();
+    if (gl.isContextLost()) return;
+    let e, n = 0;
+    while ((e = gl.getError()) !== gl.NO_ERROR && n++ < 8) {
+      logErr('gl', '0x' + e.toString(16));
+      if (e === gl.OUT_OF_MEMORY || e === gl.INVALID_FRAMEBUFFER_OPERATION) requestStep('GL error 0x' + e.toString(16));
+    }
+    if (!ctx.playing || ctx.quizOpen) return;
+    // 3×3 grid of the presented drawing buffer (read in the same task, before compositing)
+    renderer.setRenderTarget(null);
+    const W = gl.drawingBufferWidth, H = gl.drawingBufferHeight;
+    let first = null, flat = true, white = 0;
+    for (let i = 1; i <= 3; i++) for (let j = 1; j <= 3; j++) {
+      gl.readPixels(Math.floor(W * i / 4), Math.floor(H * j / 4), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, _px);
+      const k = _px[0] + ',' + _px[1] + ',' + _px[2];
+      if (first === null) first = k; else if (k !== first) flat = false;
+      if (_px[0] > 250 && _px[1] > 250 && _px[2] > 250) white++;
+    }
+    diag.lastPx = first + (flat ? ' (flat)' : '');
+    if (flat || white >= 8) {
+      flatHits++;
+      logErr('frame', 'composed frame looks blank: ' + first + (white >= 8 ? ' white' : ' flat'));
+      if (flatHits >= 2) { flatHits = 0; requestStep('畫面讀回是一片 ' + (white >= 8 ? '白' : '單色') + '（' + first + '）'); }
+    } else flatHits = 0;
+  }
+  function healthTick() {
+    diag.frames++;
+    if (checkAt.length && diag.frames >= checkAt[0]) { checkAt.shift(); try { selfCheck(); } catch (e) { logErr('check', e); } }
+    // proven: all three read-backs passed after a few seconds on screen — or, on a slow GPU,
+    // 12 s of frames without a single blank read-back
+    const age = performance.now() - tierStart;
+    if (!diag.healthy && !flatHits && ((!checkAt.length && age > 3000) || (diag.frames >= 20 && age > 12000))) {
+      diag.healthy = true;
+      settle();
+    }
+    if (pendingStep) { const w = pendingStep; pendingStep = null; stepDown(w); }
+  }
+  function settle() {
+    const g = gfxRead();
+    if (g.pending !== undefined) { delete g.pending; gfxWrite(); }
+  }
+  // leaving before the tier proved itself (kid closed the tab / left the zone) is not a crash
+  function idle() {
+    if (renderer && !diag.healthy && diag.frames > 30 && !flatHits && !renderer.getContext().isContextLost()) settle();
+  }
+  if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => { if (document.hidden) idle(); });
+
+  // ---- WebGL context loss (GPU process crash / reset / memory pressure) ----
+  function onContextLost(e) {
+    e.preventDefault();   // ask the browser for a restore (three does this too)
+    diag.lost++;
+    const visible = !document.hidden;
+    logErr('context', 'webglcontextlost' + (visible ? ' (visible)' : ' (hidden)') + ' after ' + diag.frames + ' frames at ' + TIERS[diag.tier]);
+    // lost in the foreground before this tier proved itself = this tier is too much for the GPU
+    if (visible && performance.now() - tierStart < 60000 && !low && diag.tier < 3) noteStep(diag.tier + 1, 'WebGL context lost（' + TIERS[diag.tier] + ' 還沒穩定）');
+    if (diag.tier >= 1) dropComposer(true);
+    showLost();
+  }
+  function onContextRestored() {
+    diag.restored++;
+    logErr('context', 'webglcontextrestored');
+    hideLost();
+    try {
+      applyTier();
+      if (envOk && !low) buildEnvironment();   // the PMREM target's contents died with the context
+      restartChecks();
+    } catch (err) { logErr('restore', err); }
+  }
+  function showLost() {
+    const wrap = renderer && renderer.domElement.parentNode;
+    if (!wrap) return;
+    if (!lostOverlay) {
+      lostOverlay = document.createElement('div');
+      lostOverlay.className = 'aw-gfx-lost';
+      lostOverlay.innerHTML = '<div><b>🔧 3D 畫面重新啟動中…</b><small>稍等一下下</small>' +
+        '<button type="button" class="aw-gfx-reload" hidden>🔄 重新載入（自動調整畫質）</button></div>';
+      lostOverlay.querySelector('button').addEventListener('click', () => location.reload());
+    }
+    wrap.appendChild(lostOverlay);
+    lostOverlay.querySelector('button').hidden = true;
+    clearTimeout(lostTimer);
+    lostTimer = setTimeout(() => {
+      if (lostOverlay && lostOverlay.parentNode) {
+        lostOverlay.querySelector('small').textContent = '畫面沒有回來，按下面的按鈕再試一次';
+        lostOverlay.querySelector('button').hidden = false;
+      }
+    }, 4000);
+  }
+  function hideLost() { clearTimeout(lostTimer); if (lostOverlay && lostOverlay.parentNode) lostOverlay.remove(); }
 
   function resize(w, h) {
     if (!renderer) return;
-    renderer.setPixelRatio(pixelRatio());
+    renderer.setPixelRatio(pixelRatio(w, h));
     renderer.setSize(w, h);
     if (composer) {
       composer.setPixelRatio(renderer.getPixelRatio());
       composer.setSize(w, h);
     }
+  }
+
+  // ---- owner diagnostics: ?skydebug=1, or long-press the island-name pill (~1.2 s) ----
+  function diagText() {
+    const c = diag.caps, g = gfxRead();
+    const cv = renderer && renderer.domElement, gl = renderer && renderer.getContext();
+    const r = cv ? cv.getBoundingClientRect() : { width: 0, height: 0 };
+    const vv = window.visualViewport;
+    const inf = renderer ? renderer.info : null;
+    return [
+      'UA: ' + navigator.userAgent,
+      'GPU: ' + (c.gpu || '?') + ' / ' + (c.vendor || '?'),
+      'WebGL2: ' + c.webgl2 + '  lost: ' + (gl ? gl.isContextLost() : '?') + '  lost×' + diag.lost + ' restored×' + diag.restored,
+      'DPR: ' + (window.devicePixelRatio || 1) + '  pixelRatio: ' + (renderer ? renderer.getPixelRatio().toFixed(2) : '?'),
+      'window: ' + innerWidth + '×' + innerHeight + (vv ? '  visualViewport: ' + Math.round(vv.width) + '×' + Math.round(vv.height) : ''),
+      'canvas css: ' + Math.round(r.width) + '×' + Math.round(r.height) + '  buffer: ' + (cv ? cv.width + '×' + cv.height : '?') +
+        (gl ? '  drawingBuffer: ' + gl.drawingBufferWidth + '×' + gl.drawingBufferHeight : ''),
+      'maxTex: ' + c.maxTex + '  maxRenderbuffer: ' + c.maxRb + '  maxViewport: ' + c.maxVp + '  maxSamples: ' + c.maxSamples +
+        '  RGBA16F samples: [' + (c.f16Samples || []).join(',') + '] using ' + (c.composerSamples === undefined ? '-' : c.composerSamples) + '  frag highp bits: ' + c.fragHighp,
+      'ext: color_buffer_half_float=' + c.cbHalf + ' color_buffer_float=' + c.cbFloat + ' float_linear=' + c.floatLinear + ' parallel_compile=' + c.parallel,
+      '畫質 tier: ' + TIERS[diag.tier] + '（起始 ' + TIERS[diag.startTier] + '，存檔 ' + TIERS[g.tier] + (g.pending !== undefined ? '，測試中 ' + TIERS[g.pending] : '') + '）' +
+        '  lowPower: ' + low + '  composer: ' + !!composer + '  shadows: ' + !!(renderer && renderer.shadowMap.enabled) + '  env: ' + envOk,
+      'frames: ' + diag.frames + '  healthy: ' + diag.healthy + '  last px: ' + (diag.lastPx || '-') +
+        (inf ? '  programs: ' + (inf.programs ? inf.programs.length : '?') + '  calls: ' + inf.render.calls + '  tex: ' + inf.memory.textures : ''),
+      '步驟 steps:', ...(diag.steps.length ? diag.steps.map(s => '  ' + s) : ['  (none)']),
+      '錯誤 errors:', ...(diag.errors.length ? diag.errors.map(s => '  ' + s) : ['  (none)']),
+    ].join('\n');
+  }
+  function renderDiag() { if (diagEl) diagEl.querySelector('pre').textContent = diagText(); }
+  function showDiag() {
+    const wrap = renderer ? renderer.domElement.parentNode : document.body;
+    if (!diagEl) {
+      diagEl = document.createElement('div');
+      diagEl.className = 'aw-gfx-diag';
+      diagEl.innerHTML = '<div class="aw-gfx-diag-bar"><b>🛠️ Sky debug</b>' +
+        '<button type="button" data-a="copy">📋 複製</button><button type="button" data-a="reset">♻️ 重設畫質</button>' +
+        '<button type="button" data-a="close">✕</button></div><pre></pre>';
+      diagEl.addEventListener('click', e => {
+        const a = e.target.closest('button') && e.target.closest('button').dataset.a;
+        if (a === 'close') { diagEl.remove(); clearInterval(diagTimer); diagTimer = 0; }
+        else if (a === 'reset') { gfxReset(); diag.steps.push('（已重設；重新載入後以 full 開始）'); renderDiag(); }
+        else if (a === 'copy') { try { navigator.clipboard.writeText(diagText()); } catch (err) { /* select the text by hand */ } }
+      });
+      // let the panel scroll / text be selected without driving the camera
+      ['pointerdown', 'touchstart', 'wheel'].forEach(t => diagEl.addEventListener(t, e => e.stopPropagation(), { passive: true }));
+    }
+    wrap.appendChild(diagEl);
+    renderDiag();
+    if (!diagTimer) diagTimer = setInterval(renderDiag, 1000);
   }
 
   // ============================== materials ==============================
@@ -333,7 +648,7 @@ const SkyArt = (() => {
   }
   // sky-gradient environment for PBR ambient/reflections (one-off PMREM bake)
   function buildEnvironment() {
-    if (low) return;
+    if (low || !diag.caps.floatTargets) { envOk = false; return; }   // PMREM bakes into HalfFloat targets
     try {
       const envScene = new THREE.Scene();
       const u = skyUniforms();
@@ -345,7 +660,8 @@ const SkyArt = (() => {
       scene.environment = pm.fromScene(envScene, 0.04).texture;
       scene.environmentIntensity = ENV_I;
       pm.dispose();
-    } catch (e) { console.error('[SkyArt] env bake failed', e); }
+      envOk = true;
+    } catch (e) { envOk = false; logErr('env', e); }
   }
 
   // ============================== lights ==============================
@@ -687,7 +1003,9 @@ const SkyArt = (() => {
     buildPlanet();
     const sz = renderer.getSize(new THREE.Vector2());
     setupComposer(sz.x, sz.y);
+    restartChecks();
     updateAtmosphere(c.pos.y);
+    if (/[?&]skydebug=1\b/.test(location.search)) showDiag();
     if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) {
       window.__skyArt = {
         cam: (theta, phi, radius) => Object.assign(ctx.cam, { theta, phi, radius }),
@@ -747,6 +1065,7 @@ const SkyArt = (() => {
     renderer.info.reset();
     if (composer && !ctx.lowPower()) composer.render(dt);
     else renderer.render(scene, camera);
+    healthTick();
   }
 
   const _occV = new THREE.Vector3(), _occS = new THREE.Vector2();
@@ -2745,5 +3064,7 @@ const SkyArt = (() => {
     questProp, questGeo, questMesh, portalSwirl,
     get hemi() { return hemi; }, get sun() { return sun; }, get dome() { return dome; },
     get composer() { return composer; },
+    // quality tiers + owner diagnostics (see "renderer & post")
+    gfxLow, gfxReset, showDiag, idle, diag, get tier() { return TIERS[diag.tier]; },
   };
 })();
