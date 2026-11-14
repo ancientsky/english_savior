@@ -266,8 +266,8 @@ const SkyGame = (() => {
       useActiveItem(btn.dataset.item);
     });
 
-    // test hooks
-    window.__skyTest = {
+    // test hooks — localhost only (they teleport, add coins, open any quest)
+    if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__skyTest = {
       start: startAdventure,
       player: () => ({ x: pos.x, y: pos.y, z: pos.z, grounded, island: currentIsland, hearts, simTime }),
       teleport: (x, y, z) => { pos.x = x; pos.y = y; pos.z = z; vy = 0; },
@@ -3262,6 +3262,8 @@ const SkyGame = (() => {
         celebrate: n => spawnConfetti(n || 36),
         motion: () => ({ ...motion }),
         cam: () => ({ ...cam }),
+        scene: () => scene,
+        camera: () => camera,
         // (PLAY's setCam(theta, phi, radius) and AVATAR's setCam({theta, phi, radius}) both work)
         setCam: (o, phi, radius) => { if (typeof o === 'object') Object.assign(cam, o); else { cam.theta = o; if (phi !== undefined) cam.phi = phi; if (radius !== undefined) cam.radius = radius; } },
         spawnMobHere: (id, dx, dz) => { const isle = isleById(currentIsland) || SKY_ISLANDS[0]; return mobs.indexOf(spawnMob(id, isle.id, pos.x - isle.pos[0] + dx, pos.z - isle.pos[2] + dz)); },

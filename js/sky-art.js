@@ -2620,15 +2620,15 @@ const SkyArt = (() => {
     B.at(0, 0, 0, 0, 1);
     switch (name) {
       case 'mk_quest':   // Roblox-style floating "!" (bar + dot), gold with a warm rim
-        B.part(geo('rboxS'), 0, 0.42, 0, 0.36, 1.0, 0.36, 0xffc21a, { glow: 0.8 });
-        B.part(geo('sphere'), 0, -0.36, 0, 0.21, 0.21, 0.21, 0xffc21a, { glow: 0.8 });
+        B.part(geo('rbox'), 0, 0.42, 0, 0.36, 1.0, 0.36, 0xffc21a, { glow: 0.8 });
+        B.part(geo('sphereLo'), 0, -0.36, 0, 0.21, 0.21, 0.21, 0xffc21a, { glow: 0.8 });
         break;
       case 'mk_done':
-        B.part(geo('rboxS'), -0.17, -0.05, 0, 0.2, 0.46, 0.2, 0x4ade80, { rz: 0.8, glow: 0.9 });
-        B.part(geo('rboxS'), 0.17, 0.12, 0, 0.2, 0.86, 0.2, 0x4ade80, { rz: -0.62, glow: 0.9 });
+        B.part(geo('rbox'), -0.17, -0.05, 0, 0.2, 0.46, 0.2, 0x4ade80, { rz: 0.8, glow: 0.9 });
+        B.part(geo('rbox'), 0.17, 0.12, 0, 0.2, 0.86, 0.2, 0x4ade80, { rz: -0.62, glow: 0.9 });
         break;
       case 'mk_lock':
-        B.part(geo('rboxS'), 0, -0.15, 0, 0.72, 0.6, 0.34, 0xd9dee8, { glow: 0.12 });
+        B.part(geo('rbox'), 0, -0.15, 0, 0.72, 0.6, 0.34, 0xd9dee8, { glow: 0.12 });
         B.part(geo('torusHalf'), 0, 0.15, 0, 0.25, 0.3, 0.9, 0xa4adbd);
         B.part(geo('rbox'), 0, -0.17, 0.17, 0.1, 0.22, 0.04, 0x4a5262);
         break;

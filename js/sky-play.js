@@ -1273,8 +1273,8 @@ const SkyPlay = (() => {
             gate.answers.push(col);
             // the word floats low over the platform's FAR edge: readable on the approach,
             // never over the kid's head once they stand on it
-            const lbl = cardSprite(['?'], { border: '#8f6bff', h: 230, w: 760 }, 1.0);
-            lbl.position.set(k * G.ansX, el.y + 1.25, el.z + G.ansZ + G.ansD / 2 + 0.2);
+            const lbl = cardSprite(['?'], { border: '#8f6bff', h: 230, w: 760 }, 1.3);   // big enough to read on a phone
+            lbl.position.set(k * G.ansX, el.y + 1.4, el.z + G.ansZ + G.ansD / 2 + 0.2);
             group.add(lbl);
             gate.labels.push(lbl);
           });
