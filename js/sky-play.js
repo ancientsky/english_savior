@@ -12,6 +12,7 @@
    only paid for English answered correctly at word gates (ctx.playReward = awardAnswer rates)
    and for clearing a course (ctx.playClear = quest-clear rates). Hatching questions pay nothing. */
 const SkyPlay = (() => {
+  const CPU2D = { willReadFrequently: true };   // texture canvases survive a GPU crash (see js/sky-art.js)
   let ctx = null;
   let ready = false;
   let P = null;                 // ctx.save.play (see ensureSave)
@@ -143,7 +144,7 @@ const SkyPlay = (() => {
     const W = opts.w || 1024, H = opts.h || 256;
     const cv = document.createElement('canvas');
     cv.width = W; cv.height = H;
-    const g = cv.getContext('2d');
+    const g = cv.getContext('2d', CPU2D);
     drawCard(g, W, H, lines, opts);
     return cv;
   }
@@ -182,7 +183,7 @@ const SkyPlay = (() => {
   }
   function redrawSprite(s, lines, opts) {
     const cv = s.userData.cv;
-    drawCard(cv.getContext('2d'), cv.width, cv.height, lines, opts || {});
+    drawCard(cv.getContext('2d', CPU2D), cv.width, cv.height, lines, opts || {});
     s.material.map.needsUpdate = true;
   }
 
@@ -698,7 +699,7 @@ const SkyPlay = (() => {
       thumbRig.scene.remove(mesh);
       const cv = document.createElement('canvas');
       cv.width = cv.height = S;
-      const g = cv.getContext('2d');
+      const g = cv.getContext('2d', CPU2D);
       const img = g.createImageData(S, S);
       const sil = g.createImageData(S, S);
       const b = thumbRig.buf;
@@ -730,7 +731,7 @@ const SkyPlay = (() => {
   function eggCanvas(shell, spot, cracks) {
     const cv = document.createElement('canvas');
     cv.width = 256; cv.height = 128;
-    paintEgg(cv.getContext('2d'), shell, spot, cracks || 0);
+    paintEgg(cv.getContext('2d', CPU2D), shell, spot, cracks || 0);
     return cv;
   }
   function hexCss(h) { return '#' + h.toString(16).padStart(6, '0'); }
@@ -793,7 +794,7 @@ const SkyPlay = (() => {
     // striped awning
     const cv = document.createElement('canvas');
     cv.width = 256; cv.height = 32;
-    const c2 = cv.getContext('2d');
+    const c2 = cv.getContext('2d', CPU2D);
     for (let i = 0; i < 8; i++) { c2.fillStyle = i % 2 ? '#ffffff' : '#ff7aa8'; c2.fillRect(i * 32, 0, 32, 32); }
     const awM = ownMat(0xffffff, 0);
     awM.map = tex(cv);
@@ -934,7 +935,7 @@ const SkyPlay = (() => {
       hatch.step++;
       hatch.wob = 1;
       hatch.cracks = Math.min(3, hatch.step);
-      paintEgg(hatch.mesh.userData.cv.getContext('2d'), hatch.egg.shell, hatch.egg.spot, hatch.cracks);
+      paintEgg(hatch.mesh.userData.cv.getContext('2d', CPU2D), hatch.egg.shell, hatch.egg.spot, hatch.cracks);
       hatch.mesh.material.map.needsUpdate = true;
       if (hatch.step >= hatch.need) setTimeout(beginCrack, 700);
       else setTimeout(renderHatchQuestion, 900);
@@ -1199,7 +1200,7 @@ const SkyPlay = (() => {
           const m = ownMat(0x3a4a5e, 0);
           const cv = document.createElement('canvas');
           cv.width = 64; cv.height = 128;
-          const g2 = cv.getContext('2d');
+          const g2 = cv.getContext('2d', CPU2D);
           g2.fillStyle = '#3a4a5e'; g2.fillRect(0, 0, 64, 128);
           g2.fillStyle = '#ffd166';
           for (let k = 0; k < 2; k++) {

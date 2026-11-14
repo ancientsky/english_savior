@@ -29,6 +29,7 @@
    `obj.userData.camIgnore = true` still opts a flagged object out. */
 const SkyAvatar = (() => {
   'use strict';
+  const CPU2D = { willReadFrequently: true };   // texture canvases survive a GPU crash (see js/sky-art.js)
   let C = null;                 // shared sky.js context (set by init)
   const TAU = Math.PI * 2;
   const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -213,8 +214,8 @@ const SkyAvatar = (() => {
     const glowEyes = style === 'robot' || style === 'ender';
     const glowMouth = style === 'robot';
     const cvGlow = glowEyes ? mk() : null;
-    const M = cvMap.getContext('2d');
-    const Gx = cvGlow ? cvGlow.getContext('2d') : null;
+    const M = cvMap.getContext('2d', CPU2D);
+    const Gx = cvGlow ? cvGlow.getContext('2d', CPU2D) : null;
     const eyeCtx = glowEyes ? [M, Gx] : [M];
     const mouthCtx = glowMouth ? [M, Gx] : [M];
     const ink = style === 'robot' ? '#8ff8ff' : style === 'ender' ? '#f08cff'
@@ -805,7 +806,7 @@ const SkyAvatar = (() => {
   function badgeTexture(text) {
     const cv = document.createElement('canvas');
     cv.width = 512; cv.height = 128;
-    const g = cv.getContext('2d');
+    const g = cv.getContext('2d', CPU2D);
     g.font = 'bold 50px "Noto Sans TC", sans-serif';
     const tw = Math.min(400, g.measureText(text).width);
     const w = tw + 96, x = (512 - w) / 2, y = 22, h = 84;
@@ -1134,7 +1135,7 @@ const SkyAvatar = (() => {
     // soft blob shadows: the hero has its own; mobs share an instanced pool
     const cv = document.createElement('canvas');
     cv.width = cv.height = 64;
-    const g = cv.getContext('2d');
+    const g = cv.getContext('2d', CPU2D);
     const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
     grad.addColorStop(0, 'rgba(0,0,0,0.85)');
     grad.addColorStop(0.55, 'rgba(0,0,0,0.45)');

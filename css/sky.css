@@ -1679,7 +1679,28 @@ body.game-max #zone-sky.active .aw-canvas-wrap {
   touch-action: pan-y;
   pointer-events: auto;
 }
-.aw-gfx-diag-bar { display: flex; gap: 6px; align-items: center; padding: 6px 8px; border-bottom: 1px solid #34406a; }
+.aw-gfx-diag--page { position: fixed; top: 8px; max-height: 88vh; max-height: 88dvh; z-index: 9999; }
+.aw-gfx-diag-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 8px; border-bottom: 1px solid #34406a; }
+.aw-gfx-diag-bar button:disabled { opacity: 0.55; }
+.aw-gfx-probe:empty { display: none; }
+.aw-gfx-probe { padding: 6px 8px 0; }
+.aw-gfx-probe canvas { display: block; width: 160px; height: auto; border: 1px solid #34406a; border-radius: 4px; background: #000; }
+/* staged shader warm-up cover (first frames of an adventure) */
+.aw-gfx-warm {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, #5aa9e6, #a9d8ff);
+  color: #fff;
+  text-align: center;
+}
+.aw-gfx-warm > div { display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.aw-gfx-warm b { font-size: 1.25rem; text-shadow: 0 2px 0 var(--aw-ink); }
+.aw-gfx-warm span { width: 180px; height: 10px; border: 2px solid var(--aw-ink); border-radius: 999px; background: rgba(255, 255, 255, 0.5); overflow: hidden; }
+.aw-gfx-warm i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #ffe07a, #ffa81c); transition: width 0.15s; }
 .aw-gfx-diag-bar b { flex: 1; font-size: 0.85rem; }
 .aw-gfx-diag-bar button { font: inherit; font-size: 0.78rem; padding: 3px 8px; border-radius: 6px; border: 1px solid #8bd8ff; background: #1c2850; color: #fff; }
 .aw-gfx-diag pre {

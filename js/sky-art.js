@@ -17,6 +17,10 @@
    and per-vertex emissive glow, so a whole island's decoration is one draw call. */
 const SkyArt = (() => {
   'use strict';
+  // canvases that become WebGL textures are CPU-backed: Chrome keeps big (≥256²) 2D canvases on the
+  // GPU, and a GPU-process crash wipes them — a restored WebGL context then re-uploads blank pixels
+  // (black island tops, invisible portal swirls). CPU canvases survive and re-upload correctly.
+  const CPU2D = { willReadFrequently: true };
 
   let ctx = null;
   let renderer = null, scene = null, camera = null;
@@ -71,17 +75,24 @@ const SkyArt = (() => {
   //   3 low       the lowPower() path (Lambert, DPR 1, fewer props) — needs a fresh world, so it
   //               applies from the next adventure / page load
   // Steps come from capability checks before anything is built (no float colour buffer,
-  // incomplete framebuffer) and from a runtime self-check (shader/program errors, GL
-  // OUT_OF_MEMORY / INVALID_FRAMEBUFFER_OPERATION, a composed frame that reads back as one flat
-  // colour, a WebGL context lost while the tier was still unproven). The lowest tier this device
-  // needed is remembered per device in localStorage `english_savior_sky_gfx` (not a save key,
-  // never exported). A tier is "pending" until it has rendered ~10 s cleanly, so a GPU-process
-  // crash that kills the page mid-attempt still steps down on the next visit (crash-loop breaker).
+  // incomplete framebuffer), from a runtime self-check (real shader/program errors, GL errors,
+  // read-backs that come out flat / white / black on a daytime island) and from a WebGL context
+  // lost while the tier was still unproven. The lowest tier this device needed is remembered in
+  // localStorage `english_savior_sky_gfx` (not a save key, never exported). A tier is "pending"
+  // until it has proven itself, so a GPU-process crash that kills the page mid-attempt still steps
+  // down on the next visit (crash-loop breaker); `warm` names the warm-up stage it died in.
+  // First frames: programs are compiled in stages over several frames behind a cover (warm-up),
+  // never all in the first frame. A touch device that never proved a tier starts at nopost and
+  // tries full on a later adventure (or at once, if the 🧪 probe passed on this device).
+  // A context lost before the tier proved itself is not limped through: once Chrome restores the
+  // GPU, the page reloads and resumes the adventure at the lower tier (≤2 per session).
   const TIERS = ['full', 'nopost', 'noshadow', 'low'];
   const GFX_KEY = 'english_savior_sky_gfx';
-  const diag = { tier: 0, steps: [], errors: [], lost: 0, restored: 0, caps: {}, frames: 0, healthy: false, startTier: 0 };
+  const RESUME_KEY = 'english_savior_sky_resume', RELOADS_KEY = 'english_savior_sky_reloads';   // sessionStorage
+  const diag = { tier: 0, steps: [], errors: [], lost: 0, restored: 0, caps: {}, frames: 0, healthy: false, startTier: 0,
+    health: { checks: [], gl: {}, verdict: '-' }, warm: null };
   let gfx = null, tierStart = 0, lastStepAt = -10, pendingStep = null, lostOverlay = null, lostTimer = 0;
-  let envOk = true;
+  let envOk = true, lostUnproven = false, verifyRestore = false, sentinel2d = null, reloading = false;
   let diagEl = null, diagTimer = 0;
   function gfxRead() {
     if (gfx) return gfx;
@@ -90,8 +101,12 @@ const SkyArt = (() => {
     gfx.tier = Math.max(0, Math.min(3, gfx.tier | 0));
     // crash-loop breaker: the last attempt at `pending` never proved healthy → start below it
     if (typeof gfx.pending === 'number' && gfx.pending >= gfx.tier && gfx.pending < 3) {
+      const stage = typeof gfx.warm === 'string' ? gfx.warm.slice(0, 80) : '';
+      gfx.lastCrash = { tier: TIERS[gfx.pending], stage: stage || null };
       gfx.tier = gfx.pending + 1;
-      gfx.why = '上次 ' + TIERS[gfx.pending] + ' 沒有撐過開頭（頁面當掉或 WebGL 遺失）';
+      gfx.why = '上次 ' + TIERS[gfx.pending] + ' 沒有撐過開頭' + (stage ? '（準備「' + stage + '」時）' : '') + '（頁面當掉或 WebGL 遺失）';
+      delete gfx.pending; delete gfx.warm;
+      gfxWrite();
     }
     return gfx;
   }
@@ -102,9 +117,12 @@ const SkyArt = (() => {
   function gfxLow() { return gfxRead().tier >= 3; }
   function gfxReset() { gfx = {}; try { localStorage.removeItem(GFX_KEY); } catch (e) { /* ignore */ } }
 
+  // identical lines in a burst collapse into one "×N" entry
   function logErr(kind, msg) {
-    const t = new Date().toTimeString().slice(0, 8);
-    diag.errors.push(t + ' [' + kind + '] ' + String(msg).slice(0, 400));
+    const body = '[' + kind + '] ' + String(msg).slice(0, 600);
+    const last = diag.errors[diag.errors.length - 1];
+    if (last && last.body === body) last.n++;
+    else diag.errors.push({ t: new Date().toTimeString().slice(0, 8), body, n: 1 });
     if (diag.errors.length > 24) diag.errors.shift();
     if (diagEl) renderDiag();
   }
@@ -125,8 +143,8 @@ const SkyArt = (() => {
     return Math.max(0.5, pr);
   }
 
-  function probeCaps(gl) {
-    const c = diag.caps;
+  function probeCaps(gl, c) {
+    c = c || diag.caps;
     const ext = n => !!gl.getExtension(n);
     c.webgl2 = typeof WebGL2RenderingContext !== 'undefined' && gl instanceof WebGL2RenderingContext;
     c.maxTex = gl.getParameter(gl.MAX_TEXTURE_SIZE);
@@ -134,7 +152,7 @@ const SkyArt = (() => {
     c.maxVp = Array.from(gl.getParameter(gl.MAX_VIEWPORT_DIMS) || []).join('×');
     c.maxSamples = c.webgl2 ? gl.getParameter(gl.MAX_SAMPLES) : 0;
     const hp = gl.getShaderPrecisionFormat(gl.FRAGMENT_SHADER, gl.HIGH_FLOAT);
-    c.fragHighp = hp ? hp.precision : 0;
+    c.fragHighp = hp ? hp.precision : 0;   // 23 = an IEEE fp32 mantissa: normal, not reduced precision
     c.cbHalf = ext('EXT_color_buffer_half_float');
     c.cbFloat = ext('EXT_color_buffer_float');
     c.floatLinear = ext('OES_texture_float_linear');
@@ -152,6 +170,7 @@ const SkyArt = (() => {
     if (c.floatTargets) {
       try { c.f16Samples = Array.from(gl.getInternalformatParameter(gl.RENDERBUFFER, gl.RGBA16F, gl.SAMPLES) || []); } catch (e) { c.f16Samples = []; }
     }
+    return c;
   }
 
   function createRenderer(w, h, lowPower) {
@@ -160,8 +179,15 @@ const SkyArt = (() => {
     const gl = renderer.getContext();
     try { probeCaps(gl); } catch (e) { logErr('caps', e); }
     const g = gfxRead();
-    diag.startTier = diag.tier = low ? 3 : g.tier;
-    if (g.why) diag.steps.push('啟動於 ' + TIERS[diag.tier] + '：' + g.why);
+    let t = low ? 3 : g.tier;
+    if (g.why) diag.steps.push('啟動於 ' + TIERS[t] + '：' + g.why);
+    // first-run policy for touch devices: unknown mobile GPUs start one safe tier below full and are
+    // promoted on a later adventure once that tier has proven itself (the 🧪 probe can vouch sooner)
+    if (!low && t === 0 && isTouch && !(g.ok <= 1) && !g.probeOk) {
+      t = 1;
+      diag.steps.push('啟動於 nopost：觸控裝置還沒證明過任何畫質，先用安全畫質（穩定後下次試 full）');
+    }
+    diag.startTier = diag.tier = t;
     if (!low && diag.tier < 1 && !diag.caps.floatTargets) noteStep(1, 'no EXT_color_buffer_(half_)float → 不開 composer');
     renderer.setPixelRatio(pixelRatio(w, h));
     renderer.setSize(w, h);
@@ -170,19 +196,64 @@ const SkyArt = (() => {
     renderer.shadowMap.enabled = !low && diag.tier < 2;
     renderer.shadowMap.type = THREE.PCFShadowMap;
     renderer.info.autoReset = false;   // count shadow + main + post passes together (renderInfo())
-    renderer.debug.onShaderError = (gl2, program, vs, fs) => {
-      const log = s => (s && gl2.getShaderInfoLog(s) || '').trim();
-      const msg = (gl2.getProgramInfoLog(program) || '').trim() + ' | VS ' + log(vs) + ' | FS ' + log(fs);
-      console.error('[SkyArt] shader error', msg);
-      logErr('shader', msg);
-      requestStep('shader/program error');
-    };
+    renderer.debug.onShaderError = onShaderError;
     const cv = renderer.domElement;
+    // evidence for the panel: does a GPU crash wipe GPU-backed 2D canvases here? (ours are CPU2D)
+    try { const sc = document.createElement('canvas'); sc.width = sc.height = 512; sentinel2d = sc.getContext('2d'); sentinel2d.fillStyle = '#33cc66'; sentinel2d.fillRect(0, 0, 512, 512); } catch (e) { sentinel2d = null; }
     cv.addEventListener('webglcontextlost', onContextLost);
     cv.addEventListener('webglcontextrestored', onContextRestored);
     tierStart = performance.now();
     if (!low && diag.tier < 3) { g.pending = diag.tier; gfxWrite(); }
+    // stage the first compile over several frames unless this tier is already proven here (desktop
+    // after its first visit: unchanged)
+    warmNeeded = isTouch || !(g.ok <= diag.tier);
     return renderer;
+  }
+
+  // ---- shader errors: name the material, and don't mistake a dying GPU for a compile error ----
+  let suspect = [], suspectT = 0, suspectLost = 0;
+  const stepNames = new Set();
+  function progName(program) {
+    const ps = renderer && renderer.info.programs;
+    const p = ps && ps.find(q => q.program === program);
+    return p ? (p.name || p.type || '?') : '?';
+  }
+  function nameCounts(list) {
+    const m = {};
+    list.forEach(n => { m[n] = (m[n] || 0) + 1; });
+    return Object.keys(m).map(k => k + (m[k] > 1 ? '×' + m[k] : '')).join(', ');
+  }
+  function onShaderError(gl2, program, vs, fs) {
+    const name = progName(program);
+    const log = s => (s && gl2.getShaderInfoLog(s) || '').trim();
+    const pl = (gl2.getProgramInfoLog(program) || '').trim(), vl = log(vs), fl = log(fs);
+    if (gl2.isContextLost() || (!pl && !vl && !fl)) {
+      // a dead GPU process answers LINK_STATUS = false with empty logs before Chrome flags the
+      // context as lost — hold these until we know whether a context loss explains them
+      if (!suspect.length) suspectLost = diag.lost;
+      suspect.push(name);
+      clearTimeout(suspectT);
+      suspectT = setTimeout(resolveSuspect, 1500);
+      return;
+    }
+    const msg = name + ': ' + [pl && 'program ' + pl, vl && 'VS ' + vl, fl && 'FS ' + fl].filter(Boolean).join(' | ');
+    console.error('[SkyArt] shader error', msg);
+    logErr('shader', msg);
+    // one step per failing material: if it still fails one tier down, lower tiers won't fix it either
+    if (!stepNames.has(name)) { stepNames.add(name); requestStep('shader/program error (' + name + ')'); }
+  }
+  function resolveSuspect() {
+    clearTimeout(suspectT); suspectT = 0;
+    if (!suspect.length) return;
+    const n = suspect.length, list = nameCounts(suspect);
+    suspect = [];
+    if (diag.lost > suspectLost || (renderer && renderer.getContext().isContextLost())) {
+      logErr('compile', n + ' programs answered "not linked" with EMPTY logs as the GPU died (not compile errors): ' + list);
+    } else {
+      console.error('[SkyArt] shader error (empty log)', list);
+      logErr('shader', n + ' programs failed with empty logs: ' + list);
+      requestStep('shader/program error (empty log)');
+    }
   }
 
   // record a step that happens before/without a live renderer change
@@ -263,95 +334,281 @@ const SkyArt = (() => {
     restartChecks();
   }
 
-  // ---- runtime self-check: a few read-backs right after a frame is composed ----
-  let checkAt = [], flatHits = 0;
-  function restartChecks() {
+  // ---- runtime self-check: read-backs right after a frame is drawn ----
+  // A tier is healthy once every scheduled check has really looked at the world (a check that
+  // falls on a quiz / warm-up is postponed, never counted as passed), the last ones were clean
+  // (no GL error, 9 samples not flat, not white, not black on a daytime island) and ≥3 s passed.
+  let checkAt = [], badChecks = 0;
+  function restartChecks(at) {
     tierStart = performance.now();
-    diag.frames = 0; diag.healthy = false; flatHits = 0;
-    checkAt = [6, 30, 90];
+    diag.frames = 0; diag.healthy = false; badChecks = 0;
+    checkAt = at || [6, 30, 90];
+    diag.health = { checks: [], gl: {}, verdict: 'checking' };
     const g = gfxRead();
     if (!low && diag.tier < 3) { g.pending = diag.tier; gfxWrite(); }
+  }
+  function drainGl(gl) {
+    const out = [];
+    let e, n = 0;
+    while ((e = gl.getError()) !== gl.NO_ERROR && n++ < 8) out.push(e);
+    return out;
   }
   const _px = new Uint8Array(4);
   function selfCheck() {
     const gl = renderer.getContext();
-    if (gl.isContextLost()) return;
-    let e, n = 0;
-    while ((e = gl.getError()) !== gl.NO_ERROR && n++ < 8) {
-      logErr('gl', '0x' + e.toString(16));
-      if (e === gl.OUT_OF_MEMORY || e === gl.INVALID_FRAMEBUFFER_OPERATION) requestStep('GL error 0x' + e.toString(16));
-    }
-    if (!ctx.playing || ctx.quizOpen) return;
+    if (gl.isContextLost()) return 'lost';
+    const H = diag.health;
+    const errs = drainGl(gl);
+    errs.forEach(e => {
+      const k = '0x' + e.toString(16);
+      H.gl[k] = (H.gl[k] || 0) + 1;
+      logErr('gl', k + ' at frame ' + diag.frames + ' (' + TIERS[diag.tier] + ')');
+      if (e === gl.OUT_OF_MEMORY || e === gl.INVALID_FRAMEBUFFER_OPERATION) requestStep('GL error ' + k);
+    });
+    if (!ctx.playing || ctx.quizOpen || warm) return 'skip';
     // 3×3 grid of the presented drawing buffer (read in the same task, before compositing)
     renderer.setRenderTarget(null);
-    const W = gl.drawingBufferWidth, H = gl.drawingBufferHeight;
-    let first = null, flat = true, white = 0;
-    for (let i = 1; i <= 3; i++) for (let j = 1; j <= 3; j++) {
-      gl.readPixels(Math.floor(W * i / 4), Math.floor(H * j / 4), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, _px);
-      const k = _px[0] + ',' + _px[1] + ',' + _px[2];
-      if (first === null) first = k; else if (k !== first) flat = false;
+    const W = gl.drawingBufferWidth, Hh = gl.drawingBufferHeight;
+    const px = [];
+    let maxL = 0, minL = 255, white = 0, black = 0;
+    for (let j = 3; j >= 1; j--) for (let i = 1; i <= 3; i++) {   // top row first, like the screen
+      gl.readPixels(Math.floor(W * i / 4), Math.floor(Hh * j / 4), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, _px);
+      px.push(_px[0] + ',' + _px[1] + ',' + _px[2]);
+      const L = 0.2126 * _px[0] + 0.7152 * _px[1] + 0.0722 * _px[2];
+      maxL = Math.max(maxL, L); minL = Math.min(minL, L);
+      if (L < 8) black++;
       if (_px[0] > 250 && _px[1] > 250 && _px[2] > 250) white++;
     }
-    diag.lastPx = first + (flat ? ' (flat)' : '');
-    if (flat || white >= 8) {
-      flatHits++;
-      logErr('frame', 'composed frame looks blank: ' + first + (white >= 8 ? ' white' : ' flat'));
-      if (flatHits >= 2) { flatHits = 0; requestStep('畫面讀回是一片 ' + (white >= 8 ? '白' : '單色') + '（' + first + '）'); }
-    } else flatHits = 0;
+    const night = state.gt > 0.5 || state.ut > 0.5;   // galaxy / underground skies really are dark
+    let v = 'ok';
+    if (white >= 8) v = 'white';
+    else if (new Set(px).size === 1) v = 'flat';
+    else if ((maxL < 8 || black >= 4) && !night) v = 'dark';   // e.g. black island ground under a bright sky
+    else if (errs.length) v = 'gl-error';
+    H.checks.push({ f: diag.frames, v, px: px.join(' '), lum: Math.round(minL) + '-' + Math.round(maxL), where: night ? (state.gt > 0.5 ? 'galaxy' : 'underground') : 'day' });
+    if (H.checks.length > 6) H.checks.shift();
+    diag.lastPx = px[4] + (v !== 'ok' ? ' (' + v + ')' : '');
+    return v;
   }
   function healthTick() {
+    if (reloading) return;   // the page is about to be rebuilt: judge nothing more
     diag.frames++;
-    if (checkAt.length && diag.frames >= checkAt[0]) { checkAt.shift(); try { selfCheck(); } catch (e) { logErr('check', e); } }
-    // proven: all three read-backs passed after a few seconds on screen — or, on a slow GPU,
-    // 12 s of frames without a single blank read-back
+    if (checkAt.length && diag.frames >= checkAt[0]) {
+      let v;
+      try { v = selfCheck(); } catch (e) { logErr('check', e); v = 'skip'; }
+      if (v === 'skip') checkAt[0] = diag.frames + 20;
+      else if (v !== 'lost') {
+        checkAt.shift();
+        // a GL error with a healthy-looking frame is recorded (panel) but only condemns a restored
+        // context; elsewhere a real failure shows up as a shader error or a bad read-back
+        if (v === 'gl-error' && !verifyRestore) { badChecks = 0; logErr('frame', 'GL error at frame ' + diag.frames + ', frame looks fine'); }
+        else if (v === 'ok') badChecks = 0;
+        else {
+          badChecks++;
+          checkAt.push(diag.frames + 30);   // a bad look needs a clean one after it before we trust the tier
+          logErr('frame', 'self-check ' + v + ' at frame ' + diag.frames + ': ' + diag.lastPx);
+          if (verifyRestore) recover('restored context draws ' + v);
+          else if (badChecks >= 2) { badChecks = 0; requestStep('畫面讀回 ' + v + '（' + diag.lastPx + '）'); }
+        }
+      }
+    }
     const age = performance.now() - tierStart;
-    if (!diag.healthy && !flatHits && ((!checkAt.length && age > 3000) || (diag.frames >= 20 && age > 12000))) {
-      diag.healthy = true;
-      settle();
+    const H = diag.health;
+    if (!diag.healthy) {
+      const done = H.checks.filter(c => c.v === 'ok').length;
+      if (!badChecks && ((!checkAt.length && age > 3000) || (done >= 2 && diag.frames >= 20 && age > 12000))) {
+        diag.healthy = true;
+        verifyRestore = false;
+        H.verdict = 'healthy (' + TIERS[diag.tier] + ', ' + done + ' clean checks, ' + (age / 1000).toFixed(1) + ' s)';
+        settle();
+      } else H.verdict = 'checking (' + checkAt.length + ' checks left' + (badChecks ? ', ' + badChecks + ' bad' : '') + ')';
     }
     if (pendingStep) { const w = pendingStep; pendingStep = null; stepDown(w); }
   }
   function settle() {
     const g = gfxRead();
-    if (g.pending !== undefined) { delete g.pending; gfxWrite(); }
+    if (g.pending !== undefined) delete g.pending;
+    if (!low && !(g.ok <= diag.tier)) g.ok = diag.tier;   // best tier this device has proven
+    gfxWrite();
   }
   // leaving before the tier proved itself (kid closed the tab / left the zone) is not a crash
   function idle() {
-    if (renderer && !diag.healthy && diag.frames > 30 && !flatHits && !renderer.getContext().isContextLost()) settle();
+    // (a GPU crash that takes the page down never gets here; a lost context is handled above)
+    if (renderer && !diag.healthy && !badChecks && !reloading && diag.lost === 0 && !renderer.getContext().isContextLost()) {
+      const g = gfxRead();
+      if (g.pending !== undefined) { delete g.pending; gfxWrite(); }
+    }
   }
   if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => { if (document.hidden) idle(); });
+
+  // ---- staged warm-up: compile programs a few at a time behind a cover ----
+  // Every renderable is parked on a hidden layer and revealed group by group (grouped by what
+  // decides its shader program), one group set per frame; the PMREM bake and the bloom chain get
+  // stages of their own. The stage name is written to english_savior_sky_gfx before it runs, so a
+  // crash that kills the page names the stage on the next visit.
+  const WARM_LAYER = 30;
+  let warm = null, warmNeeded = false, warmEl = null;
+  function progKey(o) {
+    const m = Array.isArray(o.material) ? o.material[0] : o.material;
+    if (!m) return 'none';
+    let ck = '';
+    try { ck = m.customProgramCacheKey ? String(m.customProgramCacheKey()) : ''; } catch (e) { /* ignore */ }
+    if (ck.length > 40) ck = ck.length + ':' + ck.slice(-24);
+    return [m.type, m.name, ck, o.isInstancedMesh ? 'I' : '', o.isSkinnedMesh ? 'S' : '', m.vertexColors ? 'vc' : '', m.map ? 'map' : '',
+      m.emissiveMap ? 'em' : '', m.transparent ? 't' : '', m.side, m.flatShading ? 'f' : '', o.castShadow ? 'cs' : '', o.receiveShadow ? 'rs' : ''].join('|');
+  }
+  function warmLabel(o) {
+    const m = Array.isArray(o.material) ? o.material[0] : o.material;
+    return ((m && (m.name || m.type.replace(/^Mesh|Material$/g, ''))) || '?') + (o.isInstancedMesh ? '(inst)' : o.isPoints ? '(pts)' : o.isSprite ? '(sprite)' : '');
+  }
+  function startWarm() {
+    warmNeeded = false;
+    const groups = new Map();
+    scene.traverse(o => {
+      if (!(o.isMesh || o.isPoints || o.isSprite || o.isLine) || !o.layers.isEnabled(0)) return;
+      const k = progKey(o);
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(o);
+      o.layers.set(WARM_LAYER);
+    });
+    const stages = [];
+    if (envOk && !low && !scene.environment) stages.push({ name: 'environment (PMREM)', run: buildEnvironment });
+    if (composer) stages.push({ name: 'post (bloom + output)', objs: [] });
+    const list = [...groups.values()];
+    for (let i = 0; i < list.length; i += 3) {
+      const chunk = list.slice(i, i + 3);
+      stages.push({ name: [...new Set(chunk.map(objs => warmLabel(objs[0])))].join('+'), objs: [].concat(...chunk) });
+    }
+    warm = { stages, i: 0, t0: performance.now() };
+    diag.warm = { n: stages.length, i: 0, stage: '', ms: 0 };
+    showWarm();
+  }
+  // one warm-up stage per frame. Only the stage's own group is drawn (then parked again), and
+  // straight into the composer's scene target — the same program variants the RenderPass will use —
+  // so a stage costs its own draws, not a full bloomed frame. The PMREM bake is a frame of its own;
+  // the bloom chain compiles in a stage with nothing else in it.
+  function warmStep() {
+    const s = warm.stages[warm.i];
+    const g = gfxRead();
+    g.warm = s.name; gfxWrite();
+    diag.warm.stage = s.name; diag.warm.i = warm.i + 1;
+    warm.i++;
+    if (warmEl) warmEl.querySelector('i').style.width = Math.round(warm.i / warm.stages.length * 100) + '%';
+    if (s.run) { s.run(); return; }
+    const post = composer && !ctx.lowPower();
+    if (!s.objs.length) { if (post) composer.render(0); return; }
+    s.objs.forEach(o => o.layers.set(0));
+    renderer.setRenderTarget(post ? composer.readBuffer : null);
+    renderer.render(scene, camera);
+    renderer.setRenderTarget(null);
+    s.objs.forEach(o => o.layers.set(WARM_LAYER));
+  }
+  function finishWarm(aborted) {
+    if (!warm) return;
+    // reveal everything (a lost context mid-warm must never leave the world hidden)
+    warm.stages.forEach(s => (s.objs || []).forEach(o => o.layers.set(0)));
+    diag.warm.ms = Math.round(performance.now() - warm.t0);
+    diag.warm.stage = aborted ? 'aborted at ' + diag.warm.stage : 'done';
+    warm = null;
+    const g = gfxRead();
+    if (g.warm !== undefined && !aborted) { delete g.warm; gfxWrite(); }
+    if (warmEl) warmEl.remove();
+  }
+  function showWarm() {
+    const wrap = renderer && renderer.domElement.parentNode;
+    if (!wrap) return;
+    if (!warmEl) {
+      warmEl = document.createElement('div');
+      warmEl.className = 'aw-gfx-warm';
+      warmEl.innerHTML = '<div><b>🌤️ 天空之城準備中…</b><span><i></i></span></div>';
+    }
+    warmEl.querySelector('i').style.width = '0%';
+    wrap.appendChild(warmEl);
+  }
 
   // ---- WebGL context loss (GPU process crash / reset / memory pressure) ----
   function onContextLost(e) {
     e.preventDefault();   // ask the browser for a restore (three does this too)
     diag.lost++;
     const visible = !document.hidden;
-    logErr('context', 'webglcontextlost' + (visible ? ' (visible)' : ' (hidden)') + ' after ' + diag.frames + ' frames at ' + TIERS[diag.tier]);
+    // the event lands a frame or two after the GPU died: name the stage before this one too
+    const stage = warm && (warm.i > 1 ? warm.stages[warm.i - 2].name + ' → ' : '') + diag.warm.stage;
+    logErr('context', 'webglcontextlost' + (visible ? ' (visible)' : ' (hidden)') + ' after ' + diag.frames + ' frames at ' + TIERS[diag.tier] +
+      (stage ? ', warming "' + stage + '"' : ''));
+    resolveSuspect();
     // lost in the foreground before this tier proved itself = this tier is too much for the GPU
-    if (visible && performance.now() - tierStart < 60000 && !low && diag.tier < 3) noteStep(diag.tier + 1, 'WebGL context lost（' + TIERS[diag.tier] + ' 還沒穩定）');
-    if (diag.tier >= 1) dropComposer(true);
+    lostUnproven = visible && (!diag.healthy || performance.now() - tierStart < 60000);
+    if (lostUnproven && !low && diag.tier < 3) noteStep(diag.tier + 1, 'WebGL context lost at ' + TIERS[diag.tier] + (stage ? '（準備「' + stage + '」時）' : '（還沒穩定）'));
+    finishWarm(true);
+    dropComposer(true);
+    envRT = null;
     showLost();
   }
   function onContextRestored() {
     diag.restored++;
-    logErr('context', 'webglcontextrestored');
+    let s2 = '';
+    try { const d = sentinel2d && sentinel2d.getImageData(256, 256, 1, 1).data; s2 = d ? (d[1] > 150 && d[3] > 200 ? ' (GPU 2D canvases kept)' : ' (GPU 2D canvases WIPED — texture canvases are CPU-backed)') : ''; } catch (e) { s2 = ''; }
+    logErr('context', 'webglcontextrestored' + s2);
+    // Chrome handed the GPU back (so WebGL isn't blocked for this site). A tier that died before
+    // proving itself is rebuilt from scratch at the lower tier — reload + resume — rather than
+    // limping on with a restored context on the driver that just crashed.
+    if (lostUnproven && reloadToResume('context lost before ' + TIERS[diag.startTier] + ' proved itself')) return;
     hideLost();
     try {
+      drainGl(renderer.getContext());   // errors queued while the context was lost
       applyTier();
       if (envOk && !low) buildEnvironment();   // the PMREM target's contents died with the context
-      restartChecks();
-    } catch (err) { logErr('restore', err); }
+      if (!low && diag.tier < 1 && !composer) { const sz = renderer.getSize(new THREE.Vector2()); setupComposer(sz.x, sz.y); }
+      warmNeeded = true;                        // every program recompiles: stage it again
+      restartChecks([2, 6, 30, 90]);
+      verifyRestore = true;                     // the first bad read-back after a restore → rebuild
+    } catch (err) { logErr('restore', err); recover('restore threw: ' + (err && err.message || err)); }
   }
-  function showLost() {
+  function recover(why) {
+    verifyRestore = false;
+    logErr('restore', why);
+    if (!reloadToResume(why)) requestStep(why);
+  }
+  // controlled reload that reopens 天空之城 and restarts the adventure (sky.js reads takeResume())
+  function reloadToResume(why) {
+    let n = 0;
+    try {
+      n = +sessionStorage.getItem(RELOADS_KEY) || 0;
+      if (n >= 2) { logErr('restore', 'not reloading again (' + n + ' this session): ' + why); return false; }
+      sessionStorage.setItem(RELOADS_KEY, String(n + 1));
+      sessionStorage.setItem(RESUME_KEY, JSON.stringify({ at: Date.now(), why, max: document.body.classList.contains('game-max'),
+        errs: diag.errors.slice(-10).map(e => e.t + ' ' + e.body + (e.n > 1 ? ' ×' + e.n : '')) }));
+    } catch (e) { return false; }
+    reloading = true;
+    pendingStep = null;
+    const g = gfxRead();
+    g.reloads = (g.reloads || 0) + 1;
+    delete g.pending; delete g.warm;   // a deliberate reload is not a crash: the breaker must not fire
+    gfxWrite();
+    showLost('自動調整畫質，馬上回來…');
+    setTimeout(() => location.reload(), 350);
+    return true;
+  }
+  function takeResume() {
+    let r = null;
+    try { r = JSON.parse(sessionStorage.getItem(RESUME_KEY) || 'null'); sessionStorage.removeItem(RESUME_KEY); } catch (e) { r = null; }
+    if (!r || !(Date.now() - r.at < 60000)) return null;
+    diag.steps.push('↻ 自動重新載入後繼續冒險：' + r.why);
+    // the panel keeps what happened before the reload
+    (Array.isArray(r.errs) ? r.errs : []).forEach(t => diag.errors.push({ t: 'before reload', body: String(t).slice(0, 700), n: 1 }));
+    return r;
+  }
+  function showLost(msg) {
     const wrap = renderer && renderer.domElement.parentNode;
     if (!wrap) return;
     if (!lostOverlay) {
       lostOverlay = document.createElement('div');
       lostOverlay.className = 'aw-gfx-lost';
-      lostOverlay.innerHTML = '<div><b>🔧 3D 畫面重新啟動中…</b><small>稍等一下下</small>' +
+      lostOverlay.innerHTML = '<div><b>🔧 3D 畫面重新啟動中…</b><small></small>' +
         '<button type="button" class="aw-gfx-reload" hidden>🔄 重新載入（自動調整畫質）</button></div>';
       lostOverlay.querySelector('button').addEventListener('click', () => location.reload());
     }
+    lostOverlay.querySelector('small').textContent = msg || '稍等一下下';
     wrap.appendChild(lostOverlay);
     lostOverlay.querySelector('button').hidden = true;
     clearTimeout(lostTimer);
@@ -374,53 +631,92 @@ const SkyArt = (() => {
     }
   }
 
-  // ---- owner diagnostics: ?skydebug=1, or long-press the island-name pill (~1.2 s) ----
+  // ---- owner diagnostics: ?skydebug=1 (works on the cover too), or long-press the island-name pill ----
   function diagText() {
     const c = diag.caps, g = gfxRead();
     const cv = renderer && renderer.domElement, gl = renderer && renderer.getContext();
     const r = cv ? cv.getBoundingClientRect() : { width: 0, height: 0 };
     const vv = window.visualViewport;
     const inf = renderer ? renderer.info : null;
+    const H = diag.health, lastC = H.checks[H.checks.length - 1];
+    const glErr = Object.keys(H.gl).map(k => k + '×' + H.gl[k]).join(' ') || 'none';
+    const probe = typeof SkyProbe !== 'undefined' ? SkyProbe.text() : '';
     return [
       'UA: ' + navigator.userAgent,
       'GPU: ' + (c.gpu || '?') + ' / ' + (c.vendor || '?'),
-      'WebGL2: ' + c.webgl2 + '  lost: ' + (gl ? gl.isContextLost() : '?') + '  lost×' + diag.lost + ' restored×' + diag.restored,
-      'DPR: ' + (window.devicePixelRatio || 1) + '  pixelRatio: ' + (renderer ? renderer.getPixelRatio().toFixed(2) : '?'),
+      'WebGL2: ' + c.webgl2 + '  lost: ' + (gl ? gl.isContextLost() : '-') + '  lost×' + diag.lost + ' restored×' + diag.restored,
+      'DPR: ' + (window.devicePixelRatio || 1) + '  pixelRatio: ' + (renderer ? renderer.getPixelRatio().toFixed(2) : '-'),
       'window: ' + innerWidth + '×' + innerHeight + (vv ? '  visualViewport: ' + Math.round(vv.width) + '×' + Math.round(vv.height) : ''),
-      'canvas css: ' + Math.round(r.width) + '×' + Math.round(r.height) + '  buffer: ' + (cv ? cv.width + '×' + cv.height : '?') +
-        (gl ? '  drawingBuffer: ' + gl.drawingBufferWidth + '×' + gl.drawingBufferHeight : ''),
-      'maxTex: ' + c.maxTex + '  maxRenderbuffer: ' + c.maxRb + '  maxViewport: ' + c.maxVp + '  maxSamples: ' + c.maxSamples +
+      renderer ? 'canvas css: ' + Math.round(r.width) + '×' + Math.round(r.height) + '  buffer: ' + cv.width + '×' + cv.height +
+        '  drawingBuffer: ' + gl.drawingBufferWidth + '×' + gl.drawingBufferHeight : 'world: not started',
+      c.maxTex === undefined ? 'caps: (start an adventure or run 🧪 to read them)' : 'maxTex: ' + c.maxTex + '  maxRenderbuffer: ' + c.maxRb + '  maxViewport: ' + c.maxVp + '  maxSamples: ' + c.maxSamples +
         '  RGBA16F samples: [' + (c.f16Samples || []).join(',') + '] using ' + (c.composerSamples === undefined ? '-' : c.composerSamples) + '  frag highp bits: ' + c.fragHighp,
-      'ext: color_buffer_half_float=' + c.cbHalf + ' color_buffer_float=' + c.cbFloat + ' float_linear=' + c.floatLinear + ' parallel_compile=' + c.parallel,
-      '畫質 tier: ' + TIERS[diag.tier] + '（起始 ' + TIERS[diag.startTier] + '，存檔 ' + TIERS[g.tier] + (g.pending !== undefined ? '，測試中 ' + TIERS[g.pending] : '') + '）' +
+      c.maxTex === undefined ? '' : 'ext: color_buffer_half_float=' + c.cbHalf + ' color_buffer_float=' + c.cbFloat + ' float_linear=' + c.floatLinear + ' parallel_compile=' + c.parallel,
+      '畫質 tier: ' + (renderer ? TIERS[diag.tier] + '（起始 ' + TIERS[diag.startTier] + '）' : '-') + '  存檔 ' + TIERS[g.tier] +
+        (g.pending !== undefined ? '，測試中 ' + TIERS[g.pending] : '') + (g.ok !== undefined ? '，已證明 ' + TIERS[g.ok] : '') +
         '  lowPower: ' + low + '  composer: ' + !!composer + '  shadows: ' + !!(renderer && renderer.shadowMap.enabled) + '  env: ' + envOk,
-      'frames: ' + diag.frames + '  healthy: ' + diag.healthy + '  last px: ' + (diag.lastPx || '-') +
+      'gfx: ' + JSON.stringify(g),
+      'warm-up: ' + (diag.warm ? diag.warm.i + '/' + diag.warm.n + ' ' + (warm ? '… ' + diag.warm.stage : diag.warm.stage + ' in ' + diag.warm.ms + ' ms') : '-'),
+      'frames: ' + diag.frames + '  healthy: ' + diag.healthy + '  health: ' + H.verdict + '  gl errors: ' + glErr +
         (inf ? '  programs: ' + (inf.programs ? inf.programs.length : '?') + '  calls: ' + inf.render.calls + '  tex: ' + inf.memory.textures : ''),
+      '  checks: ' + (H.checks.length ? H.checks.map(k => 'f' + k.f + ' ' + k.v).join(', ') : '-'),
+      lastC ? '  last read-back f' + lastC.f + ' (' + lastC.where + ', lum ' + lastC.lum + '): ' + lastC.px : '  last read-back: -',
       '步驟 steps:', ...(diag.steps.length ? diag.steps.map(s => '  ' + s) : ['  (none)']),
-      '錯誤 errors:', ...(diag.errors.length ? diag.errors.map(s => '  ' + s) : ['  (none)']),
-    ].join('\n');
+      '錯誤 errors:', ...(diag.errors.length ? diag.errors.map(e => '  ' + e.t + ' ' + e.body + (e.n > 1 ? ' ×' + e.n : '')) : ['  (none)']),
+      ...(probe ? [probe] : []),
+    ].filter(l => l !== '').join('\n');
   }
-  function renderDiag() { if (diagEl) diagEl.querySelector('pre').textContent = diagText(); }
+  function renderDiag() {
+    if (!diagEl) return;
+    const pre = diagEl.querySelector('pre');
+    // don't yank a selection the owner is making
+    const sel = window.getSelection && window.getSelection();
+    if (sel && !sel.isCollapsed && pre.contains(sel.anchorNode)) return;
+    pre.textContent = diagText();
+    const pb = diagEl.querySelector('[data-a="probe"]');
+    if (pb && typeof SkyProbe !== 'undefined') { pb.textContent = SkyProbe.label(); pb.disabled = SkyProbe.busy(); }
+  }
   function showDiag() {
-    const wrap = renderer ? renderer.domElement.parentNode : document.body;
+    const wrap = renderer && renderer.domElement.parentNode ? renderer.domElement.parentNode : document.body;
     if (!diagEl) {
       diagEl = document.createElement('div');
       diagEl.className = 'aw-gfx-diag';
       diagEl.innerHTML = '<div class="aw-gfx-diag-bar"><b>🛠️ Sky debug</b>' +
+        '<button type="button" data-a="probe">🧪 相容性測試</button>' +
         '<button type="button" data-a="copy">📋 複製</button><button type="button" data-a="reset">♻️ 重設畫質</button>' +
-        '<button type="button" data-a="close">✕</button></div><pre></pre>';
+        '<button type="button" data-a="close">✕</button></div><div class="aw-gfx-probe"></div><pre></pre>';
       diagEl.addEventListener('click', e => {
         const a = e.target.closest('button') && e.target.closest('button').dataset.a;
         if (a === 'close') { diagEl.remove(); clearInterval(diagTimer); diagTimer = 0; }
-        else if (a === 'reset') { gfxReset(); diag.steps.push('（已重設；重新載入後以 full 開始）'); renderDiag(); }
-        else if (a === 'copy') { try { navigator.clipboard.writeText(diagText()); } catch (err) { /* select the text by hand */ } }
+        else if (a === 'reset') { gfxReset(); diag.steps.push('（已重設；重新載入後重新判斷畫質）'); renderDiag(); }
+        else if (a === 'probe' && typeof SkyProbe !== 'undefined') SkyProbe.run(diagEl.querySelector('.aw-gfx-probe'), renderDiag);
+        else if (a === 'copy') {
+          const txt = diagText();
+          try { navigator.clipboard.writeText(txt).catch(() => selectAll()); } catch (err) { selectAll(); }
+        }
       });
+      const selectAll = () => { const rg = document.createRange(); rg.selectNodeContents(diagEl.querySelector('pre')); const s = window.getSelection(); s.removeAllRanges(); s.addRange(rg); };
       // let the panel scroll / text be selected without driving the camera
       ['pointerdown', 'touchstart', 'wheel'].forEach(t => diagEl.addEventListener(t, e => e.stopPropagation(), { passive: true }));
     }
+    diagEl.classList.toggle('aw-gfx-diag--page', wrap === document.body);
     wrap.appendChild(diagEl);
     renderDiag();
     if (!diagTimer) diagTimer = setInterval(renderDiag, 1000);
+  }
+  // the probe borrows the real material factories and helpers so it can't drift from the game
+  function probeKit() {
+    if (!TEX.noise) initTextures();
+    return { MK, skyMat, skyUniforms, seaMat, seaUniforms, newFallMat, newAuroraMat, newLavaMat, newTopMat, bakeEnv, cloudGeometry,
+      Batch, K, geo, getTuftGeo, mulberry, TEX, OCC, SUN_DIR, fogBase, probeCaps, pixelRatio, isTouch, TIERS, caps: diag.caps,
+      asLow: fn => { const p = low; low = true; try { return fn(); } finally { low = p; } } };
+  }
+  function applyProbe(sum) {
+    const g = gfxRead();
+    g.probe = sum;
+    if (sum.allOk) g.probeOk = true; else delete g.probeOk;
+    if (typeof sum.rec === 'number' && sum.rec > g.tier) { g.tier = sum.rec; g.why = '🧪 相容性測試：' + sum.fail + ' 失敗'; }
+    gfxWrite();
   }
 
   // ============================== materials ==============================
@@ -447,24 +743,40 @@ const SkyArt = (() => {
       else withOcclusion(sh);
     };
     mat.customProgramCacheKey = () => 'skyart-' + key;
+    mat.name = key;   // named programs: shader errors and the 🧪 probe say which material
     return mat;
   }
-  function litMat(opts, key) {
+  // `std`: always the PBR path (the 🧪 probe tests the normal-quality materials whatever tier runs)
+  function litMat(opts, std) {
     const o = Object.assign({}, opts);
-    if (low) { delete o.roughness; delete o.metalness; return new THREE.MeshLambertMaterial(o); }
+    if (low && !std) { delete o.roughness; delete o.metalness; return new THREE.MeshLambertMaterial(o); }
     if (o.roughness === undefined) o.roughness = 0.62;
     if (o.metalness === undefined) o.metalness = 0;
     return new THREE.MeshStandardMaterial(o);
   }
   let propMat = null, grassMat = null, cloudMat = null, waterMat = null, fallMat = null;
-  function initMaterials() {
-    propMat = swayGlow(litMat({ vertexColors: true, roughness: 0.7 }), 'prop');
-    grassMat = swayGlow(litMat({ vertexColors: true, roughness: 0.95, side: THREE.DoubleSide }), 'grass');
-    cloudMat = litMat({ color: 0xffffff, roughness: 1, emissive: 0xaec4e6, emissiveIntensity: 0.16 });
-    waterMat = litMat({
+  // factories (also used by the 🧪 probe, so it compiles exactly what the world compiles)
+  const MK = {
+    prop: std => swayGlow(litMat({ vertexColors: true, roughness: 0.7 }, std), 'prop'),
+    grass: std => swayGlow(litMat({ vertexColors: true, roughness: 0.95, side: THREE.DoubleSide }, std), 'grass'),
+    cloud: std => Object.assign(litMat({ color: 0xffffff, roughness: 1, emissive: 0xaec4e6, emissiveIntensity: 0.16 }, std), { name: 'cloud' }),
+    water: std => Object.assign(litMat({
       color: 0x3fb8ec, roughness: 0.12, emissive: 0x0c4a6e, emissiveIntensity: 0.6,
       map: TEX.ripple, transparent: true, opacity: 0.92,
-    });
+    }, std), { name: 'water' }),
+    occ: (opts, std) => {
+      const m = litMat(opts, std);
+      m.onBeforeCompile = withOcclusion;
+      m.customProgramCacheKey = () => 'skyart-occ';
+      m.name = 'occ';
+      return m;
+    },
+  };
+  function initMaterials() {
+    propMat = MK.prop();
+    grassMat = MK.grass();
+    cloudMat = MK.cloud();
+    waterMat = MK.water();
   }
 
   // ctx.matOf — cached simple materials that sibling modules build with
@@ -474,9 +786,7 @@ const SkyArt = (() => {
       const opts = { color };
       if (texKey && TEX[texKey]) opts.map = TEX[texKey];
       if (emissive) { opts.emissive = new THREE.Color(emissive); opts.emissiveIntensity = low ? 1 : 1.6; }
-      MAT[key] = litMat(opts);
-      MAT[key].onBeforeCompile = withOcclusion;
-      MAT[key].customProgramCacheKey = () => 'skyart-occ';
+      MAT[key] = MK.occ(opts);
     }
     return MAT[key];
   }
@@ -517,7 +827,7 @@ const SkyArt = (() => {
   function fieldTex(size, field, fn, srgb) {
     const cv = document.createElement('canvas');
     cv.width = cv.height = size;
-    const c2 = cv.getContext('2d');
+    const c2 = cv.getContext('2d', CPU2D);
     const img = c2.createImageData(size, size);
     for (let i = 0; i < field.length; i++) {
       const v = fn(field[i], i);
@@ -534,7 +844,7 @@ const SkyArt = (() => {
     const size = 128;
     const cv = document.createElement('canvas');
     cv.width = cv.height = size;
-    const c2 = cv.getContext('2d');
+    const c2 = cv.getContext('2d', CPU2D);
     c2.fillStyle = base;
     c2.fillRect(0, 0, size, size);
     const rng = mulberry(density * 7 + 3);
@@ -566,7 +876,7 @@ const SkyArt = (() => {
     // soft round sprite for particles
     const cv = document.createElement('canvas');
     cv.width = cv.height = 64;
-    const c2 = cv.getContext('2d');
+    const c2 = cv.getContext('2d', CPU2D);
     const g = c2.createRadialGradient(32, 32, 0, 32, 32, 32);
     g.addColorStop(0, 'rgba(255,255,255,1)');
     g.addColorStop(0.25, 'rgba(255,255,255,0.85)');
@@ -636,30 +946,38 @@ const SkyArt = (() => {
       uTime: U.time,
     };
   }
+  function skyMat(u, env) {
+    return new THREE.ShaderMaterial({ name: env ? 'sky_env' : 'sky_dome', uniforms: u, vertexShader: SKY_VERT, fragmentShader: SKY_FRAG,
+      side: THREE.BackSide, depthWrite: !!env, fog: false });
+  }
   function buildSkyDome() {
     skyU = skyUniforms();
-    dome = new THREE.Mesh(
-      new THREE.SphereGeometry(900, 40, 20),
-      new THREE.ShaderMaterial({ uniforms: skyU, vertexShader: SKY_VERT, fragmentShader: SKY_FRAG, side: THREE.BackSide, depthWrite: false, fog: false })
-    );
+    dome = new THREE.Mesh(new THREE.SphereGeometry(900, 40, 20), skyMat(skyU));
     dome.renderOrder = -10;
     dome.frustumCulled = false;
     scene.add(dome);
   }
   // sky-gradient environment for PBR ambient/reflections (one-off PMREM bake)
+  function bakeEnv(r) {
+    const envScene = new THREE.Scene();
+    const u = skyUniforms();
+    u.uSun.value = 0.6; u.uDisc.value = 0;
+    u.uBottom.value.set(0x9cb08a); // a grassy bounce from below
+    const m = new THREE.Mesh(new THREE.SphereGeometry(10, 32, 16), skyMat(u, true));
+    envScene.add(m);
+    const pm = new THREE.PMREMGenerator(r);
+    const rt = pm.fromScene(envScene, 0.04);
+    pm.dispose();
+    m.geometry.dispose(); m.material.dispose();
+    return rt;
+  }
+  let envRT = null;
   function buildEnvironment() {
     if (low || !diag.caps.floatTargets) { envOk = false; return; }   // PMREM bakes into HalfFloat targets
     try {
-      const envScene = new THREE.Scene();
-      const u = skyUniforms();
-      u.uSun.value = 0.6; u.uDisc.value = 0;
-      u.uBottom.value.set(0x9cb08a); // a grassy bounce from below
-      envScene.add(new THREE.Mesh(new THREE.SphereGeometry(10, 32, 16),
-        new THREE.ShaderMaterial({ uniforms: u, vertexShader: SKY_VERT, fragmentShader: SKY_FRAG, side: THREE.BackSide })));
-      const pm = new THREE.PMREMGenerator(renderer);
-      scene.environment = pm.fromScene(envScene, 0.04).texture;
+      envRT = bakeEnv(renderer);
+      scene.environment = envRT.texture;
       scene.environmentIntensity = ENV_I;
-      pm.dispose();
       envOk = true;
     } catch (e) { envOk = false; logErr('env', e); }
   }
@@ -797,20 +1115,26 @@ const SkyArt = (() => {
       #include <colorspace_fragment>
     }`;
   let sea = null, seaU = null, seaY = -30;
-  function buildSea() {
-    seaU = {
+  function seaUniforms() {
+    return {
       uNoise: { value: TEX.noise }, uTime: U.time,
       uLit: { value: new THREE.Color(0xffffff) }, uShade: { value: new THREE.Color(0xa9c6ea) },
       uFog: { value: new THREE.Color(0xbfe4ff) }, uCam: { value: new THREE.Vector3() },
       uLava: { value: 0 }, uFar: { value: 900 },
     };
-    const geo = new THREE.PlaneGeometry(2400, 2400, 1, 1);
-    geo.rotateX(-Math.PI / 2);
-    sea = new THREE.Mesh(geo, new THREE.ShaderMaterial({
-      uniforms: seaU, fog: false,
+  }
+  function seaMat(u) {
+    return new THREE.ShaderMaterial({
+      name: 'cloud_sea', uniforms: u, fog: false,
       vertexShader: 'varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
       fragmentShader: SEA_FRAG,
-    }));
+    });
+  }
+  function buildSea() {
+    seaU = seaUniforms();
+    const geo = new THREE.PlaneGeometry(2400, 2400, 1, 1);
+    geo.rotateX(-Math.PI / 2);
+    sea = new THREE.Mesh(geo, seaMat(seaU));
     sea.frustumCulled = false;
     sea.renderOrder = -5;
     scene.add(sea);
@@ -995,7 +1319,7 @@ const SkyArt = (() => {
     initTextures();
     initMaterials();
     buildSkyDome();
-    buildEnvironment();
+    if (!warmNeeded) buildEnvironment();   // otherwise the warm-up's first stage bakes it
     buildLights();
     buildClouds();
     buildSea();
@@ -1005,7 +1329,7 @@ const SkyArt = (() => {
     setupComposer(sz.x, sz.y);
     restartChecks();
     updateAtmosphere(c.pos.y);
-    if (/[?&]skydebug=1\b/.test(location.search)) showDiag();
+    if (/[?&]skydebug=1\b/.test(location.search) || diagEl) showDiag();
     if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) {
       window.__skyArt = {
         cam: (theta, phi, radius) => Object.assign(ctx.cam, { theta, phi, radius }),
@@ -1063,7 +1387,11 @@ const SkyArt = (() => {
     TEX.ripple.offset.set(time * 0.02, time * 0.013);
     updateOcclusion();
     renderer.info.reset();
-    if (composer && !ctx.lowPower()) composer.render(dt);
+    if (warmNeeded) startWarm();
+    if (warm) {
+      warmStep();
+      if (warm.i >= warm.stages.length) finishWarm();   // everything revealed: next frame is the real one
+    } else if (composer && !ctx.lowPower()) composer.render(dt);
     else renderer.render(scene, camera);
     healthTick();
   }
@@ -1830,12 +2158,12 @@ const SkyArt = (() => {
   function paintTop(isle, st, R, Rm, info, rng, size) {
     const cv = document.createElement('canvas');
     cv.width = cv.height = size;
-    const c = cv.getContext('2d');
+    const c = cv.getContext('2d', CPU2D);
     const k = size / (2 * Rm);
     const X = x => (x / (2 * Rm) + 0.5) * size;
     const em = (st.cracks || st.specks || st.gold) ? document.createElement('canvas') : null;
     let e = null;
-    if (em) { em.width = em.height = size; e = em.getContext('2d'); e.fillStyle = '#000'; e.fillRect(0, 0, size, size); }
+    if (em) { em.width = em.height = size; e = em.getContext('2d', CPU2D); e.fillStyle = '#000'; e.fillRect(0, 0, size, size); }
     const rp = () => { const a = rng() * 6.28, rr = Math.sqrt(rng()) * isle.r; return [Math.cos(a) * rr, Math.sin(a) * rr]; };
     c.fillStyle = hexCss(st.g[0]);
     c.fillRect(0, 0, size, size);
@@ -2170,14 +2498,13 @@ const SkyArt = (() => {
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
     }`;
-  function getFallMat() {
-    if (fallMat) return fallMat;
-    fallMat = new THREE.ShaderMaterial({
-      uniforms: { uNoise: { value: TEX.noise }, uTime: U.time },
+  function getFallMat() { return fallMat || (fallMat = newFallMat()); }
+  function newFallMat() {
+    return new THREE.ShaderMaterial({
+      name: 'waterfall', uniforms: { uNoise: { value: TEX.noise }, uTime: U.time },
       vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
       fragmentShader: FALL_FRAG, transparent: true, depthWrite: false, side: THREE.DoubleSide,
     });
-    return fallMat;
   }
   // ribbon from (x0,z0) on the top, over the lip, straight down `drop`
   function waterfall(g, isle, a, R, width, drop) {
@@ -2240,10 +2567,9 @@ const SkyArt = (() => {
 
   // ---------- aurora curtains ----------
   let auroraMat = null;
-  function auroraCurtain(g, isle, rng) {
-    if (!auroraMat) {
-      auroraMat = new THREE.ShaderMaterial({
-        uniforms: { uTime: U.time, uNoise: { value: TEX.noise } },
+  function newAuroraMat() {
+    return new THREE.ShaderMaterial({
+        name: 'aurora', uniforms: { uTime: U.time, uNoise: { value: TEX.noise } },
         vertexShader: `uniform float uTime; varying vec2 vUv; void main(){ vUv = uv; vec3 p = position; p.z += sin(p.x * 0.35 + uTime * 0.8) * 1.2 + sin(p.x * 0.9 + uTime * 1.3) * 0.4; gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0); }`,
         fragmentShader: `uniform float uTime; uniform sampler2D uNoise; varying vec2 vUv;
           void main(){ float n = texture2D(uNoise, vec2(vUv.x * 2.0 + uTime * 0.03, 0.2)).r;
@@ -2255,7 +2581,9 @@ const SkyArt = (() => {
           }`,
         transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending,
       });
-    }
+  }
+  function auroraCurtain(g, isle, rng) {
+    if (!auroraMat) auroraMat = newAuroraMat();
     for (let i = 0; i < 2; i++) {
       const m = new THREE.Mesh(new THREE.PlaneGeometry(isle.r * 1.6, 9, 24, 1), auroraMat);
       const a = rng() * 6.28;
@@ -2580,10 +2908,10 @@ const SkyArt = (() => {
   }
   // animated molten pool: bright flowing lava with drifting dark crust plates
   let lavaMat = null;
-  function getLavaMat() {
-    if (lavaMat) return lavaMat;
-    lavaMat = new THREE.ShaderMaterial({
-      uniforms: { uNoise: { value: TEX.noise }, uTime: U.time },
+  function getLavaMat() { return lavaMat || (lavaMat = newLavaMat()); }
+  function newLavaMat() {
+    return new THREE.ShaderMaterial({
+      name: 'lava', uniforms: { uNoise: { value: TEX.noise }, uTime: U.time },
       vertexShader: 'attribute vec2 uv2s; varying vec2 vUv; varying vec2 vE; void main(){ vUv = uv; vE = uv2s; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
       fragmentShader: `uniform sampler2D uNoise; uniform float uTime; varying vec2 vUv; varying vec2 vE;
         void main() {
@@ -2603,7 +2931,6 @@ const SkyArt = (() => {
           #include <colorspace_fragment>
         }`,
     });
-    return lavaMat;
   }
   function lavaPool(B, rng, isle, info, f, g) {
     let px = -isle.r * 0.12, pz = isle.r * 0.14;
@@ -2621,6 +2948,24 @@ const SkyArt = (() => {
     g.add(m);
     for (let i = 0; i < 12; i++) { const a = i / 12 * 6.28; K.rock(B, rng, px + Math.cos(a) * (pr + 0.5), pz + Math.sin(a) * (pr + 0.5), 0.35 + rng() * 0.25, 0x2a2224); }
     info.water = { x: px, z: pz, r: pr };
+  }
+
+  // painted island top: crisp close-up grain — a world-scale tiling noise multiplies the painted canvas
+  function newTopMat(topOpts, scale, std) {
+    const topMat = litMat(topOpts, std);
+    const detailScale = { value: scale };
+    topMat.onBeforeCompile = sh => {
+      sh.uniforms.uDetail = { value: TEX.noise };
+      sh.uniforms.uDetailScale = detailScale;
+      sh.fragmentShader = 'uniform sampler2D uDetail;\nuniform float uDetailScale;\n' + sh.fragmentShader.replace('#include <map_fragment>',
+        `#include <map_fragment>
+        float dt1 = texture2D(uDetail, vMapUv * uDetailScale).r;
+        float dt2 = texture2D(uDetail, vMapUv * uDetailScale * 0.27 + 0.31).r;
+        diffuseColor.rgb *= 0.8 + dt1 * 0.28 + dt2 * 0.12;`);
+    };
+    topMat.customProgramCacheKey = () => 'skyart-top';
+    topMat.name = 'island_top';
+    return topMat;
   }
 
   // ---------- main entry: build one island's visuals (sky.js adds the collider) ----------
@@ -2657,19 +3002,7 @@ const SkyArt = (() => {
     const paint = paintTop(isle, st, R, Rm, info, rng, low ? 256 : (isle.id === 'isle_dawn' && !isTouch ? 1024 : isle.r >= 15 ? 512 : 256));
     const topOpts = { map: paint.map, roughness: st.rough || 0.92 };
     if (paint.emap) { topOpts.emissiveMap = paint.emap; topOpts.emissive = new THREE.Color(0xffffff); topOpts.emissiveIntensity = 1.6; }
-    const topMat = litMat(topOpts);
-    // crisp close-up grain: a world-scale tiling noise multiplies the painted canvas
-    const detailScale = { value: 2 * Rm / 3.2 };
-    topMat.onBeforeCompile = sh => {
-      sh.uniforms.uDetail = { value: TEX.noise };
-      sh.uniforms.uDetailScale = detailScale;
-      sh.fragmentShader = 'uniform sampler2D uDetail;\nuniform float uDetailScale;\n' + sh.fragmentShader.replace('#include <map_fragment>',
-        `#include <map_fragment>
-        float dt1 = texture2D(uDetail, vMapUv * uDetailScale).r;
-        float dt2 = texture2D(uDetail, vMapUv * uDetailScale * 0.27 + 0.31).r;
-        diffuseColor.rgb *= 0.8 + dt1 * 0.28 + dt2 * 0.12;`);
-    };
-    topMat.customProgramCacheKey = () => 'skyart-top';
+    const topMat = newTopMat(topOpts, 2 * Rm / 3.2);
     const top = new THREE.Mesh(topGeometry(isle, R, Rm), topMat);
     top.receiveShadow = true;
     top.userData.camSolid = true;
@@ -3005,7 +3338,7 @@ const SkyArt = (() => {
   function portalSwirl(g, x, z, crater) {
     if (!swirlTex) {
       const cv = document.createElement('canvas'); cv.width = cv.height = 256;
-      const c = cv.getContext('2d');
+      const c = cv.getContext('2d', CPU2D);
       const gr = c.createRadialGradient(128, 128, 0, 128, 128, 128);
       gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.35, 'rgba(255,255,255,0.75)'); gr.addColorStop(1, 'rgba(255,255,255,0.35)');
       c.fillStyle = gr; c.beginPath(); c.arc(128, 128, 128, 0, 6.28); c.fill();
@@ -3066,5 +3399,6 @@ const SkyArt = (() => {
     get composer() { return composer; },
     // quality tiers + owner diagnostics (see "renderer & post")
     gfxLow, gfxReset, showDiag, idle, diag, get tier() { return TIERS[diag.tier]; },
+    get warming() { return !!(warm || warmNeeded); }, takeResume, probeKit, applyProbe,
   };
 })();
