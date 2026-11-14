@@ -227,6 +227,12 @@ const EmpireGame = (() => {
   // Neutral overlay approach: base = near-white with subtle speckles/streaks so the
   // material's own `color` still shows through (Lambert multiplies map × color).
   const TEX = {};
+  // colour canvas texture (three r152+ colour management: canvas pixels are sRGB)
+  function canvasTex(cv) {
+    const t = new THREE.CanvasTexture(cv);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  }
   function noiseTexture(key, base, spots, density, opts) {
     if (TEX[key]) return TEX[key];
     opts = opts || {};
@@ -270,7 +276,7 @@ const EmpireGame = (() => {
       }
     }
     ctx.globalAlpha = 1;
-    const tex = new THREE.CanvasTexture(cv);
+    const tex = canvasTex(cv);
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
     tex.repeat.set(opts.repeat || 4, opts.repeat || 4);
     TEX[key] = tex;
@@ -308,7 +314,7 @@ const EmpireGame = (() => {
     sctx.fillStyle = g;
     sctx.fillRect(0, 0, 128, 128);
     sunSprite = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: new THREE.CanvasTexture(sc), transparent: true, fog: false,
+      map: canvasTex(sc), transparent: true, fog: false,
     }));
     sunSprite.scale.set(140, 140, 1);
     sunSprite.position.set(60, 70, -90);
@@ -325,7 +331,7 @@ const EmpireGame = (() => {
       st.sky.forEach((c, i) => grad.addColorStop(i / (st.sky.length - 1), c));
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, 48, 384);
-      skyDomeTexCache[ageId] = new THREE.CanvasTexture(cv);
+      skyDomeTexCache[ageId] = canvasTex(cv);
     }
     skyDome.material.map = skyDomeTexCache[ageId];
     skyDome.material.needsUpdate = true;
@@ -340,7 +346,7 @@ const EmpireGame = (() => {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(w, h);
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
     renderer.domElement.className = 'emp-canvas';
     els.wrap.insertBefore(renderer.domElement, els.wrap.firstChild);
 
@@ -354,9 +360,9 @@ const EmpireGame = (() => {
     initSky();
 
     // Lights (kept as refs so each age can tint the atmosphere)
-    hemiLight = new THREE.HemisphereLight(0xffffee, 0x7da35d, 0.85);
+    hemiLight = new THREE.HemisphereLight(0xffffee, 0x7da35d, 0.85 * Math.PI);
     scene.add(hemiLight);
-    sunLight = new THREE.DirectionalLight(0xfff3d6, 1.0);
+    sunLight = new THREE.DirectionalLight(0xfff3d6, 1.0 * Math.PI);
     sunLight.position.set(30, 40, 15);
     sunLight.castShadow = true;
     sunLight.shadow.mapSize.set(1024, 1024);
@@ -425,7 +431,7 @@ const EmpireGame = (() => {
 
     buildCastle(currentAge().id);
 
-    clock = new THREE.Clock();
+    clock = new THREE.Timer();
     threeReady = true;
     animate();
   }
@@ -691,8 +697,8 @@ const EmpireGame = (() => {
       scene.fog.near = st.fogNear;
       scene.fog.far = st.fogFar;
     }
-    if (sunLight) { sunLight.color.set(st.sun); sunLight.intensity = st.sunI; }
-    if (hemiLight) hemiLight.intensity = st.hemiI;
+    if (sunLight) { sunLight.color.set(st.sun); sunLight.intensity = st.sunI * Math.PI; }
+    if (hemiLight) hemiLight.intensity = st.hemiI * Math.PI;
     if (groundMat) groundMat.color.set(st.groundColor);
     if (pathMat) pathMat.color.set(st.pathColor);
 
@@ -1037,7 +1043,7 @@ const EmpireGame = (() => {
     ctx.fillStyle = crit ? '#ffd166' : '#fff6dd';
     ctx.strokeText(text, 128, 48);
     ctx.fillText(text, 128, 48);
-    const tex = new THREE.CanvasTexture(cv);
+    const tex = canvasTex(cv);
     rewardTexCache.set(key, tex);
     return tex;
   }
@@ -1901,7 +1907,7 @@ const EmpireGame = (() => {
       return;
     }
 
-    const dt = Math.min(clock.getDelta(), 0.1);
+    const dt = Math.min((clock.update(), clock.getDelta()), 0.1);
     const now = performance.now();
 
     if (battleActive) {

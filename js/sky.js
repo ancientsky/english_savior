@@ -22,13 +22,11 @@ const SkyGame = (() => {
   let rafId = null;
   let threeReady = false;
   let playing = false;
-  let hemiLight, sunLight, skyDome;
-  let cloudMesh = null;
-  const cloudData = [];
-  // altitude atmosphere: base sky ↔ deep-space purple (galaxy region sits high)
-  // ↔ deep-red cave gloom (地心世界 sits far below, y ≈ -70..-95)
-  let fogBase = null, fogGalaxy = null, hemiBase = null, hemiGalaxy = null;
-  let fogUnderground = null, hemiUnderground = null;
+  let hemiLight, sunLight, skyDome;   // owned by js/sky-art.js (SkyArt.hemi/sun/dome)
+  // altitude atmosphere (computed in SkyArt): base sky ↔ deep-space purple (galaxy
+  // region sits high) ↔ deep-red cave gloom (地心世界 sits far below, y ≈ -70..-95).
+  // fogBase is SkyArt.fogBase — the daytime haze colour the storm-boss victory brightens.
+  let fogBase = null;
   let galaxyBlend = -1;
   let undergroundBlend = -1;
 
@@ -46,7 +44,6 @@ const SkyGame = (() => {
   let grounded = false;
   let lastGroundedAt = -10;
   let jumpBufferedAt = -10;
-  let airJumpUsed = false;
   let lastGroundIsland = 'isle_dawn';
   let currentIsland = null;
   let regionUnderground = false; // true while standing on/under an `underground: true` island (地心世界)
@@ -89,10 +86,6 @@ const SkyGame = (() => {
     bubble_shield: { icon: '🫧', name: '泡泡護罩', key: 'R' },
     cloud_mount: { icon: '☁️', name: '飛天雲', key: 'F' },
   };
-  // ambient decoration Points systems (☁️ Wave 4 polish)
-  let waterMistSystems = [];
-  let fireflySystems = [];
-
   function computePerks() {
     const id = GameEngine.getEquippedTitle().id;
     perks = {
@@ -119,12 +112,68 @@ const SkyGame = (() => {
     let bonus = 0;
     while (gemCarry >= 1) { gemCarry -= 1; bonus++; }
     GameEngine.addGems(n + bonus);
+    uiPop('gem', n + bonus);
   }
 
   // reused temp vectors (zero allocation inside animate)
   let _v1, _v2;
 
+  // ===================== module contract (sky-art / sky-avatar / sky-play) =====================
+  // Per-frame movement snapshot: WRITTEN by the physics half of updatePlayer(),
+  // READ by avatar animation, camera feel and FX. Never write it from a reader.
+  const motion = { speed: 0, moving: false, sprint: false, vy: 0, grounded: true, airJumps: 0, dashing: false, riding: null, gliding: false };
+  // One-shot gameplay events -> visual/audio feedback. Emit from gameplay code,
+  // listen from presentation code. Known names (add more, document them here):
+  //   'jump' 'airjump'{n} 'land'{v} 'pad' 'hurt' 'respawn' 'arrive'{isle}
+  //   'start' (adventure begins → camera reveal + wave) 'teleport' (camera snaps)
+  //   PLAY: 'dash'{x,z,grounded} 'coin'{x,y,z,combo} 'checkpoint'{x,y,z} 'gate'{ok,word}
+  //         'courseStart'{id} 'courseFinish'{id,time,best} 'hatch'{pet,rarity} 'respawn'{course:true}
+  // motion.airJumps = air jumps used this airtime; motion.dashing; motion.gliding (glide title /
+  // 🪂 glider held at the capped fall speed); motion.platform
+  // (standing on a moving obby platform).
+  const fxListeners = [];
+  function emitFx(name, data) {
+    for (let i = 0; i < fxListeners.length; i++) {
+      try { fxListeners[i](name, data || {}); } catch (e) { console.error('[sky fx]', name, e); }
+    }
+  }
+  // Shared context handed to the companion modules (SkyArt / SkyAvatar / SkyPlay).
+  // Getters because several of these are assigned after this object is created.
+  // Extend it from YOUR OWN section with Object.assign(ctx, {...}) /
+  // Object.defineProperty — do not edit this literal (keeps merges clean).
+  const ctx = {
+    get THREE() { return THREE; },
+    get scene() { return scene; },
+    get camera() { return camera; },
+    get renderer() { return renderer; },
+    get player() { return player; },
+    get playerParts() { return playerParts; },
+    get save() { return save; },
+    get perks() { return perks; },
+    get simTime() { return simTime; },
+    get playing() { return playing; },
+    get currentIsland() { return currentIsland; },
+    get hearts() { return hearts; },
+    pos, cam, motion, colliders, islandGroups, isTouch,
+    onFx: fn => fxListeners.push(fn),
+    emitFx,
+    persist: () => persist(),
+    lowPower: () => lowPower(),
+    toast: msg => showWorldToast(msg),
+    matOf: (color, emissive, texKey) => matOf(color, emissive, texKey),
+    isleById: id => isleById(id),
+    bobOf: id => bobOf(id),
+    supportAt: (x, z, maxTop) => supportAt(x, z, maxTop),
+    mulberry32: seed => mulberry32(seed),
+  };
+
   // ===================== helpers =====================
+  // colour canvas texture (three r152+ colour management: canvas pixels are sRGB)
+  function canvasTex(cv) {
+    const t = new THREE.CanvasTexture(cv);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  }
   function mulberry32(seed) {
     let a = seed >>> 0;
     return () => {
@@ -187,6 +236,8 @@ const SkyGame = (() => {
     };
     if (!els.zone) return;
 
+    uiInit();
+    SkyPlay.registerUi?.(ctx);   // PLAY's cover stats (⭐ / 🐾 / 🏁) + dash / pets rows in the controls guide
     loadSave();
     renderStartScreen();
     if (els.minimap) minimapCtx = els.minimap.getContext('2d');
@@ -215,11 +266,12 @@ const SkyGame = (() => {
       useActiveItem(btn.dataset.item);
     });
 
-    // test hooks
-    window.__skyTest = {
+    // test hooks — localhost only (they teleport, add coins, open any quest)
+    if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__skyTest = {
       start: startAdventure,
       player: () => ({ x: pos.x, y: pos.y, z: pos.z, grounded, island: currentIsland, hearts, simTime }),
       teleport: (x, y, z) => { pos.x = x; pos.y = y; pos.z = z; vy = 0; },
+      warp: id => usePortal({ to: id }),   // like a portal: sets the region (underground void depth) too
       stats: () => ({ islands: SKY_ISLANDS.length, ready: threeReady, playing, colliders: colliders.length }),
       keys: k => Object.assign(keys, k),
       jump: () => { jumpBufferedAt = simTime; },
@@ -227,7 +279,7 @@ const SkyGame = (() => {
       renderInfo: () => (renderer ? renderer.info.render : null),
       // quest hooks (Part 2)
       questState: () => ({ completed: { ...save.completed }, total: totalCleared() }),
-      target: () => (currentTarget ? currentTarget.q.id : null),
+      target: () => (currentTarget ? (currentTarget.play ? 'play:' + currentTarget.id : currentTarget.q.id) : null),
       openQuest: id => {
         const q = SKY_QUESTS.find(x => x.id === id);
         if (q) openQuest(q);
@@ -314,6 +366,27 @@ const SkyGame = (() => {
         return s ? { x: s.mesh.position.x, y: s.mesh.position.y, z: s.mesh.position.z, letter: s.letter } : null;
       },
       // puzzle-quest hooks (🧩 Wave 3: order 語序踏石 / maze 傳送迷宮)
+      // PLAY hooks (coins / pets / eggs / obby courses) — see SkyPlay.test in js/sky-play.js
+      play: SkyPlay.test,
+      motion: () => ({ ...motion }),
+      dash: () => requestDash(),
+      jumpHold: v => { if (v && !jumpHeld) jumpBufferedAt = simTime; jumpHeld = !!v; },
+      // deterministic fixed-step play: runs the REAL world + physics updates `sec` seconds
+      // at `step` (headless software GL renders at a few fps; this lets a scripted
+      // controller drive input every step). onStep(i) runs before each step.
+      simulate: (sec, step, onStep) => {
+        step = step || 1 / 60;
+        const n = Math.round(sec / step);
+        for (let i = 0; i < n; i++) {
+          if (onStep && onStep(i) === false) break;
+          if (!playing) break;
+          updateWorld(step);
+          updatePlayer(step);
+        }
+        updateCamera(1);
+      },
+      supportAt: (x, z, maxTop) => { const s = supportAt(x, z, maxTop); return { y: s.y, kind: s.col && s.col.kind, play: !!(s.col && s.col.play) }; },
+      setCam: (theta, phi, radius) => { cam.theta = theta; if (phi !== undefined) cam.phi = phi; if (radius !== undefined) cam.radius = radius; },
       puzzle: () => (orderActive
         ? {
           type: 'order', idx: orderActive.idx, expected: orderActive.words.slice(),
@@ -334,24 +407,219 @@ const SkyGame = (() => {
     }
   }
 
-  function renderStartScreen() {
-    const clearedCount = totalCleared();
-    els.startStats.innerHTML = `
-      <div class="aw-stat"><span>🏝️</span><b>${SKY_ISLANDS.length}</b><small>座浮空島嶼</small></div>
-      <div class="aw-stat"><span>📜</span><b>${clearedCount} / ${visibleQuestTotal()}</b><small>完成任務</small></div>
-      <div class="aw-stat"><span>🌉</span><b>${SKY_BRIDGES.length}</b><small>空中橋樑</small></div>
-    `;
-    els.guide.innerHTML = isTouch
-      ? `📱 <b>手機操作</b><br>
-         🕹️ 左半邊拖曳＝虛擬搖桿移動（推到底衝刺）<br>
-         👆 右半邊拖曳＝轉動視角 ・ 雙指縮放<br>
-         🦘 跳躍鈕 ・ ⚡ 互動鈕`
-      : `⌨️ <b>電腦操作</b><br>
-         <span class="kbd">W</span><span class="kbd">A</span><span class="kbd">S</span><span class="kbd">D</span> 移動 ・
-         <span class="kbd">Space</span> 跳躍 ・ <span class="kbd">Shift</span> 衝刺<br>
-         🖱️ 拖曳畫面轉視角 ・ 滾輪縮放 ・ <span class="kbd">E</span> 互動`;
-    els.startBtn.textContent = clearedCount > 0 ? '⚔️ 繼續冒險' : '⚔️ 開始冒險';
+  // ===================== SkyUI: presentation helpers (UI workstream) =====================
+  // Everything below is DOM/CSS presentation only (css/sky.css, prefix aw-). It never
+  // changes what is asked, how answers are judged or what is paid. Other modules reach
+  // it through `ctx.ui`:
+  //   ctx.ui.pop(kind, amount, {text})   floating "+12 XP" chip that flies to the top bar
+  //                                       (kind: 'xp' | 'gem' | 'coin' | 'text')
+  //   ctx.ui.banner(title, small, icon)  big ribbon (island arrival / unlock); queued while a quiz is open
+  //   ctx.ui.toast(msg)                  the in-world toast (kind picked from the leading emoji)
+  //   ctx.ui.addStartStat(fn)            fn() -> html chip(s) appended to the cover's stats row
+  //   ctx.ui.addControl({id, icon, kbd:['Q'], touch:'💨 衝刺鈕', text:'衝刺', isNew:true})
+  //                                       adds/overrides a row of the cover's controls guide
+  //   ctx.ui.refreshStart()              re-render the cover (after a save change)
+  // HUD chips: append `.aw-chip` elements to `.aw-hud` (top-left column) for extra HUD pieces.
+  const uiState = {
+    streak: 0, hearts: -1, heartsMax: 0, bossW: 100, live: 0,
+    lastBanner: 0, queue: [], arriveT: 0,
+    startStats: [], controls: {},
+  };
+  function uiReduced() {
+    return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   }
+  function uiInit() {
+    Object.assign(ctx, {
+      ui: {
+        pop: uiPop, banner: uiBanner, toast: msg => showWorldToast(msg),
+        addStartStat: fn => { uiState.startStats.push(fn); renderStartScreen(); },
+        addControl: c => { if (c && c.id) { uiState.controls[c.id] = c; renderStartScreen(); } },
+        refreshStart: () => renderStartScreen(),
+      },
+    });
+    ctx.onFx((name, d) => {
+      if (name === 'arrive' && d && d.isle) uiBanner(d.isle.name, '抵達', d.isle.underground ? '🌋' : '🏝️');
+    });
+  }
+
+  // ---- floating reward pop-ups ----
+  function uiPop(kind, amount, opts) {
+    if (!els.wrap || !(amount > 0 || (opts && opts.text))) return;
+    const el = document.createElement('div');
+    el.className = 'aw-pop ' + kind;
+    el.textContent = (opts && opts.text) ||
+      (kind === 'xp' ? `+${amount} XP` : kind === 'gem' ? `+${amount} 💎` : kind === 'coin' ? `+${amount} ⭐` : String(amount));
+    document.body.appendChild(el);
+    const wr = els.wrap.getBoundingClientRect();
+    let ox = wr.left + wr.width / 2;
+    let oy = wr.top + wr.height * 0.4;
+    const card = quizOpen && quiz && quiz.root.querySelector('.aw-quiz-card');
+    if (card) { const cr = card.getBoundingClientRect(); ox = cr.left + cr.width / 2; oy = cr.top + 30; }
+    const idx = uiState.live++;
+    oy -= Math.min(idx, 4) * 38;
+    ox += (idx % 2 ? 1 : -1) * Math.min(idx, 3) * 14;
+    const targetEl = kind === 'xp' ? document.getElementById('xp-text') : (kind === 'gem' ? document.getElementById('hud-gems') : null);
+    let tr = targetEl ? targetEl.getBoundingClientRect() : null;
+    if (tr && (!tr.width || tr.bottom < 0)) tr = null;
+    const tx = tr ? tr.left + tr.width / 2 : ox;
+    const ty = tr ? Math.max(14, tr.top + tr.height / 2) : oy - 90;
+    const at = (x, y, sc) => `translate(${Math.round(x)}px,${Math.round(y)}px) translate(-50%,-50%) scale(${sc})`;
+    const done = () => {
+      el.remove();
+      uiState.live = Math.max(0, uiState.live - 1);
+      if (tr && targetEl) {
+        const b = targetEl.closest('.hud-coins') || targetEl.closest('.xp-bar-container') || targetEl;
+        b.classList.remove('aw-bump');
+        void b.offsetWidth;
+        b.classList.add('aw-bump');
+      }
+    };
+    if (!el.animate) { setTimeout(done, 900); return; }
+    const frames = uiReduced()
+      ? [{ transform: at(ox, oy, 1), opacity: 0 }, { transform: at(ox, oy, 1), opacity: 1, offset: 0.2 }, { transform: at(ox, oy, 1), opacity: 1, offset: 0.8 }, { transform: at(ox, oy, 1), opacity: 0 }]
+      : [
+        { transform: at(ox, oy + 24, 0.3), opacity: 0 },
+        { transform: at(ox, oy - 8, 1.3), opacity: 1, offset: 0.16 },
+        { transform: at(ox, oy - 22, 1), opacity: 1, offset: 0.45 },
+        { transform: at(tx, ty, 0.45), opacity: 0.95, offset: 0.94 },
+        { transform: at(tx, ty, 0.3), opacity: 0 },
+      ];
+    const a = el.animate(frames, { duration: uiReduced() ? 1100 : 1350 + idx * 60, easing: 'cubic-bezier(.35,.05,.3,1)', fill: 'forwards' });
+    a.onfinish = done;
+    a.oncancel = done;
+  }
+
+  // ---- banner (arrival / unlock) ----
+  function uiBanner(title, small, icon) {
+    if (!els.wrap) return;
+    if (quizOpen) { uiState.queue.push([title, small, icon]); return; }
+    els.wrap.querySelectorAll('.aw-banner').forEach(b => b.remove());
+    const el = document.createElement('div');
+    el.className = 'aw-banner';
+    el.innerHTML = `<div class="aw-banner-card"><div class="aw-banner-small"></div><div class="aw-banner-title aw-outline-text"></div></div>`;
+    el.querySelector('.aw-banner-small').textContent = small || '';
+    el.querySelector('.aw-banner-title').textContent = `${icon || ''} ${title}`.trim();
+    els.wrap.appendChild(el);
+    uiState.lastBanner = Date.now();
+    setTimeout(() => el.remove(), 2700);
+  }
+  function uiFlushBanners() {
+    const q = uiState.queue.splice(0);
+    q.forEach((a, i) => setTimeout(() => uiBanner(a[0], a[1], a[2]), 350 + i * 2700));
+  }
+
+  // ---- little star burst on a button ----
+  function uiBurst(el) {
+    if (uiReduced() || !el) return;
+    for (let i = 0; i < 8; i++) {
+      const sp = document.createElement('i');
+      sp.className = 'aw-spark';
+      const ang = (i / 8) * Math.PI * 2 + Math.random() * 0.4;
+      const d = 34 + Math.random() * 26;
+      sp.style.setProperty('--dx', Math.cos(ang) * d + 'px');
+      sp.style.setProperty('--dy', Math.sin(ang) * d + 'px');
+      sp.style.background = ['#ffe45c', '#fff', '#7dff9a', '#8bd8ff'][i % 4];
+      el.appendChild(sp);
+      setTimeout(() => sp.remove(), 800);
+    }
+  }
+  function uiStepAnim() {
+    if (!quiz || !quiz.card || uiReduced()) return;
+    quiz.card.classList.remove('step');
+    void quiz.card.offsetWidth;
+    quiz.card.classList.add('step');
+  }
+  function uiStreakUpdate(bump) {
+    if (!quiz || !quiz.streak) return;
+    const n = uiState.streak;
+    quiz.streak.classList.toggle('on', n >= 2);
+    quiz.streak.textContent = `🔥 ×${n}`;
+    if (bump && n >= 2) {
+      quiz.streak.classList.remove('bump');
+      void quiz.streak.offsetWidth;
+      quiz.streak.classList.add('bump');
+      if (n === 3 || n === 5 || n === 8 || n === 12) uiPop('text', 0, { text: `🔥 連續答對 ${n} 題！` });
+    }
+  }
+  function uiCountUp(root) {
+    root.querySelectorAll('[data-count]').forEach((b, i) => {
+      const target = +b.dataset.count || 0;
+      if (uiReduced()) { b.textContent = target; return; }
+      const t0 = performance.now() + 500 + i * 200;
+      const tick = now => {
+        if (!b.isConnected) return;
+        const k = Math.min(1, Math.max(0, (now - t0) / 700));
+        b.textContent = Math.round(target * (1 - Math.pow(1 - k, 3)));
+        if (k < 1) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+  }
+
+  // ---- cover: explorer's passport + controls guide ----
+  const SKY_RANKS = [
+    [0, '🌱 見習旅人'], [0.08, '🧭 探險新手'], [0.25, '🎒 空島冒險家'],
+    [0.5, '⚔️ 雲海戰士'], [0.75, '👑 天空勇者'], [1, '🌟 天空之城傳說'],
+  ];
+  function guideHtml() {
+    const C = uiState.controls;
+    const kbd = (...k) => k.map(x => `<span class="kbd">${x}</span>`).join('');
+    const row = (ico, html, isNew) => `<div class="aw-guide-row${isNew ? ' new' : ''}"><span class="aw-guide-ico">${ico}</span><span>${html}</span></div>`;
+    const extraK = Object.values(C).filter(c => c.kbd).map(c => row(c.icon || '✨', `${kbd(...c.kbd)} ${c.text || ''}`, c.isNew));
+    const extraT = Object.values(C).filter(c => c.touch).map(c => row(c.icon || '✨', c.touch, c.isNew));
+    const keyboard = [
+      row('🏃', `${kbd('W', 'A', 'S', 'D')} 或方向鍵 移動`),
+      row('🦘', `${kbd('Space')} 跳躍`),
+      row('🦘', `空中再按一次 ${kbd('Space')} ＝ 二段跳`, true),
+      ...extraK,
+      row('👟', `按住 ${kbd('Shift')} 奔跑`),
+      row('⚡', `${kbd('E')} 互動／攻擊怪物`),
+      row('🖱️', '拖曳畫面轉視角、滾輪縮放'),
+    ].join('');
+    const touch = [
+      row('🕹️', '左半邊拖曳＝搖桿（推到底奔跑）'),
+      row('👆', '右半邊拖曳＝轉視角・雙指縮放'),
+      row('🦘', '綠色鈕＝跳躍，空中再按一次＝二段跳', true),
+      row('⚡', '橘色鈕＝互動（也可直接點怪物）'),
+      ...extraT,
+    ].join('');
+    const first = isTouch ? ['📱 手機操作', touch] : ['⌨️ 電腦操作', keyboard];
+    const other = isTouch ? ['⌨️ 有鍵盤時', keyboard] : ['📱 手機／平板', touch];
+    return `<div class="aw-guide-h">${first[0]}</div><div class="aw-guide-grid">${first[1]}</div>
+      <details class="aw-guide-more"><summary>${other[0]}怎麼玩？</summary><div class="aw-guide-grid" style="margin-top:6px">${other[1]}</div></details>`;
+  }
+
+  function renderStartScreen() {
+    if (!els.startStats) return;
+    const cleared = totalCleared();
+    const total = visibleQuestTotal();
+    const frac = total ? cleared / total : 0;
+    const pct = Math.round(frac * 100);
+    let rank = SKY_RANKS[0][1];
+    for (const r of SKY_RANKS) if (frac >= r[0] && (r[0] < 1 || cleared >= total)) rank = r[1];
+    const bridges = Object.keys(save.bridgesBuilt || {}).filter(k => save.bridgesBuilt[k]).length;
+    const secrets = Object.keys(save.secretsFound || {}).length;
+    let extra = '';
+    for (const fn of uiState.startStats) { try { extra += fn() || ''; } catch (e) { console.error('[sky ui]', e); } }
+    els.startStats.innerHTML = `
+      <div class="aw-passport">
+        <div class="aw-ring" style="--p:${pct}"><b>${pct}%</b></div>
+        <div><div class="aw-rank">${rank}</div>
+          <div class="aw-passport-sub">任務 ${cleared} / ${total}</div></div>
+      </div>
+      <div class="aw-stat"><span>🌉</span><div><b>${bridges} / ${SKY_BRIDGES.length}</b><small>空中橋樑</small></div></div>
+      <div class="aw-stat"><span>🏝️</span><div><b>${SKY_ISLANDS.length}</b><small>座浮空島</small></div></div>
+      ${secrets ? `<div class="aw-stat"><span>🔮</span><div><b>${secrets}</b><small>秘密發現</small></div></div>` : ''}
+      ${extra}`;
+    els.guide.innerHTML = guideHtml();
+    els.startBtn.textContent = cleared > 0 ? '⚔️ 繼續冒險' : '⚔️ 開始冒險';
+    const resume = document.getElementById('sky-start-resume');
+    if (resume) {
+      const isle = save.lastIsland && isleById(save.lastIsland);
+      resume.textContent = isle ? `📍 上次到過：${isle.name}` : '';
+    }
+  }
+
 
   function startAdventure() {
     els.start.style.display = 'none';
@@ -372,6 +640,7 @@ const SkyGame = (() => {
     const isle = isleById(save.lastIsland) || SKY_ISLANDS[0];
     respawnAt(isle, false);
     refreshEquipment();
+    emitFx('start');
     hearts = maxHearts();
     playing = true;
     updateHudHearts();
@@ -388,6 +657,7 @@ const SkyGame = (() => {
     // active-use items reset per adventure (they're activated in-world, not consumed at start)
     clearActiveItemEffects();
     updateItemTray();
+    SkyPlay.onAdventureStart?.();   // PLAY: welcome-back card / tutorial pointer
     if (!rafId) animate();
   }
 
@@ -406,7 +676,7 @@ const SkyGame = (() => {
   function resizeRenderer() {
     if (!threeReady) return;
     const { w, h } = canvasSize();
-    renderer.setSize(w, h);
+    SkyArt.resize(w, h);
     els.wrap.style.height = h + 'px';
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
@@ -415,11 +685,8 @@ const SkyGame = (() => {
   function initThree() {
     const { w, h } = canvasSize();
 
-    renderer = new THREE.WebGLRenderer({ antialias: !lowPower() });
-    renderer.setPixelRatio(lowPower() ? 1 : Math.min(window.devicePixelRatio, 2));
-    renderer.setSize(w, h);
-    renderer.shadowMap.enabled = !lowPower();
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // renderer, post FX, sky, lights, clouds and particles: js/sky-art.js
+    renderer = SkyArt.createRenderer(w, h, lowPower());
     renderer.domElement.className = 'aw-canvas';
     els.wrap.insertBefore(renderer.domElement, els.wrap.firstChild);
     els.wrap.style.height = h + 'px';
@@ -428,20 +695,13 @@ const SkyGame = (() => {
     _v2 = new THREE.Vector3();
 
     scene = new THREE.Scene();
-    scene.fog = new THREE.Fog(SKY_CONFIG.fogColor, SKY_CONFIG.fogNear, SKY_CONFIG.fogFar);
-    fogBase = new THREE.Color(SKY_CONFIG.fogColor);
-    fogGalaxy = new THREE.Color(0x241a4e);
-    hemiBase = new THREE.Color(0xdfefff);
-    hemiGalaxy = new THREE.Color(0xb09ae8);
-    fogUnderground = new THREE.Color(0x2a0c06);
-    hemiUnderground = new THREE.Color(0x8a4a20);
-
     camera = new THREE.PerspectiveCamera(55, w / h, 0.1, 1800);
+    SkyArt.init(ctx);
+    hemiLight = SkyArt.hemi;
+    sunLight = SkyArt.sun;
+    skyDome = SkyArt.dome;
+    fogBase = SkyArt.fogBase;   // the storm-boss victory brightens the haze through this
 
-    buildSkyDome();
-    buildLights();
-    buildClouds();
-    initTextures();
     SKY_ISLANDS.forEach(buildIsland);
     SKY_BRIDGES.forEach(b => {
       if (b.quest && !isBridgeBuilt(b.quest)) return; // built by its quest
@@ -452,956 +712,28 @@ const SkyGame = (() => {
     buildQuestObjects();
     buildPortals();
     buildSwitches();
+    flushQuestProps();
     AMBIENT_MOBS.forEach(a => spawnMob(a.mob, a.island, a.dx, a.dz));
-    buildParticles();
-    buildEmberParticles();
     buildPlayer();
     setupPointerControls();
+    SkyPlay.init(ctx);   // PLAY: coins, pets, egg stand, obby courses (js/sky-play.js)
 
-    clock = new THREE.Clock();
+    clock = new THREE.Timer();
     threeReady = true;
   }
 
-  function buildSkyDome() {
-    const cv = document.createElement('canvas');
-    cv.width = 64; cv.height = 512;
-    const ctx = cv.getContext('2d');
-    const grad = ctx.createLinearGradient(0, 0, 0, 512);
-    grad.addColorStop(0, '#2a7fd4');
-    grad.addColorStop(0.42, '#69b8ef');
-    grad.addColorStop(0.62, '#aee3ff');
-    grad.addColorStop(0.78, '#e8f7ff');
-    grad.addColorStop(1, '#fdf0d5');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, 64, 512);
-    const tex = new THREE.CanvasTexture(cv);
-    skyDome = new THREE.Mesh(
-      new THREE.SphereGeometry(820, 24, 16),
-      new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, fog: false })
-    );
-    scene.add(skyDome);
-
-    // sun glow sprite
-    const sc = document.createElement('canvas');
-    sc.width = sc.height = 128;
-    const sctx = sc.getContext('2d');
-    const g = sctx.createRadialGradient(64, 64, 6, 64, 64, 64);
-    g.addColorStop(0, 'rgba(255,250,220,1)');
-    g.addColorStop(0.25, 'rgba(255,236,160,0.9)');
-    g.addColorStop(1, 'rgba(255,236,160,0)');
-    sctx.fillStyle = g;
-    sctx.fillRect(0, 0, 128, 128);
-    const sun = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: new THREE.CanvasTexture(sc), transparent: true, fog: false,
-    }));
-    sun.scale.set(220, 220, 1);
-    sun.position.set(420, 460, -520);
-    scene.add(sun);
-  }
-
-  function buildLights() {
-    hemiLight = new THREE.HemisphereLight(0xdfefff, 0x8a9db5, 0.75);
-    scene.add(hemiLight);
-    sunLight = new THREE.DirectionalLight(0xfff3d6, 1.05);
-    sunLight.position.set(40, 60, 20);
-    sunLight.castShadow = true;
-    sunLight.shadow.mapSize.set(1024, 1024);
-    sunLight.shadow.camera.left = -45; sunLight.shadow.camera.right = 45;
-    sunLight.shadow.camera.top = 45; sunLight.shadow.camera.bottom = -45;
-    sunLight.shadow.camera.near = 5; sunLight.shadow.camera.far = 220;
-    scene.add(sunLight);
-    scene.add(sunLight.target);
-  }
-
-  function buildClouds() {
-    const rng = mulberry32(SKY_CONFIG.worldSeed);
-    const COUNT = lowPower() ? 36 : 70;
-    const geo = new THREE.SphereGeometry(1, 7, 5);
-    const mat = new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.85 });
-    cloudMesh = new THREE.InstancedMesh(geo, mat, COUNT);
-    cloudMesh.castShadow = false;
-    const m = new THREE.Matrix4();
-    const q = new THREE.Quaternion();
-    const s = new THREE.Vector3();
-    const p = new THREE.Vector3();
-    for (let i = 0; i < COUNT; i++) {
-      const d = {
-        x: -420 + rng() * 840,
-        y: -20 + rng() * 140,
-        z: -420 + rng() * 840,
-        sx: 7 + rng() * 14,
-        sy: 2 + rng() * 3.2,
-        sz: 5 + rng() * 9,
-        speed: 1.2 + rng() * 2.4,
-      };
-      cloudData.push(d);
-      p.set(d.x, d.y, d.z); s.set(d.sx, d.sy, d.sz);
-      m.compose(p, q, s);
-      cloudMesh.setMatrixAt(i, m);
-    }
-    scene.add(cloudMesh);
-  }
-
-  // ---------- shared geometry / material caches ----------
+  // ---------- art pipeline: everything visual about the world lives in js/sky-art.js ----------
+  // (sky, lights, clouds, island terrain + props, bridges, pads, particles, post FX)
   const GEO = {};
-  const MAT = {};
   function geoBox() { return GEO.box || (GEO.box = new THREE.BoxGeometry(1, 1, 1)); }
-  function matOf(color, emissive, texKey) {
-    const key = color + '_' + (emissive || 0) + '_' + (texKey || '');
-    if (!MAT[key]) {
-      const opts = { color };
-      if (texKey && TEX[texKey]) opts.map = TEX[texKey];
-      MAT[key] = new THREE.MeshLambertMaterial(opts);
-      if (emissive) { MAT[key].emissive = new THREE.Color(emissive); }
-    }
-    return MAT[key];
-  }
-
-  // ---------- procedural surface textures (cosmetic-only, no new draw calls) ----------
-  // Neutral overlay approach: base = near-white with subtle speckles/streaks so the
-  // material's own `color` still shows through (Lambert multiplies map × color).
-  // One texture per PATTERN, not per color, so the MAT cache above still fully reuses.
-  const TEX = {};
-  function noiseTexture(key, base, spots, density, opts) {
-    if (TEX[key]) return TEX[key];
-    opts = opts || {};
-    const size = opts.size || 128;
-    const cv = document.createElement('canvas');
-    cv.width = cv.height = size;
-    const ctx = cv.getContext('2d');
-    ctx.fillStyle = base;
-    ctx.fillRect(0, 0, size, size);
-    for (let i = 0; i < density; i++) {
-      const x = Math.random() * size, y = Math.random() * size;
-      ctx.fillStyle = spots[i % spots.length];
-      ctx.globalAlpha = 0.15 + Math.random() * 0.35;
-      if (opts.angular) {
-        // sparse angular flecks (crystal facets)
-        const s = 1.5 + Math.random() * 3;
-        ctx.save();
-        ctx.translate(x, y);
-        ctx.rotate(Math.random() * Math.PI);
-        ctx.fillRect(-s / 2, -s / 4, s, s / 2);
-        ctx.restore();
-      } else {
-        const r = 1 + Math.random() * (opts.rmax || 2);
-        ctx.beginPath();
-        ctx.arc(x, y, r, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-    if (opts.streaks) {
-      const { color, count, len, random } = opts.streaks;
-      ctx.strokeStyle = color;
-      for (let i = 0; i < count; i++) {
-        const x = Math.random() * size, y = Math.random() * size;
-        const l = len * (0.5 + Math.random() * 0.9);
-        // default: mostly-vertical grain; `random: true` = short scattered cracks
-        const angle = random ? Math.random() * Math.PI * 2 : (Math.PI / 2 + (Math.random() - 0.5) * 0.3);
-        ctx.globalAlpha = 0.1 + Math.random() * 0.25;
-        ctx.lineWidth = 1 + Math.random() * 1.2;
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-        ctx.lineTo(x + Math.cos(angle) * l, y + Math.sin(angle) * l);
-        ctx.stroke();
-      }
-    }
-    ctx.globalAlpha = 1;
-    const tex = new THREE.CanvasTexture(cv);
-    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-    tex.repeat.set(opts.repeat || 4, opts.repeat || 4);
-    TEX[key] = tex;
-    return tex;
-  }
-
-  // build every recipe once, eagerly, before any island/bridge mesh is made
-  function initTextures() {
-    noiseTexture('grassTex', '#ffffff', ['#c2ceac', '#a9ba92', '#e4ecd4'], 300, { rmax: 5 });
-    noiseTexture('rockTex', '#ffffff', ['#9c9c9c', '#7e7e7e', '#c6c6c6'], 220,
-      { streaks: { color: '#606060', count: 40, len: 10, random: true } });
-    noiseTexture('woodTex', '#ffffff', ['#c9beac', '#ddd2bd'], 50,
-      { streaks: { color: '#8a6f4e', count: 60, len: 110 } });
-    noiseTexture('sandTex', '#ffffff', ['#dcc9a4', '#ccb68c', '#f0e6cc'], 420, { rmax: 3 });
-    noiseTexture('snowTex', '#ffffff', ['#b9d6f6', '#dceafc', '#a2c6ec'], 200, { rmax: 3 });
-    noiseTexture('crystalTex', '#ffffff', ['#dcdcff', '#c8c8f0'], 46,
-      { streaks: { color: '#b0b0e8', count: 20, len: 14, random: true }, angular: true });
-  }
-
-  const ISLAND_STYLE = {
-    grass: { top: 0x62c95e, side: 0x7a5230, tex: 'grassTex' },
-    forest: { top: 0x3f8f4a, side: 0x6a4a2e, tex: 'grassTex' },
-    water: { top: 0x6fcf6f, side: 0x77572f, tex: 'grassTex' },
-    flower: { top: 0x7fd070, side: 0x7a5230, tex: 'grassTex' },
-    mushroom: { top: 0x9c7bb8, side: 0x5e4a3a, tex: 'grassTex' },
-    ruin: { top: 0xb8b09a, side: 0x8a8272, tex: 'rockTex' },
-    crystal: { top: 0x8fd8e8, side: 0x5a7a99, tex: 'crystalTex' },
-    cloud: { top: 0xf2f8ff, side: 0xd8e6f5, tex: null },
-    village: { top: 0x8fce62, side: 0x7a5230, tex: 'grassTex' },
-    ice: { top: 0xd8f0fa, side: 0x9ec3d8, tex: 'snowTex' },
-    lava: { top: 0x4a3a38, side: 0x35292a, tex: 'rockTex' },
-    pillars: { top: 0xc9c3ae, side: 0x99917c, tex: 'rockTex' },
-    bone: { top: 0xb8ad8f, side: 0x847a5e, tex: 'sandTex' },
-    storm: { top: 0x5a5a72, side: 0x3c3c50, tex: 'rockTex' },
-    // galaxy biomes
-    nebula: { top: 0x4a3a7a, side: 0x2a2050, tex: 'crystalTex' },
-    star: { top: 0x5a5aa0, side: 0x333366, tex: 'crystalTex' },
-    moon: { top: 0xb8b8c8, side: 0x8a8a9a, tex: 'rockTex' },
-    comet: { top: 0x3a4a6a, side: 0x24304a, tex: 'rockTex' },
-    aurora: { top: 0x2a5a4a, side: 0x1a3a35, tex: 'crystalTex' },
-    alien: { top: 0x6a4a8a, side: 0x44305a, tex: 'crystalTex' },
-    // hidden secret realms
-    cave: { top: 0x3a3a4a, side: 0x242430, tex: 'rockTex' },
-    lake: { top: 0x4aa8d8, side: 0x2a6a8a, tex: null },
-    mist: { top: 0x6a7a6a, side: 0x4a5a4a, tex: 'rockTex' },
-    temple: { top: 0x2a2438, side: 0x1a1626, tex: 'crystalTex' },
-    // mechanism-triggered hidden realms
-    garden: { top: 0xcfe8b8, side: 0x8a6a4a, tex: 'grassTex' },
-    vault: { top: 0x1a1414, side: 0x120e10, tex: 'rockTex' },
-    tree: { top: 0x8a6a3e, side: 0x5e4526, tex: 'woodTex' },
-    relic: { top: 0xe8dfc0, side: 0xb8ac86, tex: 'rockTex' },
-    // 地心世界 (underground region)
-    cavefloor: { top: 0x4a3f38, side: 0x2a221e, tex: 'rockTex' },
-    deepcrystal: { top: 0x3a2a52, side: 0x241a38, tex: 'crystalTex' },
-    magma: { top: 0x2a1410, side: 0x180c0a, tex: 'rockTex' },
-    bonecave: { top: 0x6a5a48, side: 0x3a2f26, tex: 'sandTex' },
-    coretemple: { top: 0x1a0f08, side: 0x100a06, tex: 'rockTex' },
-  };
+  function matOf(color, emissive, texKey) { return SkyArt.matOf(color, emissive, texKey); }
+  const TEX = SkyArt.TEX;
 
   function buildIsland(isle) {
-    const rng = mulberry32(SKY_CONFIG.worldSeed + isle.seed * 977);
-    const style = ISLAND_STYLE[isle.type] || ISLAND_STYLE.grass;
-    const g = new THREE.Group();
-    g.position.set(isle.pos[0], isle.pos[1], isle.pos[2]);
-
-    // top disc (walkable surface at local y = 0)
-    const discH = 2.2;
-    const disc = new THREE.Mesh(
-      new THREE.CylinderGeometry(isle.r, isle.r * 0.92, discH, 22),
-      matOf(style.top, 0, style.tex)
-    );
-    disc.position.y = -discH / 2;
-    disc.receiveShadow = true;
-    disc.matrixAutoUpdate = false;
-    disc.updateMatrix();
-    g.add(disc);
-
-    // inverted rock cone below — always rocky regardless of the top biome
-    const rockH = isle.r * (0.9 + rng() * 0.5);
-    const rock = new THREE.Mesh(
-      new THREE.ConeGeometry(isle.r * 0.9, rockH, 12),
-      matOf(style.side, 0, 'rockTex')
-    );
-    rock.rotation.x = Math.PI;
-    rock.position.y = -discH - rockH / 2 + 0.1;
-    rock.matrixAutoUpdate = false;
-    rock.updateMatrix();
-    g.add(rock);
-
-    // hanging rubble chunks
-    const nRubble = 2 + Math.floor(rng() * 3);
-    for (let i = 0; i < nRubble; i++) {
-      const a = rng() * Math.PI * 2;
-      const rr = isle.r * (0.55 + rng() * 0.5);
-      const chunk = new THREE.Mesh(new THREE.DodecahedronGeometry(0.8 + rng() * 1.6), matOf(style.side, 0, 'rockTex'));
-      chunk.position.set(Math.cos(a) * rr, -discH - rockH * (0.55 + rng() * 0.6), Math.sin(a) * rr);
-      chunk.matrixAutoUpdate = false;
-      chunk.updateMatrix();
-      g.add(chunk);
-    }
-
-    decorateIsland(g, isle, rng);
-
-    scene.add(g);
+    const g = SkyArt.buildIsland(isle);
     islandGroups[isle.id] = g;
     islandBob[isle.id] = 0;
-
     colliders.push({ kind: 'isle', x: isle.pos[0], z: isle.pos[2], r: isle.r - 0.4, top: isle.pos[1], isle: isle.id });
-  }
-
-  // scatter a mesh factory n times inside radius (keeps centre walkable-ish)
-  function scatter(g, isle, rng, n, minR, maxR, make) {
-    for (let i = 0; i < n; i++) {
-      const a = rng() * Math.PI * 2;
-      const rr = isle.r * (minR + rng() * (maxR - minR));
-      const obj = make(rng);
-      obj.position.x += Math.cos(a) * rr;
-      obj.position.z += Math.sin(a) * rr;
-      obj.traverse(o => { o.matrixAutoUpdate = false; o.updateMatrix(); });
-      obj.matrixAutoUpdate = false;
-      obj.updateMatrix();
-      g.add(obj);
-    }
-  }
-
-  function makeTree(rng, leafColor = 0x3e8a3e) {
-    const t = new THREE.Group();
-    const h = 1.8 + rng() * 1.4;
-    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.4, h, 6), matOf(0x7a5230));
-    trunk.position.y = h / 2;
-    trunk.castShadow = true;
-    t.add(trunk);
-    for (let i = 0; i < 3; i++) {
-      const leaf = new THREE.Mesh(new THREE.ConeGeometry(1.7 - i * 0.4, 1.9, 7), matOf(leafColor));
-      leaf.position.y = h + 0.6 + i * 1.0;
-      leaf.castShadow = true;
-      t.add(leaf);
-    }
-    return t;
-  }
-
-  function makeCrystal(rng, color = 0x7fe8ff) {
-    const c = new THREE.Mesh(
-      new THREE.OctahedronGeometry(0.7 + rng() * 1.3),
-      matOf(color, color)
-    );
-    c.position.y = 0.9;
-    c.scale.y = 1.7;
-    c.rotation.y = rng() * Math.PI;
-    c.castShadow = true;
-    return c;
-  }
-
-  function makeHouse(rng) {
-    const hgroup = new THREE.Group();
-    const bw = 2.6 + rng() * 1.2;
-    const body = new THREE.Mesh(geoBox(), matOf(0xe8d9b8));
-    body.scale.set(bw, 2.2, bw);
-    body.position.y = 1.1;
-    body.castShadow = true;
-    hgroup.add(body);
-    const roof = new THREE.Mesh(new THREE.ConeGeometry(bw * 0.85, 1.6, 4), matOf(0xb0523a));
-    roof.position.y = 2.2 + 0.8;
-    roof.rotation.y = Math.PI / 4;
-    roof.castShadow = true;
-    hgroup.add(roof);
-    return hgroup;
-  }
-
-  function decorateIsland(g, isle, rng) {
-    switch (isle.type) {
-      case 'grass':
-        scatter(g, isle, rng, 4, 0.4, 0.85, r => makeTree(r));
-        scatter(g, isle, rng, 8, 0.2, 0.9, r => {
-          const f = new THREE.Mesh(new THREE.SphereGeometry(0.22, 6, 5),
-            matOf([0xff6b81, 0xffd166, 0xc77dff, 0xffffff][Math.floor(r() * 4)]));
-          f.position.y = 0.25;
-          return f;
-        });
-        break;
-      case 'forest':
-        scatter(g, isle, rng, 11, 0.25, 0.9, r => makeTree(r, 0x2e6e38));
-        buildFireflies(g, isle);
-        break;
-      case 'water': {
-        const pond = new THREE.Mesh(new THREE.CylinderGeometry(isle.r * 0.4, isle.r * 0.4, 0.16, 18),
-          matOf(0x4aa8e8, 0x1a4a7a));
-        pond.position.set(isle.r * 0.2, 0.06, -isle.r * 0.1);
-        g.add(pond);
-        // waterfall pouring off the edge
-        const fall = new THREE.Mesh(geoBox(), matOf(0x6fc2f2, 0x2a6a9a));
-        fall.scale.set(3.2, 16, 0.8);
-        fall.position.set(isle.r * 0.2, -7.4, -isle.r * 0.62);
-        g.add(fall);
-        scatter(g, isle, rng, 4, 0.55, 0.9, () => {
-          const s = new THREE.Mesh(new THREE.DodecahedronGeometry(0.6), matOf(0xa8a49a));
-          s.position.y = 0.4;
-          return s;
-        });
-        buildWaterMist(g, isle, fall.position.x, fall.position.z);
-        break;
-      }
-      case 'flower':
-        scatter(g, isle, rng, 22, 0.1, 0.92, r => {
-          const f = new THREE.Group();
-          const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.6, 4), matOf(0x3e8a3e));
-          stem.position.y = 0.3;
-          f.add(stem);
-          const bloom = new THREE.Mesh(new THREE.SphereGeometry(0.3, 6, 5),
-            matOf([0xff6b81, 0xffd166, 0xc77dff, 0xff9f1c, 0xffffff][Math.floor(r() * 5)]));
-          bloom.position.y = 0.7;
-          f.add(bloom);
-          return f;
-        });
-        scatter(g, isle, rng, 2, 0.5, 0.8, r => makeTree(r, 0xd97fb8));
-        break;
-      case 'mushroom':
-        scatter(g, isle, rng, 7, 0.15, 0.85, r => {
-          const m = new THREE.Group();
-          const h = 0.8 + r() * 2.2;
-          const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.42, h, 8), matOf(0xe8dcc8));
-          stem.position.y = h / 2;
-          stem.castShadow = true;
-          m.add(stem);
-          const cap = new THREE.Mesh(new THREE.SphereGeometry(0.9 + r() * 0.7, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2),
-            matOf(r() < 0.5 ? 0xd84848 : 0xb86bd8));
-          cap.position.y = h;
-          cap.castShadow = true;
-          m.add(cap);
-          return m;
-        });
-        break;
-      case 'ruin':
-        scatter(g, isle, rng, 6, 0.3, 0.85, r => {
-          const h = 1.2 + r() * 3.4;
-          const col = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.58, h, 9), matOf(0xcfc7ac));
-          col.position.y = h / 2;
-          col.rotation.z = (r() - 0.5) * 0.14;
-          col.castShadow = true;
-          return col;
-        });
-        scatter(g, isle, rng, 4, 0.2, 0.7, r => {
-          const b = new THREE.Mesh(geoBox(), matOf(0xb8b09a));
-          b.scale.set(1 + r(), 0.7, 1 + r());
-          b.position.y = 0.35;
-          b.rotation.y = r() * Math.PI;
-          return b;
-        });
-        break;
-      case 'crystal':
-        scatter(g, isle, rng, 9, 0.15, 0.88, r => makeCrystal(r, r() < 0.4 ? 0xb08fff : 0x7fe8ff));
-        break;
-      case 'cloud':
-        scatter(g, isle, rng, 6, 0.2, 0.85, r => {
-          const puff = new THREE.Mesh(new THREE.SphereGeometry(0.9 + r() * 0.9, 8, 6), matOf(0xffffff));
-          puff.position.y = 0.5;
-          puff.scale.y = 0.6;
-          return puff;
-        });
-        scatter(g, isle, rng, 6, 0.4, 0.9, () => {
-          const post = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 1, 5), matOf(0xc9b48a));
-          post.position.y = 0.5;
-          return post;
-        });
-        break;
-      case 'village':
-        scatter(g, isle, rng, 4, 0.3, 0.75, r => makeHouse(r));
-        scatter(g, isle, rng, 3, 0.35, 0.8, r => {
-          const stall = new THREE.Group();
-          const table = new THREE.Mesh(geoBox(), matOf(0xa8763e));
-          table.scale.set(1.8, 0.9, 1.1);
-          table.position.y = 0.45;
-          stall.add(table);
-          const awning = new THREE.Mesh(geoBox(), matOf(r() < 0.5 ? 0xe85454 : 0x54a8e8));
-          awning.scale.set(2, 0.16, 1.4);
-          awning.position.y = 1.7;
-          stall.add(awning);
-          return stall;
-        });
-        scatter(g, isle, rng, 2, 0.6, 0.9, r => makeTree(r));
-        break;
-      case 'ice':
-        scatter(g, isle, rng, 8, 0.15, 0.88, r => {
-          const h = 1.4 + r() * 3;
-          const spike = new THREE.Mesh(new THREE.ConeGeometry(0.5 + r() * 0.4, h, 6), matOf(0xbfeaff, 0x2a5a7a));
-          spike.position.y = h / 2;
-          spike.castShadow = true;
-          return spike;
-        });
-        break;
-      case 'lava': {
-        const pool = new THREE.Mesh(new THREE.CylinderGeometry(isle.r * 0.35, isle.r * 0.35, 0.18, 16),
-          matOf(0xff7a20, 0xff4400));
-        pool.position.set(-isle.r * 0.15, 0.08, isle.r * 0.15);
-        g.add(pool);
-        scatter(g, isle, rng, 6, 0.4, 0.88, r => {
-          const h = 1 + r() * 2.6;
-          const spike = new THREE.Mesh(new THREE.ConeGeometry(0.45, h, 5), matOf(0x2a2026));
-          spike.position.y = h / 2;
-          spike.castShadow = true;
-          return spike;
-        });
-        break;
-      }
-      case 'pillars':
-        scatter(g, isle, rng, 8, 0.15, 0.85, r => {
-          const h = 2 + r() * 6;
-          const p = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.9, h, 8), matOf(0xd8d2bc));
-          p.position.y = h / 2;
-          p.castShadow = true;
-          return p;
-        });
-        break;
-      case 'bone':
-        scatter(g, isle, rng, 5, 0.25, 0.8, r => {
-          const rib = new THREE.Mesh(new THREE.TorusGeometry(1.6 + r() * 1.4, 0.22, 6, 10, Math.PI), matOf(0xe8e0c8));
-          rib.position.y = 0.1;
-          rib.rotation.y = r() * Math.PI;
-          rib.castShadow = true;
-          return rib;
-        });
-        scatter(g, isle, rng, 4, 0.3, 0.85, r => {
-          const b = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 1.6 + r(), 5), matOf(0xe8e0c8));
-          b.rotation.z = Math.PI / 2 + (r() - 0.5);
-          b.position.y = 0.2;
-          return b;
-        });
-        break;
-      case 'nebula':
-        scatter(g, isle, rng, 8, 0.15, 0.88, r => makeCrystal(r, r() < 0.5 ? 0xff9de2 : 0xb08fff));
-        scatter(g, isle, rng, 5, 0.3, 0.85, r => {
-          const orb = new THREE.Mesh(new THREE.SphereGeometry(0.35 + r() * 0.3, 8, 6),
-            matOf(0xd8b4ff, 0x6a3aaa));
-          orb.position.y = 1 + r() * 2.5;
-          return orb;
-        });
-        break;
-      case 'star':
-        scatter(g, isle, rng, 7, 0.2, 0.85, r => {
-          const p = new THREE.Group();
-          const h = 1.5 + r() * 3.5;
-          const col = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.45, h, 6), matOf(0x44446a));
-          col.position.y = h / 2;
-          col.castShadow = true;
-          p.add(col);
-          const tip = new THREE.Mesh(new THREE.OctahedronGeometry(0.4), matOf(0xffe066, 0xaa8800));
-          tip.position.y = h + 0.4;
-          p.add(tip);
-          return p;
-        });
-        break;
-      case 'moon':
-        scatter(g, isle, rng, 6, 0.2, 0.8, r => {
-          const crater = new THREE.Mesh(new THREE.CylinderGeometry(1 + r() * 1.4, 1.2 + r() * 1.4, 0.22, 12),
-            matOf(0x8a8a9a));
-          crater.position.y = 0.1;
-          return crater;
-        });
-        scatter(g, isle, rng, 6, 0.3, 0.88, r => {
-          const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.5 + r() * 0.8), matOf(0x9a9aac));
-          rock.position.y = 0.4;
-          rock.castShadow = true;
-          return rock;
-        });
-        break;
-      case 'comet':
-        scatter(g, isle, rng, 8, 0.15, 0.88, r => {
-          const h = 1.2 + r() * 2.6;
-          const shard = new THREE.Mesh(new THREE.ConeGeometry(0.4 + r() * 0.3, h, 5), matOf(0x9fd4ff, 0x2255aa));
-          shard.position.y = h / 2;
-          shard.rotation.z = (r() - 0.5) * 0.5;
-          shard.castShadow = true;
-          return shard;
-        });
-        break;
-      case 'aurora':
-        scatter(g, isle, rng, 7, 0.2, 0.85, r => {
-          const h = 2.5 + r() * 4;
-          const beam = new THREE.Mesh(new THREE.ConeGeometry(0.5, h, 6),
-            new THREE.MeshLambertMaterial({
-              color: r() < 0.5 ? 0x4ae8b0 : 0x66ccff,
-              emissive: r() < 0.5 ? 0x0a5a3a : 0x0a3a6a,
-              transparent: true, opacity: 0.75,
-            }));
-          beam.position.y = h / 2;
-          return beam;
-        });
-        scatter(g, isle, rng, 6, 0.25, 0.9, r => {
-          const tuft = new THREE.Mesh(new THREE.SphereGeometry(0.28, 6, 5), matOf(0x7fe8c8));
-          tuft.position.y = 0.25;
-          return tuft;
-        });
-        break;
-      case 'alien':
-        scatter(g, isle, rng, 5, 0.2, 0.8, r => {
-          const m = new THREE.Group();
-          const h = 1 + r() * 2;
-          const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.3, h, 6), matOf(0xb8e8d8));
-          stem.position.y = h / 2;
-          m.add(stem);
-          const cap = new THREE.Mesh(new THREE.SphereGeometry(0.7 + r() * 0.5, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2),
-            matOf(r() < 0.5 ? 0xb06ae8 : 0x4ae8b0, 0x2a1a4a));
-          cap.position.y = h;
-          cap.castShadow = true;
-          m.add(cap);
-          return m;
-        });
-        scatter(g, isle, rng, 4, 0.35, 0.8, r => {
-          const dome = new THREE.Mesh(new THREE.SphereGeometry(1.4 + r() * 0.6, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2),
-            matOf(0xcfd8e8, 0x223344));
-          dome.castShadow = true;
-          return dome;
-        });
-        break;
-      case 'storm': {
-        // off-centre — the boss altar and colossus take the middle
-        const obelisk = new THREE.Mesh(geoBox(), matOf(0x2c2c40, 0x16165a));
-        obelisk.scale.set(1.4, 6, 1.4);
-        obelisk.position.set(isle.r * 0.55, 3, isle.r * 0.35);
-        obelisk.castShadow = true;
-        g.add(obelisk);
-        scatter(g, isle, rng, 6, 0.45, 0.85, r => {
-          const h = 1.5 + r() * 3;
-          const shard = new THREE.Mesh(new THREE.ConeGeometry(0.5, h, 4), matOf(0x3c3c55, 0x2a2aaa));
-          shard.position.y = h / 2;
-          shard.rotation.y = r();
-          return shard;
-        });
-        break;
-      }
-      // ===== hidden secret realms =====
-      case 'cave':
-        // ring of tall dark rock walls around the rim (visual enclosure)
-        scatter(g, isle, rng, 14, 0.85, 0.95, r => {
-          const h = 5 + r() * 6;
-          const wall = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.2, h, 6), matOf(0x2a2a34));
-          wall.position.y = h / 2;
-          wall.castShadow = true;
-          return wall;
-        });
-        // stalactites hanging above (non-colliding decoration only)
-        scatter(g, isle, rng, 8, 0.1, 0.8, r => {
-          const h = 2 + r() * 2.5;
-          const stal = new THREE.Mesh(new THREE.ConeGeometry(0.4 + r() * 0.3, h, 6), matOf(0x333340));
-          stal.position.y = 8 + r() * 4;
-          stal.rotation.x = Math.PI;
-          return stal;
-        });
-        scatter(g, isle, rng, 7, 0.15, 0.8, r => makeCrystal(r, r() < 0.5 ? 0xb08fff : 0x66e8ff));
-        scatter(g, isle, rng, 5, 0.2, 0.75, r => {
-          const m = new THREE.Group();
-          const h = 0.5 + r() * 1;
-          const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.2, h, 6), matOf(0x6a5a7a));
-          stem.position.y = h / 2;
-          m.add(stem);
-          const cap = new THREE.Mesh(new THREE.SphereGeometry(0.4, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2),
-            new THREE.MeshLambertMaterial({ color: 0x8f6bb0, emissive: 0x2a1a3a }));
-          cap.position.y = h;
-          m.add(cap);
-          return m;
-        });
-        break;
-      case 'lake':
-        scatter(g, isle, rng, 12, 0.15, 0.8, r => {
-          const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.5 + r() * 0.3, 0.5 + r() * 0.3, 0.08, 10),
-            matOf(0x3e8a4a));
-          pad.position.y = 0.1;
-          return pad;
-        });
-        scatter(g, isle, rng, 10, 0.2, 0.85, r => {
-          const reed = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.08, 1.2 + r(), 5), matOf(0x5a8a4a));
-          reed.position.y = 0.6 + r() * 0.5;
-          return reed;
-        });
-        {
-          const pier = new THREE.Mesh(geoBox(), matOf(0x8a6a42));
-          pier.scale.set(1.6, 0.2, 6);
-          pier.position.set(isle.r * 0.3, 0.15, -isle.r * 0.3);
-          pier.castShadow = true;
-          g.add(pier);
-        }
-        scatter(g, isle, rng, 4, 0.3, 0.7, () => {
-          const mist = new THREE.Sprite(new THREE.SpriteMaterial({
-            color: 0xffffff, transparent: true, opacity: 0.35,
-          }));
-          mist.scale.set(3, 2, 1);
-          mist.position.y = 0.8;
-          return mist;
-        });
-        break;
-      case 'mist':
-        scatter(g, isle, rng, 8, 0.2, 0.88, r => {
-          const t = new THREE.Group();
-          const h = 2 + r() * 2;
-          const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.38, h, 6), matOf(0x3a332e));
-          trunk.position.y = h / 2;
-          trunk.rotation.z = (r() - 0.5) * 0.3;
-          t.add(trunk);
-          const canopy = new THREE.Mesh(new THREE.SphereGeometry(0.7 + r() * 0.4, 6, 5), matOf(0x4a5c48));
-          canopy.position.y = h + 0.3;
-          canopy.scale.y = 0.6;
-          t.add(canopy);
-          return t;
-        });
-        scatter(g, isle, rng, 5, 0.15, 0.85, () => {
-          const fog = new THREE.Sprite(new THREE.SpriteMaterial({
-            color: 0xd8e0d8, transparent: true, opacity: 0.3,
-          }));
-          fog.scale.set(4, 2.4, 1);
-          fog.position.y = 1;
-          return fog;
-        });
-        scatter(g, isle, rng, 10, 0.1, 0.9, r => {
-          const fly = new THREE.Mesh(new THREE.SphereGeometry(0.06, 5, 4),
-            new THREE.MeshLambertMaterial({ color: 0xd8ff8f, emissive: 0x8fbf3a }));
-          fly.position.y = 0.4 + r() * 1.2;
-          return fly;
-        });
-        buildFireflies(g, isle);
-        break;
-      case 'temple': {
-        const trim = new THREE.Mesh(new THREE.TorusGeometry(isle.r * 0.94, 0.35, 6, 28),
-          matOf(0xd8b34a, 0x6a4a10));
-        trim.rotation.x = Math.PI / 2;
-        trim.position.y = 0.1;
-        g.add(trim);
-        scatter(g, isle, rng, 10, 0.55, 0.85, r => {
-          const p = new THREE.Group();
-          const h = 3 + r() * 1.5;
-          const col = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.5, h, 8), matOf(0x211d2c));
-          col.position.y = h / 2;
-          col.castShadow = true;
-          p.add(col);
-          const cap = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.3, 1.1), matOf(0xd8b34a, 0x4a3308));
-          cap.position.y = h + 0.15;
-          p.add(cap);
-          return p;
-        });
-        const altar = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 2.2, 1.1, 8), matOf(0x1a1626, 0x0a0812));
-        altar.position.y = 0.55;
-        altar.castShadow = true;
-        g.add(altar);
-        scatter(g, isle, rng, 4, 0.25, 0.5, () => {
-          const b = new THREE.Group();
-          const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.3, 0.6, 8), matOf(0x33291a));
-          bowl.position.y = 0.3;
-          b.add(bowl);
-          const flame = new THREE.Mesh(new THREE.ConeGeometry(0.25, 0.6, 6),
-            new THREE.MeshLambertMaterial({ color: 0xff8a3a, emissive: 0xcc4400 }));
-          flame.position.y = 0.85;
-          b.add(flame);
-          return b;
-        });
-        break;
-      }
-      // ===== mechanism-triggered hidden realms =====
-      case 'garden':
-        scatter(g, isle, rng, 20, 0.1, 0.9, r => {
-          const f = new THREE.Group();
-          const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.5, 4), matOf(0x5a9a4a));
-          stem.position.y = 0.25;
-          f.add(stem);
-          const bloom = new THREE.Mesh(new THREE.SphereGeometry(0.28, 6, 5),
-            matOf([0xffb0d0, 0xfff0a0, 0xd0b0ff, 0xffffff][Math.floor(r() * 4)]));
-          bloom.position.y = 0.65;
-          f.add(bloom);
-          return f;
-        });
-        // vine arches (torus halves)
-        scatter(g, isle, rng, 3, 0.55, 0.85, r => {
-          const arch = new THREE.Mesh(new THREE.TorusGeometry(1.6, 0.16, 6, 16, Math.PI), matOf(0x4a8a3a));
-          arch.rotation.x = Math.PI / 2;
-          arch.rotation.z = r() * Math.PI;
-          arch.position.y = 1.6;
-          return arch;
-        });
-        // butterfly sprites (small emissive quads; drift with the island's own bob)
-        scatter(g, isle, rng, 8, 0.2, 0.85, r => {
-          const b = new THREE.Mesh(new THREE.PlaneGeometry(0.35, 0.28),
-            new THREE.MeshLambertMaterial({
-              color: [0xffb0d0, 0x9fd8ff, 0xffe066][Math.floor(r() * 3)],
-              emissive: 0x442244, side: THREE.DoubleSide,
-            }));
-          b.position.y = 0.6 + r() * 1.4;
-          b.rotation.y = r() * Math.PI;
-          return b;
-        });
-        break;
-      case 'vault': {
-        const glow = new THREE.Mesh(new THREE.CylinderGeometry(isle.r * 0.3, isle.r * 0.3, 0.14, 14),
-          matOf(0xff5a1a, 0xdd3300));
-        glow.position.set(isle.r * 0.1, 0.08, -isle.r * 0.1);
-        g.add(glow);
-        scatter(g, isle, rng, 7, 0.2, 0.85, r => {
-          const h = 2 + r() * 3.5;
-          const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.6, h, 8), matOf(0x0e0a0c));
-          pillar.position.y = h / 2;
-          pillar.castShadow = true;
-          return pillar;
-        });
-        // red-orange emissive crack lines
-        scatter(g, isle, rng, 10, 0.1, 0.9, r => {
-          const crack = new THREE.Mesh(new THREE.BoxGeometry(0.9 + r() * 0.6, 0.04, 0.12),
-            new THREE.MeshLambertMaterial({ color: 0xff6a2a, emissive: 0xdd3300 }));
-          crack.position.y = 0.02;
-          crack.rotation.y = r() * Math.PI;
-          return crack;
-        });
-        scatter(g, isle, rng, 5, 0.2, 0.7, r => {
-          const ember = new THREE.Mesh(new THREE.SphereGeometry(0.08, 5, 4),
-            new THREE.MeshLambertMaterial({ color: 0xffb060, emissive: 0xff5500 }));
-          ember.position.y = 0.5 + r() * 1.5;
-          return ember;
-        });
-        break;
-      }
-      case 'tree':
-        // ring-pattern of the stump's growth rings
-        for (let i = 0; i < 3; i++) {
-          const ring = new THREE.Mesh(new THREE.TorusGeometry(isle.r * (0.3 + i * 0.22), 0.1, 6, 24),
-            matOf(0x6a4a2a, 0, 'woodTex'));
-          ring.rotation.x = Math.PI / 2;
-          ring.position.y = 0.15;
-          g.add(ring);
-        }
-        // branch platforms (non-colliding decor)
-        scatter(g, isle, rng, 6, 0.5, 0.85, r => {
-          const h = 1 + r() * 1.5;
-          const branch = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.4, h, 6), matOf(0x5e4526, 0, 'woodTex'));
-          branch.rotation.z = Math.PI / 2.4;
-          branch.position.y = 2 + r() * 2;
-          return branch;
-        });
-        scatter(g, isle, rng, 12, 0.1, 0.85, r => {
-          const moss = new THREE.Mesh(new THREE.SphereGeometry(0.12, 5, 4),
-            new THREE.MeshLambertMaterial({ color: 0x8fd870, emissive: 0x2a6a1a }));
-          moss.position.y = 0.1;
-          return moss;
-        });
-        break;
-      case 'relic': {
-        scatter(g, isle, rng, 8, 0.3, 0.85, r => {
-          const h = 1.5 + r() * 3;
-          const col = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.58, h, 9), matOf(0xe8dfc0));
-          col.position.y = h / 2;
-          col.rotation.z = (r() - 0.5) * 0.3;
-          col.castShadow = true;
-          return col;
-        });
-        // cracked statue: stacked boxes
-        {
-          const statue = new THREE.Group();
-          const base = new THREE.Mesh(geoBox(), matOf(0xd8cba0));
-          base.scale.set(1.4, 1, 1.4);
-          base.position.y = 0.5;
-          statue.add(base);
-          const torso = new THREE.Mesh(geoBox(), matOf(0xe8dfc0));
-          torso.scale.set(1, 1.6, 1);
-          torso.position.y = 1.8;
-          statue.add(torso);
-          const head = new THREE.Mesh(geoBox(), matOf(0xf0e8d0));
-          head.scale.set(0.7, 0.7, 0.7);
-          head.position.y = 2.95;
-          statue.add(head);
-          statue.traverse(o => { o.castShadow = true; });
-          g.add(statue);
-        }
-        // floating rubble (slow-bob small rocks)
-        scatter(g, isle, rng, 6, 0.2, 0.8, r => {
-          const rubble = new THREE.Mesh(new THREE.DodecahedronGeometry(0.3 + r() * 0.3), matOf(0xd0c39a));
-          rubble.position.y = 0.5 + r() * 2;
-          return rubble;
-        });
-        break;
-      }
-      // ===== 地心世界 (underground region) =====
-      case 'cavefloor':
-        scatter(g, isle, rng, 8, 0.15, 0.85, r => {
-          const h = 1.2 + r() * 2.4;
-          const stal = new THREE.Mesh(new THREE.ConeGeometry(0.4 + r() * 0.3, h, 6), matOf(0x3a322c));
-          stal.position.y = h / 2;
-          stal.castShadow = true;
-          return stal;
-        });
-        scatter(g, isle, rng, 6, 0.2, 0.8, r => makeCrystal(r, 0x5a6a8a));
-        break;
-      case 'deepcrystal': {
-        scatter(g, isle, rng, 9, 0.15, 0.88, r => makeCrystal(r, r() < 0.5 ? 0x9a7bff : 0x6ae8ff));
-        const lake = new THREE.Mesh(new THREE.CylinderGeometry(isle.r * 0.35, isle.r * 0.35, 0.14, 18),
-          matOf(0x2a3a6a, 0x14204a));
-        lake.position.set(isle.r * 0.15, 0.07, -isle.r * 0.15);
-        g.add(lake);
-        scatter(g, isle, rng, 5, 0.3, 0.75, r => {
-          const orb = new THREE.Mesh(new THREE.SphereGeometry(0.3 + r() * 0.25, 8, 6),
-            matOf(0xb08fff, 0x5a2aaa));
-          orb.position.y = 0.8 + r() * 2;
-          return orb;
-        });
-        break;
-      }
-      case 'magma': {
-        const pool = new THREE.Mesh(new THREE.CylinderGeometry(isle.r * 0.4, isle.r * 0.4, 0.18, 18),
-          matOf(0xff5a1a, 0xdd2200));
-        pool.position.set(-isle.r * 0.1, 0.09, isle.r * 0.12);
-        g.add(pool);
-        scatter(g, isle, rng, 7, 0.4, 0.9, r => {
-          const h = 1.2 + r() * 3;
-          const spike = new THREE.Mesh(new THREE.ConeGeometry(0.5, h, 5), matOf(0x120a0c));
-          spike.position.y = h / 2;
-          spike.castShadow = true;
-          return spike;
-        });
-        scatter(g, isle, rng, 10, 0.1, 0.9, r => {
-          const crack = new THREE.Mesh(new THREE.BoxGeometry(0.9 + r() * 0.6, 0.04, 0.12),
-            new THREE.MeshLambertMaterial({ color: 0xff6a2a, emissive: 0xdd3300 }));
-          crack.position.y = 0.02;
-          crack.rotation.y = r() * Math.PI;
-          return crack;
-        });
-        scatter(g, isle, rng, 6, 0.2, 0.7, r => {
-          const ember = new THREE.Mesh(new THREE.SphereGeometry(0.08, 5, 4),
-            new THREE.MeshLambertMaterial({ color: 0xffb060, emissive: 0xff5500 }));
-          ember.position.y = 0.5 + r() * 1.6;
-          return ember;
-        });
-        break;
-      }
-      case 'bonecave':
-        scatter(g, isle, rng, 6, 0.25, 0.85, r => {
-          const rib = new THREE.Mesh(new THREE.TorusGeometry(1.8 + r() * 1.6, 0.24, 6, 10, Math.PI), matOf(0xe0d4b0));
-          rib.position.y = 0.15;
-          rib.rotation.y = r() * Math.PI;
-          rib.castShadow = true;
-          return rib;
-        });
-        scatter(g, isle, rng, 5, 0.3, 0.85, r => {
-          const bone = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 1.8 + r(), 5), matOf(0xe0d4b0));
-          bone.rotation.z = Math.PI / 2 + (r() - 0.5);
-          bone.position.y = 0.25;
-          return bone;
-        });
-        scatter(g, isle, rng, 4, 0.2, 0.7, r => {
-          const skull = new THREE.Mesh(new THREE.DodecahedronGeometry(0.4 + r() * 0.2), matOf(0xd8cba0));
-          skull.position.y = 0.3;
-          return skull;
-        });
-        break;
-      case 'coretemple': {
-        scatter(g, isle, rng, 8, 0.5, 0.88, r => {
-          const h = 3 + r() * 2;
-          const col = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.58, h, 8), matOf(0x14100c));
-          col.position.y = h / 2;
-          col.castShadow = true;
-          return col;
-        });
-        const trim = new THREE.Mesh(new THREE.TorusGeometry(isle.r * 0.9, 0.3, 6, 26), matOf(0xd8a83a, 0x6a4a10));
-        trim.rotation.x = Math.PI / 2;
-        trim.position.y = 0.1;
-        g.add(trim);
-        const core = new THREE.Mesh(new THREE.SphereGeometry(1.8, 14, 10),
-          new THREE.MeshLambertMaterial({ color: 0xff6a1a, emissive: 0xff3300 }));
-        core.position.y = 2.4;
-        core.castShadow = true;
-        g.add(core);
-        break;
-      }
-    }
-
-    // grass blades on green islands (InstancedMesh child → bobs with island)
-    if (['grass', 'forest', 'flower', 'village', 'garden'].includes(isle.type)) {
-      const rng2 = mulberry32(isle.seed * 31 + 7);
-      const N = 55;
-      const gm = new THREE.InstancedMesh(
-        GEO.grass || (GEO.grass = new THREE.ConeGeometry(0.1, 0.75, 4)),
-        MAT.grassBlade || (MAT.grassBlade = new THREE.MeshLambertMaterial({ color: 0x4faf45 })),
-        N
-      );
-      const m = new THREE.Matrix4();
-      const q = new THREE.Quaternion();
-      const e = new THREE.Euler();
-      const s = new THREE.Vector3(1, 1, 1);
-      const p = new THREE.Vector3();
-      for (let i = 0; i < N; i++) {
-        const a = rng2() * Math.PI * 2;
-        const rr = isle.r * Math.sqrt(rng2()) * 0.92;
-        e.set(0, rng2() * Math.PI, (rng2() - 0.5) * 0.25);
-        q.setFromEuler(e);
-        p.set(Math.cos(a) * rr, 0.36, Math.sin(a) * rr);
-        s.setScalar(0.7 + rng2() * 0.9);
-        m.compose(p, q, s);
-        gm.setMatrixAt(i, m);
-      }
-      g.add(gm);
-    }
   }
 
   function buildBridge(b) {
@@ -1417,6 +749,7 @@ const SkyGame = (() => {
     const ex = bx - ux * (B.r - 2), ez = bz - uz * (B.r - 2), ey = B.pos[1];
     const span = Math.hypot(ex - sx, ez - sz);
     const yaw = Math.atan2(ex - sx, ez - sz);
+    const pieces = [];
 
     if (b.style === 'stepstones') {
       // steep climbs get extra, overlapping stones (a stair ramp) so each
@@ -1429,86 +762,28 @@ const SkyGame = (() => {
         const px = sx + (ex - sx) * t;
         const pz = sz + (ez - sz) * t;
         const py = sy + (ey - sy) * t + Math.sin(i * 1.7) * wobble;
-        const stone = new THREE.Mesh(
-          GEO.step || (GEO.step = new THREE.CylinderGeometry(1.7, 1.4, 0.8, 9)),
-          matOf(0x9aa5a8, 0, 'rockTex')
-        );
-        stone.position.set(px, py - 0.4, pz);
-        stone.receiveShadow = true;
-        stone.matrixAutoUpdate = false;
-        stone.updateMatrix();
-        scene.add(stone);
+        pieces.push({ x: px, y: py, z: pz });
         colliders.push({ kind: 'seg', x: px, z: pz, r: 1.7, top: py });
       }
-      return;
-    }
-
-    const plank = b.style === 'plank';
-    const segLen = 3;
-    const n = Math.max(2, Math.round(span / segLen));
-    for (let i = 0; i < n; i++) {
-      const t0 = i / n, t1 = (i + 1) / n, tm = (t0 + t1) / 2;
-      const px = sx + (ex - sx) * tm;
-      const pz = sz + (ez - sz) * tm;
-      const py = sy + (ey - sy) * tm;
-      const seg = new THREE.Mesh(geoBox(),
-        plank
-          ? matOf(i % 2 ? 0xa8763e : 0x99672f, 0, 'woodTex')
-          : matOf(i % 2 ? 0xa8a49a : 0x94908a, 0, 'rockTex'));
-      seg.scale.set(plank ? 2.6 : 3.2, 0.4, span / n + 0.25);
-      seg.position.set(px, py - 0.2, pz);
-      seg.rotation.y = yaw;
-      seg.receiveShadow = true;
-      seg.castShadow = true;
-      seg.matrixAutoUpdate = false;
-      seg.updateMatrix();
-      scene.add(seg);
-      colliders.push({ kind: 'seg', x: px, z: pz, r: 1.9, top: py });
-
-      // plank bridge rope posts
-      if (plank && i % 2 === 0) {
-        [-1.2, 1.2].forEach(off => {
-          const post = new THREE.Mesh(
-            GEO.post || (GEO.post = new THREE.CylinderGeometry(0.09, 0.09, 1.1, 5)),
-            matOf(0x6a4a2e)
-          );
-          post.position.set(px + Math.cos(yaw) * off, py + 0.55, pz - Math.sin(yaw) * off);
-          post.matrixAutoUpdate = false;
-          post.updateMatrix();
-          scene.add(post);
-        });
+    } else {
+      const segLen = 3;
+      const n = Math.max(2, Math.round(span / segLen));
+      for (let i = 0; i < n; i++) {
+        const tm = (i + 0.5) / n;
+        const px = sx + (ex - sx) * tm;
+        const pz = sz + (ez - sz) * tm;
+        const py = sy + (ey - sy) * tm;
+        pieces.push({ x: px, y: py, z: pz, len: span / n + 0.25 });
+        colliders.push({ kind: 'seg', x: px, z: pz, r: 1.9, top: py });
       }
     }
+    SkyArt.buildBridge(b, pieces, yaw, b.style);
   }
 
   function buildPad(p) {
     const isle = isleById(p.island);
     if (!isle) return;
-    const g = islandGroups[isle.id];
-    const pad = new THREE.Group();
-    const disc = new THREE.Mesh(
-      GEO.pad || (GEO.pad = new THREE.CylinderGeometry(2, 2.3, 0.5, 14)),
-      matOf(0xffffff)
-    );
-    disc.position.y = 0.25;
-    pad.add(disc);
-    const glow = new THREE.Mesh(
-      GEO.padGlow || (GEO.padGlow = new THREE.CylinderGeometry(1.5, 1.5, 0.2, 12)),
-      matOf(0x8fe8ff, 0x2a9adf)
-    );
-    glow.position.y = 0.55;
-    pad.add(glow);
-    const arrow = new THREE.Mesh(
-      GEO.padArrow || (GEO.padArrow = new THREE.ConeGeometry(0.55, 1, 6)),
-      matOf(0xffe066, 0xaa8800)
-    );
-    arrow.position.y = 1.3;
-    pad.add(arrow);
-    pad.position.set(p.dx, 0, p.dz);
-    pad.traverse(o => { o.matrixAutoUpdate = false; o.updateMatrix(); });
-    pad.matrixAutoUpdate = false;
-    pad.updateMatrix();
-    g.add(pad);
+    SkyArt.buildPad(p, islandGroups[isle.id]);
     colliders.push({
       kind: 'pad',
       x: isle.pos[0] + p.dx, z: isle.pos[2] + p.dz, r: 2.1,
@@ -1527,7 +802,6 @@ const SkyGame = (() => {
     'runes', 'arena', 'bridge', 'race', 'boss', 'portal', 'order', 'maze']);
 
   const interactables = [];    // { q, x, z, isle, marker }
-  const markerList = [];       // bobbing quest markers
   let quizOpen = false;
   let currentTarget = null;
   let quiz = null;             // quiz overlay DOM refs
@@ -1542,20 +816,6 @@ const SkyGame = (() => {
   function isLocked(q) {
     if (q.lockSecret) return secretCleared() < q.lockSecret;
     return q.lock && totalCleared() < q.lock;
-  }
-
-  function markerTexture(symbol, color) {
-    const cv = document.createElement('canvas');
-    cv.width = cv.height = 96;
-    const ctx = cv.getContext('2d');
-    ctx.font = 'bold 72px "Noto Sans TC", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.shadowColor = 'rgba(0,0,0,0.5)';
-    ctx.shadowBlur = 8;
-    ctx.fillStyle = color;
-    ctx.fillText(symbol, 48, 52);
-    return new THREE.CanvasTexture(cv);
   }
 
   function markerState(q) {
@@ -1574,153 +834,85 @@ const SkyGame = (() => {
   function updateQuestMarkers() {
     for (const it of interactables) {
       const st = markerState(it.q);
-      if (it.markerSym !== st.s) {
-        it.markerSym = st.s;
-        it.marker.material.map = markerTexture(st.s, st.c);
-        it.marker.material.needsUpdate = true;
-      }
+      it.markerSym = st.s;
+      it.mkKind = MK_OF[st.s] || 'lock';
     }
   }
 
+  // ---- floating quest markers: ONE instanced mesh per marker kind for the whole world ----
+  // (they used to be one emoji sprite per quest = ~110 draw calls). 3D "!" / ✓ / 🔒 / gems from
+  // SkyArt.questGeo, glowing through the bloom pass; `it.marker` stays a { visible } handle.
+  const MK_OF = { '!': 'quest', '✓': 'done', '✅': 'done', '🔒': 'lock', '⏳': 'lock', '🌀': 'portal', '⚙️': 'switch' };
+  const MK_KINDS = ['quest', 'done', 'lock', 'portal', 'switch'];
+  const MK_SCALE = { quest: 1.1, done: 0.75, lock: 0.85, portal: 1, switch: 1 };
+  const mkMesh = {};
+  const _mkObj = new THREE.Object3D();
+  function buildMarkerMeshes() {
+    const cap = interactables.length + 4;
+    for (const k of MK_KINDS) {
+      const m = new THREE.InstancedMesh(SkyArt.questGeo('mk_' + k), SkyArt.propMat, cap);
+      m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      m.frustumCulled = false;
+      m.count = 0;
+      scene.add(m);
+      mkMesh[k] = m;
+    }
+  }
+  function updateMarkers() {
+    const n = {};
+    for (const k of MK_KINDS) n[k] = 0;
+    for (let i = 0; i < interactables.length; i++) {
+      const it = interactables[i];
+      if (!it.marker.visible) continue;
+      // the quest being played right now loses its marker (a boss stands on its altar)
+      if ((bossActive && bossActive.q.id === it.q.id) || (arenaActive && arenaActive.q.id === it.q.id)) continue;
+      const g = islandGroups[it.isle.id];
+      if (!g.visible) continue;
+      const dx = it.x - pos.x, dz = it.z - pos.z;
+      if (dx * dx + dz * dz > 170 * 170) continue;
+      const m = mkMesh[it.mkKind];
+      if (!m) continue;
+      const sc = MK_SCALE[it.mkKind] * (it.mkKind === 'quest' ? 1 + Math.max(0, Math.sin(simTime * 4 + i)) * 0.08 : 1);
+      _mkObj.position.set(it.x, g.position.y + it.mkY + Math.sin(simTime * 2 + i) * 0.25, it.z);
+      _mkObj.rotation.set(0, simTime * 1.6 + i, 0);
+      _mkObj.scale.set(sc, sc, sc);
+      _mkObj.updateMatrix();
+      m.setMatrixAt(n[it.mkKind]++, _mkObj.matrix);
+    }
+    for (const k of MK_KINDS) {
+      const m = mkMesh[k];
+      if (!m) continue;
+      m.count = n[k];
+      m.instanceMatrix.needsUpdate = true;
+    }
+    // quest props: one merged mesh per island, hidden beyond prop distance (like SkyArt's props)
+    if ((questLodT -= 1) <= 0) {
+      questLodT = 20;
+      for (const qm of questMeshes) qm.mesh.visible = Math.hypot(qm.x - camera.position.x, qm.y - camera.position.y, qm.z - camera.position.z) - qm.r < (lowPower() ? 140 : 190);
+    }
+  }
+  let questLodT = 0;
+  const questMeshes = [];   // { mesh, x, y, z, r }
+  const questBatches = {};  // isleId -> SkyArt.Batch (filled by buildQuestObjects / buildPortals / buildSwitches)
+  function questBatch(isleId) { return questBatches[isleId] || (questBatches[isleId] = new SkyArt.Batch()); }
+  function flushQuestProps() {
+    for (const id in questBatches) {
+      const mesh = questBatches[id].mesh(SkyArt.propMat, !lowPower());
+      if (!mesh) continue;
+      const isle = isleById(id);
+      islandGroups[id].add(mesh);
+      questMeshes.push({ mesh, x: isle.pos[0], y: isle.pos[1], z: isle.pos[2], r: isle.r });
+    }
+    buildMarkerMeshes();
+    updateQuestMarkers();
+    if (window.__skyTest) window.__skyTest.markers = () => MK_KINDS.map(k => k + ':' + mkMesh[k].count).join(' ');
+  }
+  // face the island centre (props are authored with their "front" on local +z)
+  function faceCentre(dx, dz) { return Math.hypot(dx, dz) < 0.5 ? 0 : Math.atan2(-dx, -dz); }
+
+  // little NPC characters (built + idle-animated by js/sky-avatar.js)
   function makeNpcFigure(emoji, tint) {
-    const g = new THREE.Group();
-    const legs = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.6, 0.3), matOf(0x6a5a4a));
-    legs.position.y = 0.3;
-    g.add(legs);
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.7, 0.36), matOf(tint));
-    body.position.y = 0.95;
-    body.castShadow = true;
-    g.add(body);
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.52, 0.52),
-      new THREE.MeshLambertMaterial({ map: emojiTexture(emoji, '#f2c99a') }));
-    head.position.y = 1.58;
-    head.castShadow = true;
-    g.add(head);
-    return g;
-  }
-
-  function makeQuestVisual(q) {
-    const g = new THREE.Group();
-    switch (q.type) {
-      case 'chest': {
-        const base = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.9, 1.05), matOf(0x8a5a2a));
-        base.position.y = 0.45;
-        base.castShadow = true;
-        g.add(base);
-        const lid = new THREE.Mesh(new THREE.BoxGeometry(1.56, 0.4, 1.12), matOf(0x6e4620));
-        lid.position.y = 1.05;
-        g.add(lid);
-        const lock = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.34, 0.14), matOf(0xf5c518, 0x7a5200));
-        lock.position.set(0, 0.8, 0.56);
-        g.add(lock);
-        break;
-      }
-      case 'gate': {
-        [-1.25, 1.25].forEach(x => {
-          const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.7, 3.4, 0.7), matOf(0x9a927e));
-          pillar.position.set(x, 1.7, 0);
-          pillar.castShadow = true;
-          g.add(pillar);
-        });
-        const lintel = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.6, 0.9), matOf(0x8a8270));
-        lintel.position.y = 3.6;
-        lintel.castShadow = true;
-        g.add(lintel);
-        const rune = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.1), matOf(0x66e0ff, 0x1a5a7a));
-        rune.position.set(0, 3.6, 0.5);
-        g.add(rune);
-        break;
-      }
-      case 'npc':
-        g.add(makeNpcFigure(q.npc || '🙂', 0xc47ab8));
-        break;
-      case 'listen':
-        [[-0.8, 0, 0.85], [0.7, 0.2, 1.1], [0, -0.6, 0.7]].forEach(([x, z, s]) => {
-          const c = new THREE.Mesh(new THREE.OctahedronGeometry(0.55 * s), matOf(0x9fefff, 0x2a7a9a));
-          c.position.set(x, 0.6 * s, z);
-          c.scale.y = 1.8;
-          c.castShadow = true;
-          g.add(c);
-        });
-        break;
-      case 'pillars':
-        [-0.9, 0.9].forEach(x => {
-          const p = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.48, 1.6, 8), matOf(0xd8d2bc));
-          p.position.set(x, 0.8, 0);
-          p.castShadow = true;
-          g.add(p);
-          const orb = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 6), matOf(0xffd166, 0x7a5200));
-          orb.position.set(x, 1.9, 0);
-          g.add(orb);
-        });
-        break;
-      case 'runes': {
-        const slab = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.3, 1.6), matOf(0x8a8270));
-        slab.position.y = 0.15;
-        g.add(slab);
-        const glyph = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.06, 0.8), matOf(0xb08fff, 0x4a2a8a));
-        glyph.position.y = 0.34;
-        g.add(glyph);
-        break;
-      }
-      case 'arena': {
-        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 3.2, 6), matOf(0x6a4a2e));
-        pole.position.y = 1.6;
-        g.add(pole);
-        const flag = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.7, 0.06), matOf(0xe85454));
-        flag.position.set(0.6, 2.7, 0);
-        g.add(flag);
-        break;
-      }
-      case 'race': {
-        const ring = new THREE.Mesh(new THREE.TorusGeometry(1.3, 0.14, 8, 20), matOf(0xffd166, 0x7a5200));
-        ring.position.y = 1.8;
-        g.add(ring);
-        break;
-      }
-      case 'bridge': {
-        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 1.4, 6), matOf(0x6a4a2e));
-        post.position.y = 0.7;
-        g.add(post);
-        const sign = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.8, 0.1), matOf(0xa8763e));
-        sign.position.y = 1.5;
-        g.add(sign);
-        break;
-      }
-      case 'boss': {
-        const altar = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 2, 1, 8), matOf(0x2c2c40, 0x1a1a4a));
-        altar.position.y = 0.5;
-        altar.castShadow = true;
-        g.add(altar);
-        break;
-      }
-      case 'order': {
-        const ring = new THREE.Mesh(new THREE.TorusGeometry(1.3, 0.14, 8, 16), matOf(0x8a8270));
-        ring.rotation.x = Math.PI / 2;
-        ring.position.y = 0.2;
-        g.add(ring);
-        [0, 1, 2].forEach(i => {
-          const a = (i / 3) * Math.PI * 2;
-          const stone = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.34, 0.28, 6), matOf(0xb08fff, 0x3a1a7a));
-          stone.position.set(Math.cos(a) * 1.3, 0.24, Math.sin(a) * 1.3);
-          g.add(stone);
-        });
-        break;
-      }
-      case 'maze': {
-        [-0.8, 0.8].forEach(x => {
-          const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, 2, 6), matOf(0x44305a));
-          pillar.position.set(x, 1, 0);
-          pillar.castShadow = true;
-          g.add(pillar);
-        });
-        const arch = new THREE.Mesh(new THREE.TorusGeometry(0.95, 0.16, 8, 16, Math.PI), matOf(0xb06ae8, 0x5a2a9a));
-        arch.position.set(0, 2, 0);
-        g.add(arch);
-        break;
-      }
-    }
-    return g;
+    return SkyAvatar.makeNpc(emoji, tint);
   }
 
   function buildQuestObjects() {
@@ -1728,24 +920,17 @@ const SkyGame = (() => {
       const isle = isleById(q.island);
       const g = islandGroups[q.island];
       if (!isle || !g) continue;
-      const visual = makeQuestVisual(q);
-      visual.position.set(q.dx, 0, q.dz);
-      visual.traverse(o => { o.matrixAutoUpdate = false; o.updateMatrix(); });
-      visual.matrixAutoUpdate = false;
-      visual.updateMatrix();
-      g.add(visual);
-
+      if (q.type === 'npc') {
+        const npc = makeNpcFigure(q.npc || '🙂', 0xc47ab8);
+        npc.position.set(q.dx, 0, q.dz);
+        npc.rotation.y = faceCentre(q.dx, q.dz);
+        g.add(npc);
+      } else {
+        SkyArt.questProp(questBatch(q.island), q.type, q.dx, q.dz, faceCentre(q.dx, q.dz));
+      }
       const st = markerState(q);
-      const marker = new THREE.Sprite(new THREE.SpriteMaterial({
-        map: markerTexture(st.s, st.c), transparent: true,
-      }));
-      marker.scale.set(1.6, 1.6, 1);
-      marker.position.set(q.dx, 4.3, q.dz);
-      g.add(marker);
-      markerList.push(marker);
-
       interactables.push({
-        q, marker, markerSym: st.s,
+        q, marker: { visible: true }, markerSym: st.s, mkKind: MK_OF[st.s], mkY: q.type === 'gate' ? 5.6 : q.type === 'race' ? 4.6 : 3.9,
         x: isle.pos[0] + q.dx, z: isle.pos[2] + q.dz, isle,
       });
     }
@@ -1757,48 +942,15 @@ const SkyGame = (() => {
       const isle = isleById(p.island);
       const g = islandGroups[p.island];
       if (!isle || !g) continue;
-      // crater portals (火山口深洞 ↔ 地心世界) get a rocky rim + orange glow
-      // instead of the purple swirl — cheap recolor, visually distinct
+      // crater portals (火山口深洞 ↔ 地心世界) get a basalt frame + lava-orange swirl
       const isCraterPortal = p.id.startsWith('portal_crater') || p.id.startsWith('portal_und');
-      const visual = new THREE.Group();
-      const ring = new THREE.Mesh(
-        new THREE.TorusGeometry(1.7, 0.22, 8, 24),
-        isCraterPortal ? matOf(0x2a1410, 0x1a0a06) : matOf(0xb06ae8, 0x5a2a9a)
-      );
-      ring.position.y = 2.2;
-      ring.castShadow = true;
-      visual.add(ring);
-      const swirl = new THREE.Mesh(
-        new THREE.CircleGeometry(1.45, 20),
-        new THREE.MeshLambertMaterial(isCraterPortal
-          ? { color: 0xff6a20, emissive: 0xdd3300, transparent: true, opacity: 0.75, side: THREE.DoubleSide }
-          : { color: 0x8f6bff, emissive: 0x3a1a7a, transparent: true, opacity: 0.7, side: THREE.DoubleSide })
-      );
-      swirl.position.y = 2.2;
-      visual.add(swirl);
-      [-1.9, 1.9].forEach(x => {
-        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.3, 4.2, 6),
-          isCraterPortal ? matOf(0x241a16) : matOf(0x44305a));
-        post.position.set(x, 2.1, 0);
-        post.castShadow = true;
-        visual.add(post);
-      });
-      visual.position.set(p.dx, 0, p.dz);
-      g.add(visual);
-      visual.userData.spin = ring;
+      SkyArt.questProp(questBatch(p.island), 'portal', p.dx, p.dz, 0, isCraterPortal);
+      SkyArt.portalSwirl(g, p.dx, p.dz, isCraterPortal);
 
       const q = { id: p.id, type: 'portal', name: p.name, lock: p.lock, to: p.to };
       const st = markerState(q);
-      const marker = new THREE.Sprite(new THREE.SpriteMaterial({
-        map: markerTexture(st.s, st.c), transparent: true,
-      }));
-      marker.scale.set(1.6, 1.6, 1);
-      marker.position.set(p.dx, 5.2, p.dz);
-      if (p.secret && !save.secretsFound[p.id]) marker.visible = false;
-      g.add(marker);
-      markerList.push(marker);
       interactables.push({
-        q, marker, markerSym: st.s, secret: !!p.secret,
+        q, marker: { visible: !(p.secret && !save.secretsFound[p.id]) }, markerSym: st.s, mkKind: MK_OF[st.s], mkY: 5.9, secret: !!p.secret,
         x: isle.pos[0] + p.dx, z: isle.pos[2] + p.dz, isle,
       });
     }
@@ -1810,31 +962,11 @@ const SkyGame = (() => {
       const isle = isleById(sw.island);
       const g = islandGroups[sw.island];
       if (!isle || !g) continue;
-      const visual = new THREE.Group();
-      const stone = new THREE.Mesh(new THREE.DodecahedronGeometry(0.55), matOf(0x2a2a34));
-      stone.position.y = 0.4;
-      stone.castShadow = true;
-      visual.add(stone);
-      const shard = new THREE.Mesh(new THREE.OctahedronGeometry(0.32),
-        new THREE.MeshLambertMaterial({ color: 0x7fe8ff, emissive: 0x2a7a9a, map: TEX.crystalTex }));
-      shard.position.y = 1.05;
-      shard.scale.y = 1.5;
-      visual.add(shard);
-      visual.position.set(sw.dx, 0, sw.dz);
-      g.add(visual);
-
+      SkyArt.questProp(questBatch(sw.island), 'switch', sw.dx, sw.dz, faceCentre(sw.dx, sw.dz));
       const q = { id: sw.id, type: 'switch', name: sw.name, to: sw.to };
       const st = markerState(q);
-      const marker = new THREE.Sprite(new THREE.SpriteMaterial({
-        map: markerTexture(st.s, st.c), transparent: true,
-      }));
-      marker.scale.set(1.4, 1.4, 1);
-      marker.position.set(sw.dx, 3.2, sw.dz);
-      if (!save.secretsFound[sw.id]) marker.visible = false;
-      g.add(marker);
-      markerList.push(marker);
       interactables.push({
-        q, marker, markerSym: st.s, secret: true,
+        q, marker: { visible: !!save.secretsFound[sw.id] }, markerSym: st.s, mkKind: MK_OF[st.s], mkY: 3.0, secret: true,
         x: isle.pos[0] + sw.dx, z: isle.pos[2] + sw.dz, isle,
       });
     }
@@ -1911,9 +1043,19 @@ const SkyGame = (() => {
       const d = Math.hypot(pos.x - it.x, pos.z - it.z);
       if (d < bestD) { bestD = d; best = it; }
     }
-    if (best === currentTarget) return;
+    // PLAY interactables (egg stand, course arches): a stable { play: true, label, use }
+    // object per target, closer than the nearest quest → it wins; `label` may change
+    const pt = SkyPlay.target ? SkyPlay.target(pos.x, pos.y, pos.z, bestD) : null;
+    if (pt) best = pt;
+    if (best === currentTarget && !(best && best.play && best.shown !== best.label)) return;
     currentTarget = best;
     if (!best) { els.hint.style.display = 'none'; return; }
+    if (best.play) {
+      best.shown = best.label;
+      els.hint.textContent = `${isTouch ? '點 ⚡' : '按 E'}　${best.label}`;
+      els.hint.style.display = '';
+      return;
+    }
     const q = best.q;
     const key = isTouch ? '點 ⚡' : '按 E';
     let label;
@@ -1943,7 +1085,6 @@ const SkyGame = (() => {
   let buffBarTimer = 0;
   let trackerTimer = 0;
   let journalEl = null;
-  let particles = null;
   let cullIdx = 0;
   let fpsFrames = 0, fpsTime = 0, lowPowerSuggested = false;
 
@@ -1997,6 +1138,8 @@ const SkyGame = (() => {
       ctx.fillStyle = isCleared(it.q) ? '#4ade80' : (isLocked(it.q) ? '#9aa5b5' : '#ffd166');
       ctx.fill();
     }
+    // PLAY points of interest: egg stand, course arches, coin trails
+    SkyPlay.drawMinimap?.(ctx, C, scale, pos.x, pos.z);
     // tracked quest: pulsing ring (clamped to the rim when far)
     if (save.tracked) {
       const it = interactables.find(x => x.q.id === save.tracked);
@@ -2079,11 +1222,12 @@ const SkyGame = (() => {
 
   function updateTracker() {
     if (!els.tracker) return;
-    const it = save.tracked && interactables.find(x => x.q.id === save.tracked);
+    let it = save.tracked && interactables.find(x => x.q.id === save.tracked);
     if (!it || isCleared(it.q)) {
-      els.tracker.style.display = 'none';
       if (it && isCleared(it.q)) { save.tracked = null; persist(); }
-      return;
+      // PLAY: with no tracked quest, point newcomers at the tutorial course / egg stand
+      it = SkyPlay.tracker ? SkyPlay.tracker() : null;   // { x, z, q: { name } } or null
+      if (!it) { els.tracker.style.display = 'none'; return; }
     }
     els.tracker.style.display = '';
     const dx = it.x - pos.x, dz = it.z - pos.z;
@@ -2112,7 +1256,10 @@ const SkyGame = (() => {
       journalEl = document.createElement('div');
       journalEl.className = 'aw-journal';
       els.wrap.appendChild(journalEl);
+      journalEl.addEventListener('click', e => { if (e.target === journalEl) journalEl.style.display = 'none'; });
     }
+    const prevList = journalEl.querySelector('.aw-j-list');
+    const prevScroll = prevList ? prevList.scrollTop : -1;
     const diffLabel = { easy: '簡單', medium: '中等', hard: '困難', boss: '魔王' };
     const groups = new Map();
     for (const q of SKY_QUESTS) {
@@ -2129,7 +1276,14 @@ const SkyGame = (() => {
       const revealed = !isle.secret || SKY_PORTALS.some(p => p.secret && p.to === isleId && save.secretsFound[p.id])
         || SKY_SWITCHES.some(sw => sw.to === isleId && save.secretsFound[sw.id])
         || qs.some(q => isCleared(q));
-      rows += `<div class="aw-j-island">${revealed ? `🏝️ ${isle.name}` : '❓ ？？？（秘境）'}</div>`;
+      const shown = qs.filter(q => !(q.hidden && !revealed));
+      const done = shown.filter(q => isCleared(q)).length;
+      const full = revealed && shown.length > 0 && done === shown.length;
+      const here = revealed && isleId === currentIsland;
+      rows += `<div class="aw-j-island${here ? ' here' : ''}${full ? ' full' : ''}">
+          <span>${revealed ? `${full ? '🏅' : (isle.underground ? '🌋' : '🏝️')} ${isle.name}` : '❓ ？？？（秘境）'}</span>
+          ${revealed ? `<span class="aw-j-n">${here ? '📍 ' : ''}${done}/${shown.length}</span><span class="aw-bar"><i style="--p:${shown.length ? done / shown.length * 100 : 0}%"></i></span>` : ''}
+        </div>`;
       for (const q of qs) {
         if (q.hidden && !revealed) {
           rows += `
@@ -2151,21 +1305,34 @@ const SkyGame = (() => {
           <div class="aw-j-row${cleared ? ' done' : ''}">
             <span class="aw-j-icon">${icon}</span>
             <span class="aw-j-name">${q.name}${count}</span>
-            <span class="aw-j-diff">${diffLabel[q.diff]}</span>
+            <span class="aw-j-diff ${q.diff}">${diffLabel[q.diff]}</span>
             <span class="aw-j-reward">${tier.xp}XP+${tier.gems}💎</span>
             ${trackBtn}
           </div>`;
       }
     }
+    const tc = totalCleared(), tv = visibleQuestTotal();
     journalEl.innerHTML = `
       <div class="aw-j-card">
         <div class="aw-j-head">
-          <b>📜 任務日誌　${totalCleared()} / ${visibleQuestTotal()}</b>
-          <button class="aw-quiz-close" id="sky-j-close">✕</button>
+          <span class="aw-j-title">📜 任務日誌</span>
+          <span class="aw-j-total"><span class="aw-bar"><i style="--p:${tv ? tc / tv * 100 : 0}%"></i></span>${tc} / ${tv}</span>
+          <button class="aw-quiz-close" id="sky-j-close" title="關閉">✕</button>
         </div>
         <div class="aw-j-list">${rows}</div>
       </div>`;
     journalEl.style.display = '';
+    const list = journalEl.querySelector('.aw-j-list');
+    if (prevScroll >= 0) {
+      list.style.scrollBehavior = 'auto';
+      list.scrollTop = prevScroll;
+    } else {
+      const here = list.querySelector('.aw-j-island.here');
+      if (here) {
+        list.style.scrollBehavior = 'auto';
+        list.scrollTop = Math.max(0, here.getBoundingClientRect().top - list.getBoundingClientRect().top - 8);
+      }
+    }
     journalEl.querySelector('#sky-j-close').addEventListener('click', () => {
       journalEl.style.display = 'none';
     });
@@ -2181,105 +1348,20 @@ const SkyGame = (() => {
 
   // ---- confetti celebration ----
   function spawnConfetti(n = 36) {
+    SkyAvatar.celebrate(n); // 3D confetti burst + the hero cheers
     const colors = ['#ffd166', '#ff6b81', '#4ade80', '#7fd4ff', '#c77dff', '#fff'];
+    const shapes = ['', 'round', 'star', ''];
     for (let i = 0; i < n; i++) {
       const c = document.createElement('div');
-      c.className = 'aw-confetti';
-      c.style.left = 8 + Math.random() * 84 + '%';
+      c.className = 'aw-confetti ' + shapes[i % shapes.length];
+      c.style.left = 4 + Math.random() * 92 + '%';
       c.style.background = colors[i % colors.length];
       c.style.animationDelay = Math.random() * 0.5 + 's';
       c.style.animationDuration = 1.6 + Math.random() * 1.2 + 's';
-      c.style.transform = `rotate(${Math.random() * 360}deg)`;
+      c.style.setProperty('--sway', (Math.random() * 120 - 60) + 'px');
       els.wrap.appendChild(c);
-      setTimeout(() => c.remove(), 3200);
+      setTimeout(() => c.remove(), 3400);
     }
-  }
-
-  // ---- ambient sparkle particles ----
-  function buildParticles() {
-    if (lowPower()) return;
-    const N = 420;
-    const geo = new THREE.BufferGeometry();
-    const arr = new Float32Array(N * 3);
-    const rng = mulberry32(SKY_CONFIG.worldSeed + 5);
-    for (let i = 0; i < N; i++) {
-      arr[i * 3] = -320 + rng() * 640;
-      arr[i * 3 + 1] = rng() * 110 - 10;
-      arr[i * 3 + 2] = -320 + rng() * 640;
-    }
-    geo.setAttribute('position', new THREE.BufferAttribute(arr, 3));
-    particles = new THREE.Points(geo, new THREE.PointsMaterial({
-      color: 0xffffff, size: 1.1, transparent: true, opacity: 0.55, sizeAttenuation: true,
-    }));
-    scene.add(particles);
-  }
-
-  // ---- slow-rising ember motes over the 地心世界 cluster (cheap: one Points obj) ----
-  let emberParticles = null;
-  const EMBER_COUNT = 220;
-  const EMBER_Y_LO = -100, EMBER_Y_HI = -65;
-  function buildEmberParticles() {
-    if (lowPower()) return;
-    const geo = new THREE.BufferGeometry();
-    const arr = new Float32Array(EMBER_COUNT * 3);
-    const rng = mulberry32(SKY_CONFIG.worldSeed + 77);
-    for (let i = 0; i < EMBER_COUNT; i++) {
-      arr[i * 3] = -540 + rng() * 160;
-      arr[i * 3 + 1] = EMBER_Y_LO + rng() * (EMBER_Y_HI - EMBER_Y_LO);
-      arr[i * 3 + 2] = 280 + rng() * 200;
-    }
-    geo.setAttribute('position', new THREE.BufferAttribute(arr, 3));
-    emberParticles = new THREE.Points(geo, new THREE.PointsMaterial({
-      color: 0xff7a2a, size: 1.4, transparent: true, opacity: 0.75, sizeAttenuation: true,
-    }));
-    scene.add(emberParticles);
-  }
-
-  // ---- rising mist at a waterfall's base (☁️ Wave 4 polish; ≤80 verts, one per water isle) ----
-  function buildWaterMist(g, isle, x, z) {
-    if (lowPower()) return;
-    const N = 60;
-    const geo = new THREE.BufferGeometry();
-    const arr = new Float32Array(N * 3);
-    const rng = mulberry32(SKY_CONFIG.worldSeed + isle.seed * 13 + 41);
-    for (let i = 0; i < N; i++) {
-      arr[i * 3] = (rng() - 0.5) * 2.4;
-      arr[i * 3 + 1] = rng() * 2.5;
-      arr[i * 3 + 2] = (rng() - 0.5) * 1.4;
-    }
-    geo.setAttribute('position', new THREE.BufferAttribute(arr, 3));
-    const points = new THREE.Points(geo, new THREE.PointsMaterial({
-      color: 0xffffff, size: 0.5, transparent: true, opacity: 0.5, sizeAttenuation: true,
-    }));
-    // the waterfall box is centred at y -7.4 with height 16, so its base sits
-    // at roughly y -15.4 — that's where the mist should hover
-    points.position.set(x, -15.4, z);
-    g.add(points);
-    waterMistSystems.push(points);
-  }
-
-  // ---- gentle-drifting fireflies over forest/mist isles (☁️ Wave 4 polish; ≤40 verts) ----
-  function buildFireflies(g, isle, color = 0xd8ff8f) {
-    if (lowPower()) return;
-    const N = 24;
-    const geo = new THREE.BufferGeometry();
-    const arr = new Float32Array(N * 3);
-    const phase = new Float32Array(N);
-    const rng = mulberry32(SKY_CONFIG.worldSeed + isle.seed * 29 + 7);
-    for (let i = 0; i < N; i++) {
-      const a = rng() * Math.PI * 2;
-      const rr = isle.r * (0.15 + rng() * 0.7);
-      arr[i * 3] = Math.cos(a) * rr;
-      arr[i * 3 + 1] = 0.6 + rng() * 1.6;
-      arr[i * 3 + 2] = Math.sin(a) * rr;
-      phase[i] = rng() * Math.PI * 2;
-    }
-    geo.setAttribute('position', new THREE.BufferAttribute(arr, 3));
-    const points = new THREE.Points(geo, new THREE.PointsMaterial({
-      color, size: 0.4, transparent: true, opacity: 0.85, sizeAttenuation: true,
-    }));
-    g.add(points);
-    fireflySystems.push({ points, base: arr.slice(), phase });
   }
 
   // ---- distance culling + fps watchdog (called from updateWorld) ----
@@ -2366,73 +1448,9 @@ const SkyGame = (() => {
 
   function mobDef(id) { return SKY_MOBS.find(m => m.id === id); }
 
+  // creature look + animation live in js/sky-avatar.js (keeps g.userData.body / .wings)
   function makeMobMesh(def) {
-    const shape = def.shape || def.id;
-    const g = new THREE.Group();
-    const eyeMat = matOf(0xffffff);
-    const pupilMat = matOf(0x222233);
-    if (shape === 'slime') {
-      const body = new THREE.Mesh(new THREE.SphereGeometry(0.75, 10, 8),
-        new THREE.MeshLambertMaterial({ color: def.color, transparent: true, opacity: 0.92 }));
-      body.scale.y = 0.72;
-      body.position.y = 0.55;
-      body.castShadow = true;
-      g.add(body);
-      g.userData.body = body;
-    } else if (shape === 'wisp') {
-      const body = new THREE.Mesh(new THREE.ConeGeometry(0.55, 1.5, 8),
-        new THREE.MeshLambertMaterial({ color: def.color, emissive: 0x1a6a4a }));
-      body.position.y = 1.1;
-      body.castShadow = true;
-      g.add(body);
-      g.userData.body = body;
-    } else if (shape === 'flyer') {
-      // hawk-like: streamlined stretched body, small forward head, big swept wings
-      const body = new THREE.Mesh(new THREE.SphereGeometry(0.4, 8, 6),
-        new THREE.MeshLambertMaterial({ color: def.color }));
-      body.scale.set(1, 0.8, 1.9);
-      body.position.y = 1.4;
-      body.castShadow = true;
-      g.add(body);
-      const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 7, 6),
-        new THREE.MeshLambertMaterial({ color: def.color }));
-      head.position.set(0, 1.46, 0.6);
-      g.add(head);
-      [-1, 1].forEach(s => {
-        const wing = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.07, 0.65), matOf(0x33415f));
-        wing.position.set(s * 1.15, 1.42, -0.05);
-        wing.rotation.z = s * 0.18;
-        g.add(wing);
-        (g.userData.wings = g.userData.wings || []).push(wing);
-      });
-      g.userData.body = body;
-    } else {
-      const body = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 6),
-        new THREE.MeshLambertMaterial({ color: def.color }));
-      body.position.y = 1.6;
-      body.castShadow = true;
-      g.add(body);
-      [-1, 1].forEach(s => {
-        const wing = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.08, 0.5), matOf(0x3a3050));
-        wing.position.set(s * 0.75, 1.7, 0);
-        g.add(wing);
-        (g.userData.wings = g.userData.wings || []).push(wing);
-      });
-      g.userData.body = body;
-    }
-    // eyes
-    [-0.22, 0.22].forEach(x => {
-      const eyeY = shape === 'bat' ? 1.68 : (shape === 'wisp' ? 1.35 : (shape === 'flyer' ? 1.46 : 0.72));
-      const eyeZ = shape === 'slime' ? 0.62 : (shape === 'flyer' ? 0.72 : 0.42);
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.11, 6, 5), eyeMat);
-      eye.position.set(x, eyeY, eyeZ);
-      g.add(eye);
-      const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.055, 5, 4), pupilMat);
-      pupil.position.set(x, eyeY, eyeZ + 0.09);
-      g.add(pupil);
-    });
-    if (def.scale) g.scale.setScalar(def.scale);
-    return g;
+    return SkyAvatar.makeMob(def);
   }
 
   function spawnMob(defId, isleId, dx, dz, questId) {
@@ -2482,6 +1500,7 @@ const SkyGame = (() => {
     }
     hearts -= n;
     lastDamageAt = simTime;
+    emitFx('hurt', { n });
     els.flash.classList.add('red', 'on');
     setTimeout(() => els.flash.classList.remove('on', 'red'), 350);
     SoundManager.playWrong();
@@ -2516,6 +1535,7 @@ const SkyGame = (() => {
       despawnQuestMobs(arenaActive.q.id);
       arenaActive = null;
     }
+    if (bossActive) resetBoss();   // the boss waits on its altar (full HP) — same as a KO
     const dawn = SKY_ISLANDS[0];
     pos.x = dawn.pos[0];
     pos.z = dawn.pos[2];
@@ -2635,11 +1655,7 @@ const SkyGame = (() => {
 
   function fireBolt(mob) {
     if (!bolt) {
-      bolt = {
-        mesh: new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 6),
-          new THREE.MeshLambertMaterial({ color: 0xffe066, emissive: 0xcc8800 })),
-        t: -1, mob: null,
-      };
+      bolt = { mesh: SkyAvatar.makeBolt(), t: -1, mob: null };
       scene.add(bolt.mesh);
       bolt.mesh.visible = false;
     }
@@ -2665,10 +1681,13 @@ const SkyGame = (() => {
       bolt.from.y + (ty - bolt.from.y) * bolt.t + Math.sin(bolt.t * Math.PI) * 1.2,
       bolt.from.z + (m.z - bolt.from.z) * bolt.t
     );
+    bolt.mesh.rotation.z += dt * 12;
+    SkyAvatar.boltTrail(bolt.mesh.position.x, bolt.mesh.position.y, bolt.mesh.position.z);
   }
 
   function hitMob(mob) {
     if (mob.dead) return;
+    SkyAvatar.mobHit(mob);
     mob.hp -= perks.dmg || 1;   // 冠軍 ×2 / 五十級傳說 ×1.5
     if (mob.isBoss) { onBossHit(mob); return; }
     if (mob.hp <= 0) {
@@ -2681,6 +1700,7 @@ const SkyGame = (() => {
   function killMob(mob) {
     mob.dead = true;
     GameEngine.addGems(2);
+    uiPop('gem', 2);
     SoundManager.playCorrect();
     showWorldToast(`⚔️ 擊敗 ${mob.def.name}！+2💎`);
     if (active && active.combat === mob) closeQuiz();
@@ -2698,13 +1718,8 @@ const SkyGame = (() => {
 
   // ===================== ⚡ active-use item consumables (Wave 4) =====================
   function spawnLightningLine(mob) {
-    const points = [
-      new THREE.Vector3(pos.x, pos.y + 1.4, pos.z),
-      new THREE.Vector3(mob.mesh.position.x, mob.mesh.position.y + 1, mob.mesh.position.z),
-    ];
-    const geo = new THREE.BufferGeometry().setFromPoints(points);
-    const mat = new THREE.LineBasicMaterial({ color: 0xbfe8ff, transparent: true, opacity: 1 });
-    const line = new THREE.Line(geo, mat);
+    const line = SkyAvatar.lightning(pos.x, pos.y + 1.4, pos.z,
+      mob.mesh.position.x, mob.mesh.position.y + 1, mob.mesh.position.z);
     scene.add(line);
     lightningLines.push({ mesh: line, t: 0.3 });
   }
@@ -2725,10 +1740,7 @@ const SkyGame = (() => {
 
   function ensureShieldMesh() {
     if (shieldMesh || !player) return;
-    shieldMesh = new THREE.Mesh(
-      new THREE.SphereGeometry(1.6, 12, 10),
-      new THREE.MeshBasicMaterial({ color: 0x8fe0ff, transparent: true, opacity: 0.25, depthWrite: false })
-    );
+    shieldMesh = SkyAvatar.makeShield();
     shieldMesh.position.y = 1.05;
     shieldMesh.visible = false;
     player.add(shieldMesh);
@@ -2736,21 +1748,8 @@ const SkyGame = (() => {
 
   function ensureMountMesh() {
     if (mountMesh || !player) return;
-    const g = new THREE.Group();
-    const base = new THREE.Mesh(new THREE.SphereGeometry(0.75, 10, 6), new THREE.MeshLambertMaterial({ color: 0xffffff }));
-    base.scale.set(1, 0.35, 1);
-    g.add(base);
-    const puff = new THREE.Mesh(new THREE.SphereGeometry(0.42, 8, 6), new THREE.MeshLambertMaterial({ color: 0xffffff }));
-    puff.position.set(0.4, 0.14, 0.1);
-    puff.scale.set(1, 0.55, 1);
-    g.add(puff);
-    const puff2 = new THREE.Mesh(new THREE.SphereGeometry(0.38, 8, 6), new THREE.MeshLambertMaterial({ color: 0xffffff }));
-    puff2.position.set(-0.38, 0.1, -0.12);
-    puff2.scale.set(1, 0.5, 1);
-    g.add(puff2);
-    g.position.y = -0.05;
-    g.visible = false;
-    mountMesh = g;
+    mountMesh = SkyAvatar.makeMount();
+    mountMesh.visible = false;
     player.add(mountMesh);
   }
 
@@ -2800,27 +1799,17 @@ const SkyGame = (() => {
       const isleTop = mob.isle.pos[1] + bobOf(mob.isle.id);
       if (mob.dead) {
         mob.fade += dt;
-        const s = Math.max(0.01, 1 - mob.fade * 1.8);
-        mob.mesh.scale.set(1 + mob.fade, s, 1 + mob.fade);
+        SkyAvatar.mobDying(mob, dt); // wobble → poof
         if (mob.fade > 0.55) { mob.gone = true; scene.remove(mob.mesh); }
         continue;
       }
       if (mob.isBoss) continue; // boss animated in updateBoss
       if (mob.def.flies) { updateFlyer(mob, dt); continue; } // free-flight AI (☄️ world events)
-      // idle animation
-      const b = mob.mesh.userData.body;
-      const shape = mob.def.shape || mob.def.id;
-      if (shape === 'slime' && b) b.position.y = 0.55 + Math.abs(Math.sin(simTime * 4 + mob.angle)) * 0.3;
-      if (shape === 'wisp' && b) b.position.y = 1.1 + Math.sin(simTime * 2.4 + mob.angle) * 0.25;
-      if (mob.mesh.userData.wings) {
-        mob.mesh.userData.wings.forEach((w, i) => { w.rotation.z = Math.sin(simTime * 10) * 0.5 * (i ? -1 : 1); });
-      }
-      if (mob.shieldT > 0) {
-        mob.shieldT -= dt;
-        if (b) b.material.emissive = new THREE.Color(mob.shieldT > 0 ? 0x888888 : 0x000000);
-      }
+      // idle animation / hop / hit flash (presentation: js/sky-avatar.js)
+      SkyAvatar.animateMob(mob, dt);
+      if (mob.shieldT > 0) mob.shieldT -= dt;
       mob.mesh.position.y = isleTop;
-      if (quizOpen) continue;   // combat/quiz pauses mob AI (kid-friendly)
+      if (quizOpen || playLocked()) continue;   // combat/quiz (or a PLAY panel: egg hatching, shop) pauses mob AI
       mob.cooldown -= dt;
       mob.boost -= dt;
 
@@ -2891,14 +1880,8 @@ const SkyGame = (() => {
   }
 
   function updateFlyer(mob, dt) {
-    if (mob.mesh.userData.wings) {
-      mob.mesh.userData.wings.forEach((w, i) => { w.rotation.z = Math.sin(simTime * 14) * 0.55 * (i ? -1 : 1); });
-    }
-    if (mob.shieldT > 0) {
-      mob.shieldT -= dt;
-      const b = mob.mesh.userData.body;
-      if (b) b.material.emissive = new THREE.Color(mob.shieldT > 0 ? 0x888888 : 0x000000);
-    }
+    SkyAvatar.animateMob(mob, dt);
+    if (mob.shieldT > 0) mob.shieldT -= dt;
     if (quizOpen) return; // combat quiz freezes state timers (kid-friendly)
     const air = mob.air;
     air.t += dt;
@@ -3027,11 +2010,13 @@ const SkyGame = (() => {
     quiz.tts.style.display = 'none';
     const slotsEl = quiz.prompt.querySelector('#sky-spell-slots');
     const renderSlots = () => {
-      slotsEl.textContent = word.split('').map((c, i) => (i < idx ? c : '＿')).join(' ');
+      slotsEl.innerHTML = word.split('').map((c, i) =>
+        `<span class="aw-tile${i < idx ? ' on' : ''}${i === idx - 1 ? ' pop' : ''}">${i < idx ? c : ''}</span>`).join('');
     };
     renderSlots();
     const letters = shuffled([...word.split(''), ...(extraLetters || [])]);
     quiz.opts.innerHTML = '';
+    uiStepAnim();
     const grid = document.createElement('div');
     grid.className = 'aw-letters';
     letters.forEach(ch => {
@@ -3045,6 +2030,7 @@ const SkyGame = (() => {
           idx++;
           b.disabled = true;
           b.classList.add('right');
+          uiBurst(b);
           SoundManager.playCorrect();
           renderSlots();
           if (idx >= word.length) {
@@ -3105,7 +2091,7 @@ const SkyGame = (() => {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(letter, 48, 50);
-    return new THREE.CanvasTexture(cv);
+    return canvasTex(cv);
   }
 
   function startRunes(q) {
@@ -3139,8 +2125,12 @@ const SkyGame = (() => {
       const a = Math.random() * Math.PI * 2;
       const rr = isle.r * (0.25 + Math.random() * 0.6);
       const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: letterTexture(word[i]), transparent: true }));
-      sprite.scale.set(1.3, 1.3, 1);
+      sprite.scale.set(1.1, 1.1, 1);
       sprite.position.set(Math.cos(a) * rr, 1.3, Math.sin(a) * rr);
+      const orb = SkyArt.questMesh('orb');
+      orb.position.set(0, -0.95, 0);
+      orb.scale.setScalar(0.8);
+      sprite.add(orb);   // removed together with the letter
       g.add(sprite);
       runeActive.orbs.push({ sprite, letter: word[i], got: false });
     }
@@ -3261,7 +2251,7 @@ const SkyGame = (() => {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(text, w / 2, h / 2 + 2);
-    return new THREE.CanvasTexture(cv);
+    return canvasTex(cv);
   }
 
   function pickOrderSentence() {
@@ -3295,7 +2285,6 @@ const SkyGame = (() => {
     const topY = isle.pos[1] + 0.15;
     const n = oa.words.length;
     const order = shuffled(oa.words.map((_, i) => i));
-    const stoneGeo = GEO.orderStone || (GEO.orderStone = new THREE.CylinderGeometry(0.85, 0.95, 0.3, 10));
     const stones = [];
     const rr = 2 + n * 0.28;
     for (let i = 0; i < n; i++) {
@@ -3303,8 +2292,8 @@ const SkyGame = (() => {
       const x = baseX + Math.cos(a) * rr;
       const z = baseZ + Math.sin(a) * rr;
       const word = oa.words[order[i]];
-      const mesh = new THREE.Mesh(stoneGeo, new THREE.MeshLambertMaterial({ color: 0x8a8270 }));
-      mesh.position.set(x, topY, z);
+      const mesh = SkyArt.questMesh('order_stone');
+      mesh.position.set(x, topY - 0.15, z);
       scene.add(mesh);
       const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: wordTexture(word), transparent: true }));
       sprite.scale.set(Math.max(1.5, word.length * 0.3 + 0.5), 0.85, 1);
@@ -3416,20 +2405,7 @@ const SkyGame = (() => {
   }
 
   // ---- maze (傳送迷宮: answer a clue at each of 4 portal-gate nodes to advance) ----
-  function makeMazeArch() {
-    const g = new THREE.Group();
-    [-0.7, 0.7].forEach(x => {
-      const p = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 1.7, 6),
-        new THREE.MeshLambertMaterial({ color: 0x44305a }));
-      p.position.set(x, 0.85, 0);
-      g.add(p);
-    });
-    const arch = new THREE.Mesh(new THREE.TorusGeometry(0.8, 0.13, 8, 16, Math.PI),
-      new THREE.MeshLambertMaterial({ color: 0xb06ae8, emissive: 0x5a2a9a }));
-    arch.position.set(0, 1.7, 0);
-    g.add(arch);
-    return g;
-  }
+  function makeMazeArch() { return SkyArt.questMesh('maze_arch'); }
 
   function buildMazeNodes(q) {
     const isle = isleById(q.island);
@@ -3511,7 +2487,10 @@ const SkyGame = (() => {
 
   function mazeSpawnChest() {
     const last = mazeActive.nodes[mazeActive.nodes.length - 1];
-    const chest = makeQuestVisual({ type: 'chest' });
+    const cb = new SkyArt.Batch();
+    SkyArt.questProp(cb, 'chest', 0, 0, faceCentre(last.x - mazeActive.startX, last.z - mazeActive.startZ) + Math.PI);
+    const chest = cb.mesh(SkyArt.propMat, !lowPower());
+    chest.matrixAutoUpdate = true;
     chest.position.set(last.x, mazeActive.isleY, last.z);
     scene.add(chest);
     mazeActive.chest = chest;
@@ -3589,14 +2568,13 @@ const SkyGame = (() => {
     ensureCombatHud();
     const isle = isleById(q.island);
     const rings = [];
-    const ringGeo = GEO.ring || (GEO.ring = new THREE.TorusGeometry(1.8, 0.16, 8, 22));
     for (let i = 0; i < q.n; i++) {
       const a = (i / q.n) * Math.PI * 2 * 1.4 + 0.6;
       const rr = isle.r * (0.3 + 0.35 * ((i % 3) / 2));
       const x = isle.pos[0] + Math.cos(a) * rr;
       const z = isle.pos[2] + Math.sin(a) * rr;
       const y = isle.pos[1] + 1.5 + (i % 2) * 0.9;
-      const mesh = new THREE.Mesh(ringGeo, new THREE.MeshLambertMaterial({ color: 0x8a8a8a }));
+      const mesh = SkyArt.questMesh('ring_idle');
       mesh.position.set(x, y, z);
       mesh.rotation.y = a + Math.PI / 2;
       scene.add(mesh);
@@ -3611,14 +2589,7 @@ const SkyGame = (() => {
 
   function highlightRing() {
     raceActive.rings.forEach((r, i) => {
-      if (r.passed) r.mesh.material.color.setHex(0x4ade80);
-      else if (i === raceActive.idx) {
-        r.mesh.material.color.setHex(0xffd166);
-        r.mesh.material.emissive = new THREE.Color(0x7a5200);
-      } else {
-        r.mesh.material.color.setHex(0x8a8a8a);
-        r.mesh.material.emissive = new THREE.Color(0x000000);
-      }
+      r.mesh.geometry = SkyArt.questGeo(r.passed ? 'ring_done' : i === raceActive.idx ? 'ring_next' : 'ring_idle');
     });
   }
 
@@ -3751,44 +2722,12 @@ const SkyGame = (() => {
   function buildBossMesh(q) {
     const d = bossDef(q);
     const isle = isleById(q.island);
-    const g = new THREE.Group();
-    const torso = new THREE.Mesh(new THREE.BoxGeometry(3.6, 4.4, 2.6),
-      new THREE.MeshLambertMaterial({ color: d.body, emissive: d.bodyEm }));
-    torso.position.y = 4;
-    torso.castShadow = true;
-    g.add(torso);
-    const head = new THREE.Mesh(new THREE.BoxGeometry(2, 1.9, 1.9),
-      new THREE.MeshLambertMaterial({ color: d.head }));
-    head.position.y = 7.2;
-    head.castShadow = true;
-    g.add(head);
-    const eyeMat = new THREE.MeshLambertMaterial({ color: d.eye, emissive: d.eyeEm });
-    [-0.5, 0.5].forEach(x => {
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.26, 8, 6), eyeMat);
-      eye.position.set(x, 7.35, 1);
-      g.add(eye);
-    });
-    [-2.4, 2.4].forEach(x => {
-      const arm = new THREE.Mesh(new THREE.BoxGeometry(1, 3.6, 1),
-        new THREE.MeshLambertMaterial({ color: d.arm }));
-      arm.position.set(x, 4.2, 0);
-      arm.castShadow = true;
-      g.add(arm);
-    });
-    // the dragon gets wings
-    if (q.id === 'sqg_dragon_boss') {
-      [-1, 1].forEach(s => {
-        const wing = new THREE.Mesh(new THREE.BoxGeometry(3.4, 2.4, 0.25),
-          new THREE.MeshLambertMaterial({ color: 0x3a2a5e, emissive: 0x1a0a3a, transparent: true, opacity: 0.9 }));
-        wing.position.set(s * 3.4, 5.6, -1);
-        wing.rotation.z = s * 0.5;
-        g.add(wing);
-      });
-    }
+    const built = SkyAvatar.makeBoss(q.id, d); // { group, eyeMat, torso }
+    const g = built.group;
     g.scale.setScalar(d.scale);
     g.position.set(isle.pos[0], isle.pos[1], isle.pos[2] - 7);
     scene.add(g);
-    bossParts = { group: g, eyeMat, torso };
+    bossParts = built;
     return g;
   }
 
@@ -3835,7 +2774,14 @@ const SkyGame = (() => {
     const m = bossActive.mob;
     const d = bossDef(bossActive.q);
     combatHud.bossLabel.textContent = `${d.icon} ${d.name} ${bossActive.phase === 2 ? '(狂暴!)' : ''}`;
-    combatHud.bossFill.style.width = Math.max(0, (m.hp / m.def.hp) * 100) + '%';
+    const bw = Math.max(0, (m.hp / m.def.hp) * 100);
+    combatHud.bossFill.style.width = bw + '%';
+    if (bw < uiState.bossW - 0.1) {
+      combatHud.bossBar.classList.remove('hit');
+      void combatHud.bossBar.offsetWidth;
+      combatHud.bossBar.classList.add('hit');
+    }
+    uiState.bossW = bw;
   }
 
   function onBossHit(mob) {
@@ -3913,6 +2859,7 @@ const SkyGame = (() => {
     if (!bossActive.mob.dead) {
       mesh.position.y = bossActive.mob.isle.pos[1] + bobOf(bossActive.mob.isle.id) + Math.sin(simTime * 0.8) * 0.3;
       mesh.rotation.y = Math.sin(simTime * 0.4) * 0.15;
+      SkyAvatar.animateBoss(mesh, dt, bossActive.phase);
     }
     if (bossActive.phase !== 2 || quizOpen) return;
     ensureShockRings();
@@ -4029,33 +2976,12 @@ const SkyGame = (() => {
   }
 
   // ---- meteor shower ----
-  let _shardGlowTex = null;
-  function shardGlowTex() {
-    if (_shardGlowTex) return _shardGlowTex;
-    const cv = document.createElement('canvas');
-    cv.width = cv.height = 64;
-    const ctx = cv.getContext('2d');
-    const grad = ctx.createRadialGradient(32, 32, 2, 32, 32, 32);
-    grad.addColorStop(0, 'rgba(255,230,102,0.9)');
-    grad.addColorStop(1, 'rgba(255,230,102,0)');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, 64, 64);
-    _shardGlowTex = new THREE.CanvasTexture(cv);
-    return _shardGlowTex;
-  }
-
   function makeShardMesh() {
     const g = new THREE.Group();
-    const core = new THREE.Mesh(new THREE.OctahedronGeometry(0.4, 0),
-      new THREE.MeshLambertMaterial({ color: 0xffe066, emissive: 0xcc9900 }));
+    // a glowing double-ended crystal (bloom does the halo — no sprite glow)
+    const core = SkyArt.questMesh('shard');
+    core.scale.setScalar(0.75);
     g.add(core);
-    if (!lowPower()) {
-      const glow = new THREE.Sprite(new THREE.SpriteMaterial({
-        map: shardGlowTex(), transparent: true, depthWrite: false, fog: false, opacity: 0.85,
-      }));
-      glow.scale.set(2.2, 2.2, 1);
-      g.add(glow);
-    }
     return g;
   }
 
@@ -4206,7 +3132,7 @@ const SkyGame = (() => {
     grad.addColorStop(1, 'rgba(255,255,255,1)');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, 128, 16);
-    _streakTex = new THREE.CanvasTexture(cv);
+    _streakTex = canvasTex(cv);
     return _streakTex;
   }
   function resetStreak(s, immediate) {
@@ -4307,7 +3233,7 @@ const SkyGame = (() => {
       // (not mid-quiz/quest, boss fight or race) — being busy pauses the
       // countdown rather than silently spending it on a roll that would
       // just get rejected by canStartEvent() anyway
-      if (playing && !quizOpen && !bossActive && !raceActive) {
+      if (playing && !quizOpen && !bossActive && !raceActive && !(SkyPlay.inRun && SkyPlay.inRun())) {   // PLAY: no events mid-obby
         eventTimer += dt;
         if (eventTimer > eventCooldown) {
           eventTimer = 0;
@@ -4317,107 +3243,35 @@ const SkyGame = (() => {
       }
       return;
     }
-    if (quizOpen) return; // events pause while any quiz is open
+    if (quizOpen || playLocked()) return; // events pause while any quiz / PLAY panel is open
     worldEvent.t += dt;
     if (worldEvent.type === 'meteor') updateMeteorShower(dt);
     else updateAirRaid(dt);
   }
 
   // ===================== player =====================
-  function emojiTexture(emoji, bg) {
-    const cv = document.createElement('canvas');
-    cv.width = cv.height = 128;
-    const ctx = cv.getContext('2d');
-    ctx.fillStyle = bg;
-    ctx.fillRect(0, 0, 128, 128);
-    ctx.font = '92px serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(emoji, 64, 72);
-    return new THREE.CanvasTexture(cv);
-  }
-
-  function badgeTexture(text) {
-    const cv = document.createElement('canvas');
-    cv.width = 512; cv.height = 128;
-    const ctx = cv.getContext('2d');
-    ctx.fillStyle = 'rgba(10,40,70,0.78)';
-    const w = Math.min(500, 90 + text.length * 34);
-    const x = (512 - w) / 2;
-    ctx.beginPath();
-    ctx.roundRect ? ctx.roundRect(x, 20, w, 88, 22) : ctx.rect(x, 20, w, 88);
-    ctx.fill();
-    ctx.strokeStyle = '#ffd166';
-    ctx.lineWidth = 5;
-    ctx.stroke();
-    ctx.fillStyle = '#ffe9a8';
-    ctx.font = 'bold 52px "Noto Sans TC", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(text, 256, 66);
-    return new THREE.CanvasTexture(cv);
-  }
+  // The hero's look, animation, movement FX and the camera live in js/sky-avatar.js.
+  SkyAvatar.init(ctx);
 
   function buildPlayer() {
     player = new THREE.Group();
-    playerParts = {};
-
-    const tint = 0x3aa6a0;
-    const bodyMat = new THREE.MeshLambertMaterial({ color: tint });
-    const limbMat = new THREE.MeshLambertMaterial({ color: tint });
-    const skinTone = new THREE.MeshLambertMaterial({ color: 0xf2c99a });
-    playerParts.bodyMat = bodyMat;
-    playerParts.limbMat = limbMat;
-
-    // legs (pivot at hip: geometry translated down)
-    const legGeo = new THREE.BoxGeometry(0.24, 0.7, 0.26);
-    legGeo.translate(0, -0.35, 0);
-    const legL = new THREE.Mesh(legGeo, limbMat);
-    legL.position.set(-0.16, 0.7, 0);
-    legL.castShadow = true;
-    const legR = new THREE.Mesh(legGeo, limbMat);
-    legR.position.set(0.16, 0.7, 0);
-    legR.castShadow = true;
-    player.add(legL, legR);
-
-    // torso
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.72, 0.36), bodyMat);
-    body.position.y = 1.06;
-    body.castShadow = true;
-    player.add(body);
-
-    // arms (pivot at shoulder)
-    const armGeo = new THREE.BoxGeometry(0.2, 0.66, 0.22);
-    armGeo.translate(0, -0.28, 0);
-    const armL = new THREE.Mesh(armGeo, limbMat);
-    armL.position.set(-0.44, 1.38, 0);
-    armL.castShadow = true;
-    const armR = new THREE.Mesh(armGeo, limbMat);
-    armR.position.set(0.44, 1.38, 0);
-    armR.castShadow = true;
-    player.add(armL, armR);
-
-    // head — emoji face on the front (+z)
-    const headMats = [skinTone, skinTone, skinTone, skinTone, skinTone, skinTone];
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.56, 0.56), headMats);
-    head.position.y = 1.72;
-    head.castShadow = true;
-    player.add(head);
-    playerParts.head = head;
-    playerParts.armL = armL;
-    playerParts.armR = armR;
-    playerParts.legL = legL;
-    playerParts.legR = legR;
-    playerParts.body = body;
-
-    // floating title badge
-    const badge = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true }));
-    badge.scale.set(2.6, 0.65, 1);
-    badge.position.y = 2.45;
-    player.add(badge);
-    playerParts.badge = badge;
-
+    playerParts = SkyAvatar.buildPlayer(player);
     scene.add(player);
+    if (window.__skyTest) {
+      Object.assign(window.__skyTest, {
+        avatar: () => SkyAvatar.debug(),
+        fx: (name, data) => emitFx(name, data),
+        celebrate: n => spawnConfetti(n || 36),
+        motion: () => ({ ...motion }),
+        cam: () => ({ ...cam }),
+        scene: () => scene,
+        camera: () => camera,
+        // (PLAY's setCam(theta, phi, radius) and AVATAR's setCam({theta, phi, radius}) both work)
+        setCam: (o, phi, radius) => { if (typeof o === 'object') Object.assign(cam, o); else { cam.theta = o; if (phi !== undefined) cam.phi = phi; if (radius !== undefined) cam.radius = radius; } },
+        spawnMobHere: (id, dx, dz) => { const isle = isleById(currentIsland) || SKY_ISLANDS[0]; return mobs.indexOf(spawnMob(id, isle.id, pos.x - isle.pos[0] + dx, pos.z - isle.pos[2] + dz)); },
+        hitMob: i => hitMob(mobs[i]),
+      });
+    }
   }
 
   // re-read equipped skin/title and recompute title perks
@@ -4426,24 +3280,78 @@ const SkyGame = (() => {
     if (!playerParts) return;
     const skin = GameEngine.getEquippedSkin();
     const title = GameEngine.getEquippedTitle();
-    const tint = SKY_SKIN_TINTS[skin.id] || SKY_SKIN_TINTS.default;
-    playerParts.bodyMat.color.setHex(tint);
-    playerParts.limbMat.color.setHex(tint);
-    // emoji face
-    const faceTex = emojiTexture(skin.icon, '#f2c99a');
-    const faceMat = new THREE.MeshLambertMaterial({ map: faceTex });
-    playerParts.head.material[4] = faceMat; // +z face
-    playerParts.head.material.needsUpdate = true;
-    // badge
-    playerParts.badge.material.map = badgeTexture(title.display || title.name);
-    playerParts.badge.material.needsUpdate = true;
+    SkyAvatar.refreshLook(skin.id, SKY_SKIN_TINTS[skin.id], title.display || title.name);
     if (els.titleBadge) els.titleBadge.textContent = `⭐ ${title.display || title.name}`;
   }
 
   // ===================== physics & collision =====================
   function bobOf(isleId) { return islandBob[isleId] || 0; }
 
-  // highest support top at (x,z) that is not above maxTop
+  // ---- PLAY: movement-ability state (air jumps, dash) — see SKY_PLAY_PHYS ----
+  let groundCol = null;          // collider under the feet while grounded (carry / SkyPlay hooks)
+  let airJumpsUsed = 0;
+  let jumpBaseTop = 0;           // top of the surface the current airtime started from
+  let jumpCapV = 11;             // take-off speed that sets the air-jump height cap
+  let dashT = 0, dashUsed = false, dashReadyAt = 0, dashQueuedAt = -10, dashDirX = 0, dashDirZ = 1;
+  function maxAirJumps() { return SKY_PLAY_PHYS.airJumps + (perks.doubleJump ? 1 : 0); }
+  // An air jump is SKY_CONFIG.jumpV × airJumpMult — never scaled by jump titles / boots —
+  // and can't lift you above H(take-off speed) + maxAir × H(airV) over the take-off
+  // surface. That keeps jump-height titles meaning a higher ground jump without letting
+  // them stack with air jumps onto gated/secret islands (check_sky_play.js proves it).
+  function airJumpVel() {
+    const g2 = -2 * SKY_CONFIG.gravity;
+    const airV = SKY_CONFIG.jumpV * SKY_PLAY_PHYS.airJumpMult;
+    const cap = jumpBaseTop + (jumpCapV * jumpCapV + maxAirJumps() * airV * airV) / g2;
+    const room = cap - pos.y;
+    return room <= 0 ? 0 : Math.min(airV, Math.sqrt(g2 * room));
+  }
+  function playLocked() { return !!(SkyPlay.locked && SkyPlay.locked()); }
+  function requestDash() { dashQueuedAt = simTime; }
+  // teleport used by SkyPlay (course checkpoints / finish / start)
+  function setPlayerPos(x, y, z, yaw) {
+    pos.x = x; pos.y = y; pos.z = z;
+    vy = 0; dashT = 0; dashUsed = false; airJumpsUsed = 0;
+    groundCol = null; grounded = false;
+    if (yaw !== undefined) heroYaw = yaw;
+  }
+  // English answered correctly inside a SkyPlay activity (word gates). Same rates and
+  // paths as awardAnswer(): SKY_REWARD[diff].ans XP (+1 💎) first try, half XP retry.
+  function playReward(diff, firstTry, word) {
+    const tier = SKY_REWARD[diff] || SKY_REWARD.easy;
+    const xp = Math.round((firstTry ? tier.ans : Math.ceil(tier.ans / 2)) * (perks.xpMult || 1));
+    GameEngine.addXP(xp);
+    if (firstTry) skyAddGems(1);
+    if (word && firstTry) GameEngine.recordWord(word);
+    GameEngine.recordSkyAnswer?.();
+    return { xp, gems: firstTry ? 1 : 0 };
+  }
+  // course clear: pays like a quest first clear of that difficulty; replays half XP, no gems
+  function playClear(diff, first) {
+    const tier = SKY_REWARD[diff] || SKY_REWARD.easy;
+    const xp = Math.round((first ? tier.xp : Math.round(tier.xp / 2)) * (perks.xpMult || 1));
+    GameEngine.addXP(xp);
+    if (first) skyAddGems(tier.gems);
+    return { xp, gems: first ? tier.gems : 0 };
+  }
+  Object.assign(ctx, {
+    setPlayerPos, playReward, playClear, requestDash,
+    cameraShot: shot => SkyAvatar.cameraShot && SkyAvatar.cameraShot(shot),   // AVATAR camera owns the framing
+    setDeferLevelUp: v => { if (!quizOpen) GameEngine.setDeferLevelUp(v); if (!v && !quizOpen) GameEngine.flushPendingLevelUps(); },
+    flash: () => { els.flash.classList.add('on'); setTimeout(() => els.flash.classList.remove('on'), 420); },
+  });
+  // (getters must be defined, not Object.assign-ed — assign would copy today's value)
+  Object.defineProperties(ctx, {
+    grounded: { get: () => grounded },
+    groundCol: { get: () => groundCol },
+    heroYaw: { get: () => heroYaw },
+    quizOpen: { get: () => quizOpen },
+    lastGroundIsland: { get: () => lastGroundIsland },
+    wrap: { get: () => els.wrap },
+  });
+
+  // highest support top at (x,z) that is not above maxTop.
+  // PLAY: a collider may also be a rotated rectangle (`box: {hw, hd, c, s}`, `r` = its
+  // bounding radius) and may be switched `off` (vanishing / not-yet-solid obby platforms).
   function supportAt(x, z, maxTop) {
     let best = -Infinity;
     let bestCol = null;
@@ -4451,6 +3359,11 @@ const SkyGame = (() => {
       const c = colliders[i];
       const dx = x - c.x, dz = z - c.z;
       if (dx * dx + dz * dz > c.r * c.r) continue;
+      if (c.off) continue;
+      if (c.box) {
+        const b = c.box;
+        if (Math.abs(dx * b.c - dz * b.s) > b.hw || Math.abs(dx * b.s + dz * b.c) > b.hd) continue;
+      }
       const top = c.top + (c.isle ? bobOf(c.isle) : 0);
       if (top <= maxTop && top > best) { best = top; bestCol = c; }
     }
@@ -4462,6 +3375,7 @@ const SkyGame = (() => {
     pos.z = isle.pos[2];
     pos.y = isle.pos[1] + bobOf(isle.id) + 2;
     vy = 0;
+    dashT = 0; dashUsed = false; airJumpsUsed = 0; groundCol = null;
     if (hurt && !perks.voidSafe) {
       hearts--;
       if (hearts <= 0) {
@@ -4477,33 +3391,93 @@ const SkyGame = (() => {
   }
 
   function voidFall() {
+    // PLAY: falling off an obby course pops you back to its checkpoint — no heart lost
+    if (SkyPlay.onVoid && SkyPlay.onVoid()) return;
     els.flash.classList.add('on');
     setTimeout(() => els.flash.classList.remove('on'), 420);
     SoundManager.playWrong();
     lastDamageAt = simTime;
     const isle = isleById(lastGroundIsland) || SKY_ISLANDS[0];
     respawnAt(isle, true);
+    emitFx('respawn');
   }
 
+  const HEART_PATH = 'M16 28C14 26.6 2.5 19.4 2.5 10.6 2.5 6 5.9 2.8 10 2.8c2.4 0 4.6 1.2 6 3.2 1.4-2 3.6-3.2 6-3.2 4.1 0 7.5 3.2 7.5 7.8 0 8.8-11.5 16-13.5 17.4z';
   function updateHudHearts() {
     if (!els.hearts) return;
-    els.hearts.textContent = '❤️'.repeat(Math.max(0, hearts)) + '🖤'.repeat(Math.max(0, maxHearts() - hearts));
+    const max = maxHearts();
+    const h = Math.max(0, Math.min(hearts, max));
+    const box = els.hearts;
+    if (uiState.heartsMax !== max || box.children.length !== max) {
+      uiState.heartsMax = max;
+      uiState.hearts = -1;
+      box.innerHTML = Array.from({ length: max }, () =>
+        `<span class="aw-heart empty"><svg viewBox="0 0 32 30" aria-hidden="true"><path class="hb" d="${HEART_PATH}"/><path class="hs" d="M8 8.4c1.4-2 4-2.6 5.6-1.4-2.4.2-4.2 1.6-4.8 3.6-.6-.6-1-1.4-.8-2.2z"/></svg></span>`).join('');
+    }
+    const prev = uiState.hearts;
+    for (let i = 0; i < max; i++) {
+      const el = box.children[i];
+      const full = i < h;
+      const was = prev >= 0 ? i < prev : full;
+      el.classList.toggle('full', full);
+      el.classList.toggle('empty', !full);
+      el.classList.remove('lose', 'gain');
+      if (prev >= 0 && full !== was) {
+        void el.offsetWidth;
+        el.classList.add(full ? 'gain' : 'lose');
+      }
+    }
+    box.classList.toggle('low', h === 1 && max > 1);
+    box.setAttribute('aria-label', `生命 ${h} / ${max}`);
+    uiState.hearts = h;
   }
 
   function showWorldToast(msg) {
     if (!els.toast) return;
+    // arrival is shown as a big banner (fx 'arrive'); only fall back to the toast if no banner came
+    if (/^🏝️ 抵達「/.test(msg) && !uiState.noBanner) {
+      clearTimeout(uiState.arriveT);
+      uiState.arriveT = setTimeout(() => {
+        if (Date.now() - uiState.lastBanner > 600) { uiState.noBanner = true; showWorldToast(msg); uiState.noBanner = false; }
+      }, 80);
+      return;
+    }
+    const kind = /^(💫|⚠️|🔒|😢|🏃|🦅 牠|⏳|哎呀|🔍)/.test(msg) ? 'warn'
+      : /^(✅|✨|🎆|🌉|💗|💖|🍀|🌌|📦|🌟|⚔️ 擊敗|🛡️)/.test(msg) ? 'good'
+      : /^(🏝️|🔮|🪂|🌨️|☄️|🏁|🔋)/.test(msg) ? 'gold' : '';
     els.toast.textContent = msg;
+    els.toast.dataset.kind = kind;
+    els.toast.classList.remove('on');
+    void els.toast.offsetWidth;
     els.toast.classList.add('on');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => els.toast.classList.remove('on'), 2200);
+    toastTimer = setTimeout(() => els.toast.classList.remove('on'), 1900 + Math.min(2200, msg.length * 50));
   }
 
   function updatePlayer(dt) {
     simTime += dt;
 
-    // input vector relative to camera yaw (frozen while a quiz is open)
+    // PLAY: moving / rotating / conveyor supports (SkyPlay obby platforms) carry the
+    // player. SkyPlay.update() already moved them this frame and left the deltas on
+    // the collider (mdx/mdz/mdy/myaw); island colliders never set these, so islands,
+    // bridges and pads behave exactly as before.
+    if (grounded && groundCol && mountT <= 0) {
+      if (groundCol.moving) {
+        pos.x += groundCol.mdx; pos.z += groundCol.mdz; pos.y += groundCol.mdy;
+        if (groundCol.myaw) {
+          const ox = pos.x - groundCol.x, oz = pos.z - groundCol.z;
+          const c = Math.cos(groundCol.myaw), s = Math.sin(groundCol.myaw);
+          pos.x = groundCol.x + ox * c + oz * s;
+          pos.z = groundCol.z - ox * s + oz * c;
+          heroYaw += groundCol.myaw;
+        }
+      }
+      if (groundCol.conv) { pos.x += groundCol.conv.x * dt; pos.z += groundCol.conv.z * dt; }
+    }
+
+    // input vector relative to camera yaw (frozen while a quiz or a SkyPlay panel is open)
     let ix = 0, iz = 0;
-    if (quizOpen) {
+    if (quizOpen || playLocked()) {
       // no movement input
     } else if (joy.active) {
       ix = joy.dx;
@@ -4524,7 +3498,25 @@ const SkyGame = (() => {
     let mx = fx * iz + rx * ix;
     let mz = fz * iz + rz * ix;
     const mlen = Math.hypot(mx, mz);
-    if (mlen > 0.001) {
+    // PLAY: dash (C key / 💨 button) — a short burst with gravity paused, usable on the
+    // ground and once per airtime (a ground dash that runs off an edge counts as it)
+    if (dashQueuedAt >= 0 && simTime - dashQueuedAt < 0.2 && dashT <= 0 && !dashUsed &&
+        simTime >= dashReadyAt && mountT <= 0 && !quizOpen && !playLocked()) {
+      if (mlen > 0.001) { dashDirX = mx / mlen; dashDirZ = mz / mlen; }
+      else { dashDirX = Math.sin(heroYaw); dashDirZ = Math.cos(heroYaw); }
+      dashT = SKY_PLAY_PHYS.dashTime;
+      dashReadyAt = simTime + SKY_PLAY_PHYS.dashCooldown;
+      dashUsed = true;
+      dashQueuedAt = -10;
+      heroYaw = Math.atan2(dashDirX, dashDirZ);
+      emitFx('dash', { x: dashDirX, z: dashDirZ, grounded });
+    }
+    if (dashT > 0) {
+      const step = Math.min(dt, dashT);
+      pos.x += dashDirX * SKY_PLAY_PHYS.dashSpeed * step;
+      pos.z += dashDirZ * SKY_PLAY_PHYS.dashSpeed * step;
+      walkTime += dt * 13;
+    } else if (mlen > 0.001) {
       mx /= mlen; mz /= mlen;
       const speed = SKY_CONFIG.walkSpeed * (perks.speedMult || 1) *
         (sprint ? SKY_CONFIG.sprintMult : 1) * Math.min(1, mag || 1) * (mountT > 0 ? 1.6 : 1);
@@ -4543,6 +3535,7 @@ const SkyGame = (() => {
 
     // vertical (hold jump to glide with 傳說勇者 title or 🪂 glider)
     const prevFeet = pos.y;
+    let glidingNow = false;
     if (mountT > 0) {
       // ☁️ 飛天雲: free flight — hold jump to ascend, release to sink gently;
       // the entire gravity/collision/jump/void block below is skipped while mounted
@@ -4550,8 +3543,13 @@ const SkyGame = (() => {
       pos.y += vy * dt;
       grounded = false;
     } else {
-    vy += SKY_CONFIG.gravity * dt;
-    if (jumpHeld && vy < -3.2 && (perks.glide || gliderOn)) vy = -3.2;
+    if (dashT > 0) {
+      dashT -= dt;          // gravity paused for the dash
+      vy = 0;
+    } else {
+      vy += SKY_CONFIG.gravity * dt;
+      if (jumpHeld && vy < -3.2 && (perks.glide || gliderOn)) { vy = -3.2; glidingNow = true; }
+    }
     pos.y += vy * dt;
 
     const sup = supportAt(pos.x, pos.z, prevFeet + 0.55);
@@ -4560,6 +3558,11 @@ const SkyGame = (() => {
       vy = 0;
       grounded = true;
       lastGroundedAt = simTime;
+      groundCol = sup.col;
+      jumpBaseTop = sup.y;
+      jumpCapV = SKY_CONFIG.jumpV;
+      if (dashT <= 0) dashUsed = false;
+      if (sup.col.play) SkyPlay.onGround(sup.col);
       if (sup.col.isle) {
         lastGroundIsland = sup.col.isle;
         if (currentIsland !== sup.col.isle) {
@@ -4578,18 +3581,22 @@ const SkyGame = (() => {
               save.lastIsland = currentIsland;
               persist();
               showWorldToast(`🏝️ 抵達「${isle.name}」！`);
+              emitFx('arrive', { isle });
               SoundManager.playCorrect();
             }
           }
         }
       }
+      if (!motion.grounded && motion.vy < -4) emitFx('land', { v: -motion.vy });
       // bouncy jump pad
       if (sup.col.kind === 'pad') {
         vy = sup.col.launch * (perks.padMult || 1);
         grounded = false;
+        jumpCapV = vy;
         SoundManager.playCorrect();
+        emitFx('pad');
       }
-      airJumpUsed = false;
+      airJumpsUsed = 0;
     } else {
       grounded = false;
     }
@@ -4603,11 +3610,14 @@ const SkyGame = (() => {
         grounded = false;
         jumpBufferedAt = -10;
         lastGroundedAt = -10;
-      } else if (perks.doubleJump && !airJumpUsed && vy < jumpV * 0.5) {
-        // 傳說勇者 double jump
-        vy = jumpV * 0.92;
-        airJumpUsed = true;
+        jumpCapV = SKY_CONFIG.jumpV;
+        emitFx('jump');
+      } else if (airJumpsUsed < maxAirJumps() && vy < jumpV * 0.5 && dashT <= 0) {
+        // PLAY: everyone has an air jump; 傳說勇者 (perks.doubleJump) gets a second one
+        vy = airJumpVel();
+        airJumpsUsed++;
         jumpBufferedAt = -10;
+        emitFx('airjump', { n: airJumpsUsed });
       }
     }
     }
@@ -4617,37 +3627,30 @@ const SkyGame = (() => {
     // skipped while ☁️ 飛天雲 is active so the free-flight ride never gets
     // interrupted by a stray void check.
     if (mountT <= 0 && pos.y < (regionUnderground ? SKY_CONFIG.undergroundVoidY : SKY_CONFIG.voidY)) voidFall();
+    if (!grounded) groundCol = null;
 
-    // apply to mesh
-    player.position.set(pos.x, pos.y, pos.z);
-    player.rotation.y = heroYaw;
-    const swing = Math.sin(walkTime) * 0.55;
-    playerParts.armL.rotation.x = swing;
-    playerParts.armR.rotation.x = -swing;
-    playerParts.legL.rotation.x = -swing;
-    playerParts.legR.rotation.x = swing;
-    if (!grounded) {
-      playerParts.armL.rotation.x = -2.6;
-      playerParts.armR.rotation.x = -2.6;
-    }
-    // idle breathing
-    playerParts.body.scale.y = 1 + Math.sin(simTime * 2.2) * 0.015;
+    // movement snapshot for avatar / camera / FX (see `motion` contract at the top)
+    motion.moving = mlen > 0.001 || dashT > 0;
+    motion.sprint = motion.moving && sprint;
+    motion.speed = dashT > 0 ? SKY_PLAY_PHYS.dashSpeed
+      : motion.moving ? SKY_CONFIG.walkSpeed * (sprint ? SKY_CONFIG.sprintMult : 1) : 0;
+    motion.vy = vy;
+    motion.grounded = grounded;
+    motion.airJumps = airJumpsUsed;
+    motion.dashing = dashT > 0;
+    motion.gliding = glidingNow && !grounded;   // explicit (AVATAR used to infer it from vy)
+    motion.riding = mountT > 0 ? 'cloud' : null;
+    motion.platform = !!(groundCol && groundCol.moving);   // standing on a moving obby platform
+
+    // ---- presentation half (avatar animation) below; physics above ----
+    SkyAvatar.animatePlayer(dt, { yaw: heroYaw, quiz: quizOpen });
+    SkyAvatar.update(dt);
 
     if (!quizOpen) updateInteractTarget();
   }
 
   function updateCamera(dt) {
-    const targetX = pos.x + Math.sin(cam.theta) * Math.cos(cam.phi) * cam.radius;
-    const targetY = pos.y + 1.6 + Math.sin(cam.phi) * cam.radius;
-    const targetZ = pos.z + Math.cos(cam.theta) * Math.cos(cam.phi) * cam.radius;
-    const k = 1 - Math.pow(0.0001, dt); // frame-rate independent smoothing
-    _v1.set(targetX, targetY, targetZ);
-    camera.position.lerp(_v1, k);
-    // keep the camera above whatever it hovers over
-    const gs = supportAt(camera.position.x, camera.position.z, Infinity);
-    if (gs.col && camera.position.y < gs.y + 0.6) camera.position.y = gs.y + 0.6;
-    _v2.set(pos.x, pos.y + 1.5, pos.z);
-    camera.lookAt(_v2);
+    SkyAvatar.updateCamera(dt); // collision, follow lag, FOV kick, shake, start reveal
 
     // sun + shadow frustum follow the player
     sunLight.position.set(pos.x + 40, pos.y + 60, pos.z + 20);
@@ -4663,10 +3666,7 @@ const SkyGame = (() => {
       islandBob[isle.id] = bob;
       islandGroups[isle.id].position.y = isle.pos[1] + bob;
     }
-    // bobbing quest markers
-    for (let i = 0; i < markerList.length; i++) {
-      markerList[i].position.y = 4.3 + Math.sin(simTime * 2 + i) * 0.25;
-    }
+    updateMarkers();   // bobbing / spinning 3D quest markers (instanced)
     // combat & advanced quests
     updateMobs(dt);
     updateBolt(dt);
@@ -4677,6 +3677,7 @@ const SkyGame = (() => {
     updateMaze(dt);
     checkSecretDiscovery();
     updateWorldEvent(dt);
+    SkyPlay.update(dt);   // PLAY: moves obby platforms (before updatePlayer reads them), coins, pets
     // slowly regain hearts out of combat
     if (playing && hearts < maxHearts() && simTime - lastDamageAt > 20) {
       hearts++;
@@ -4693,34 +3694,10 @@ const SkyGame = (() => {
     if (trackerTimer > 0.15) { trackerTimer = 0; updateTracker(); }
     updateCulling();
     watchFps(dt);
-    if (particles) particles.rotation.y += dt * 0.004;
-    if (emberParticles) {
-      const arr = emberParticles.geometry.attributes.position.array;
-      for (let i = 1; i < arr.length; i += 3) {
-        arr[i] += dt * 1.4;
-        if (arr[i] > EMBER_Y_HI) arr[i] = EMBER_Y_LO;
-      }
-      emberParticles.geometry.attributes.position.needsUpdate = true;
-    }
-    // ambient decoration drift (☁️ Wave 4 polish; arrays stay empty under lowPower())
-    for (const mist of waterMistSystems) {
-      const arr = mist.geometry.attributes.position.array;
-      for (let i = 1; i < arr.length; i += 3) {
-        arr[i] += dt * 1.1;
-        if (arr[i] > 2.5) arr[i] = 0;
-      }
-      mist.geometry.attributes.position.needsUpdate = true;
-    }
-    for (const sys of fireflySystems) {
-      const arr = sys.points.geometry.attributes.position.array;
-      const base = sys.base, phase = sys.phase;
-      for (let i = 0; i < phase.length; i++) {
-        arr[i * 3] = base[i * 3] + Math.sin(simTime * 0.8 + phase[i]) * 0.4;
-        arr[i * 3 + 1] = base[i * 3 + 1] + Math.sin(simTime * 1.4 + phase[i] * 1.7) * 0.35;
-        arr[i * 3 + 2] = base[i * 3 + 2] + Math.cos(simTime * 0.8 + phase[i]) * 0.4;
-      }
-      sys.points.geometry.attributes.position.needsUpdate = true;
-    }
+    // clouds, particles, atmosphere and island LOD animate in SkyArt.frame();
+    // mirror its altitude blends here for the __skyTest.region() hook
+    undergroundBlend = SkyArt.state.ut > 0.001 ? SkyArt.state.ut : -1;
+    galaxyBlend = SkyArt.state.gt;
     // ⚡ active-use item timers: chain-lightning fade + shield/mount durations
     updateLightningLines(dt);
     if (shieldT > 0) {
@@ -4751,55 +3728,6 @@ const SkyGame = (() => {
         updateItemTray();
       }
     }
-    // altitude atmosphere — deep-space tint climbing toward the galaxy region,
-    // deep-red cave gloom descending toward 地心世界; the two bands never
-    // overlap (galaxy sits at y>70, underground at y<-20) so only one branch
-    // ever actively lerps at a time.
-    const ut = Math.min(1, Math.max(0, (-pos.y - 20) / 40));
-    if (ut > 0.001) {
-      if (Math.abs(ut - undergroundBlend) > 0.01) {
-        undergroundBlend = ut;
-        scene.fog.color.copy(fogBase).lerp(fogUnderground, ut);
-        hemiLight.color.copy(hemiBase).lerp(hemiUnderground, ut);
-        skyDome.material.color.setRGB(1 - ut * 0.75, 1 - ut * 0.88, 1 - ut * 0.92);
-        scene.fog.far = SKY_CONFIG.fogFar + (150 - SKY_CONFIG.fogFar) * ut;
-      }
-    } else {
-      if (undergroundBlend !== -1) {
-        // leaving the underground — restore surface fog-far and force the
-        // galaxy branch below to recompute so it writes the surface colors back
-        undergroundBlend = -1;
-        scene.fog.far = SKY_CONFIG.fogFar;
-        galaxyBlend = -1;
-      }
-      // deep-space tint as the player climbs toward the galaxy region
-      const gt = Math.min(1, Math.max(0, (pos.y - 70) / 50));
-      if (Math.abs(gt - galaxyBlend) > 0.01) {
-        galaxyBlend = gt;
-        scene.fog.color.copy(fogBase).lerp(fogGalaxy, gt);
-        hemiLight.color.copy(hemiBase).lerp(hemiGalaxy, gt);
-        // darken the sky dome itself (color multiplies its gradient texture)
-        skyDome.material.color.setRGB(1 - gt * 0.55, 1 - gt * 0.62, 1 - gt * 0.3);
-      }
-    }
-    // drifting clouds (cheap: advance a third of them per frame)
-    if (cloudMesh) {
-      const m = new THREE.Matrix4();
-      const q = new THREE.Quaternion();
-      const s = new THREE.Vector3();
-      const p = new THREE.Vector3();
-      const start = (Math.floor(simTime * 60) % 3);
-      for (let i = start; i < cloudData.length; i += 3) {
-        const d = cloudData[i];
-        d.x += d.speed * dt * 3;
-        if (d.x > 460) d.x = -460;
-        p.set(d.x, d.y, d.z);
-        s.set(d.sx, d.sy, d.sz);
-        m.compose(p, q, s);
-        cloudMesh.setMatrixAt(i, m);
-      }
-      cloudMesh.instanceMatrix.needsUpdate = true;
-    }
   }
 
   // ===================== input =====================
@@ -4826,6 +3754,11 @@ const SkyGame = (() => {
         if (e.code === 'Escape') closeQuiz();
         return;
       }
+      // PLAY panels (egg shop / hatching / pet collection) own the keyboard while open
+      if (playLocked()) {
+        if (e.code === 'Escape') SkyPlay.onEscape?.();
+        return;
+      }
       // IME (Chinese/Japanese/Korean input method) composition steals WASD —
       // detect it and nudge the player to switch back to English, but keep
       // falling into the switch below so movement still works once it does.
@@ -4848,6 +3781,8 @@ const SkyGame = (() => {
         case 'KeyQ': useActiveItem('lightning_staff'); break;
         case 'KeyR': useActiveItem('bubble_shield'); break;
         case 'KeyF': useActiveItem('cloud_mount'); break;
+        case 'KeyC': requestDash(); break;           // PLAY: dash
+        case 'KeyP': SkyPlay.togglePets?.(); break;  // PLAY: pet collection
         default: return;
       }
       e.preventDefault();
@@ -4871,7 +3806,8 @@ const SkyGame = (() => {
   }
 
   function interact() {
-    if (quizOpen) return;
+    if (quizOpen || playLocked()) return;
+    if (currentTarget && currentTarget.play) { currentTarget.use(); return; }   // PLAY interactables
     if (!currentTarget) {
       const mob = nearestMob(10);
       if (mob) { openCombatQuiz(mob); return; }
@@ -4911,8 +3847,12 @@ const SkyGame = (() => {
       case 'order': startOrder(q); return;
       case 'maze': startMaze(q); return;
       case 'boss':
-        if (bossActive) engageBoss();
-        else startBoss(q);
+        if (bossActive && bossActive.q.id === q.id) engageBoss();
+        else {
+          // another boss is still awake far away (left by portal / bridge): it goes back to sleep
+          if (bossActive) resetBoss();
+          startBoss(q);
+        }
         return;
       default: openQuest(q);
     }
@@ -4948,20 +3888,25 @@ const SkyGame = (() => {
       <div class="aw-quiz-card">
         <div class="aw-quiz-head">
           <span class="aw-quiz-name" id="sky-qz-name"></span>
+          <span class="aw-quiz-streak" id="sky-qz-streak"></span>
           <span class="aw-quiz-prog" id="sky-qz-prog"></span>
           <button class="aw-quiz-close" id="sky-qz-close" title="離開任務">✕</button>
         </div>
-        <div class="aw-quiz-npc" id="sky-qz-npc" style="display:none"></div>
-        <div class="aw-quiz-prompt" id="sky-qz-prompt"></div>
-        <div class="aw-quiz-zh" id="sky-qz-zh"></div>
-        <button class="aw-quiz-tts" id="sky-qz-tts" style="display:none">🔊 再聽一次</button>
-        <button class="aw-quiz-hint" id="sky-qz-hint" style="display:none">🔮 使用提示水晶</button>
-        <div class="aw-quiz-options" id="sky-qz-opts"></div>
-        <div class="aw-quiz-feedback" id="sky-qz-fb"></div>
+        <div class="aw-quiz-body">
+          <div class="aw-quiz-npc" id="sky-qz-npc" style="display:none"></div>
+          <div class="aw-quiz-prompt" id="sky-qz-prompt"></div>
+          <div class="aw-quiz-zh" id="sky-qz-zh"></div>
+          <button class="aw-quiz-tts" id="sky-qz-tts" style="display:none">🔊 再聽一次</button>
+          <button class="aw-quiz-hint" id="sky-qz-hint" style="display:none">🔮 使用提示水晶</button>
+          <div class="aw-quiz-options" id="sky-qz-opts"></div>
+          <div class="aw-quiz-feedback" id="sky-qz-fb"></div>
+        </div>
       </div>`;
     els.wrap.appendChild(div);
     quiz = {
       root: div,
+      card: div.querySelector('.aw-quiz-card'),
+      streak: div.querySelector('#sky-qz-streak'),
       name: div.querySelector('#sky-qz-name'),
       prog: div.querySelector('#sky-qz-prog'),
       close: div.querySelector('#sky-qz-close'),
@@ -4995,7 +3940,10 @@ const SkyGame = (() => {
     keys.f = keys.b = keys.l = keys.r = 0;
     joy.dx = joy.dy = 0;
     GameEngine.setDeferLevelUp(true);
+    quiz.root.classList.remove('win');
     quiz.root.classList.add('on');
+    uiState.streak = 0;
+    uiStreakUpdate(false);
     quiz.name.textContent = `📜 ${q.name}`;
     quiz.npc.style.display = 'none';
     quiz.tts.style.display = 'none';
@@ -5016,16 +3964,25 @@ const SkyGame = (() => {
     if (!quizOpen) return;
     quizOpen = false;
     active = null;
-    quiz.root.classList.remove('on');
+    quiz.root.classList.remove('on', 'win');
     TTSManager.stop();
     GameEngine.setDeferLevelUp(false);
     GameEngine.flushPendingLevelUps();
+    uiFlushBanners();
   }
 
   function renderProg() {
     if (!active) return;
     const n = active.q.n;
-    quiz.prog.textContent = '●'.repeat(active.step) + '○'.repeat(Math.max(0, n - active.step));
+    const st = Math.min(active.step, n);
+    const pct = n ? (st / n) * 100 : 0;
+    const bar = quiz.prog.querySelector('.aw-prog-bar');
+    if (bar) {
+      bar.style.setProperty('--p', pct + '%');
+      quiz.prog.querySelector('.aw-prog-n').textContent = `${st}/${n}`;
+    } else {
+      quiz.prog.innerHTML = `<span class="aw-prog"><span class="aw-prog-bar" style="--p:${pct}%"><span class="aw-prog-fill"></span></span><span class="aw-prog-n">${st}/${n}</span></span>`;
+    }
   }
 
   // reward one correct answer (call BEFORE step++ so wrongThis is per-question)
@@ -5033,7 +3990,11 @@ const SkyGame = (() => {
     const tier = SKY_REWARD[active.q.diff];
     const firstTry = !active.wrongThis && !active.replay;
     const base = firstTry ? tier.ans : Math.ceil(tier.ans / 2);
-    GameEngine.addXP(Math.round(base * (perks.xpMult || 1)));
+    const xpGain = Math.round(base * (perks.xpMult || 1));
+    GameEngine.addXP(xpGain);
+    uiPop('xp', xpGain);
+    uiState.streak = firstTry ? uiState.streak + 1 : 0;
+    uiStreakUpdate(true);
     if (firstTry) {
       // 收藏之王: chests pay double per-answer gems
       skyAddGems(perks.chestGem && active.q.type === 'chest' ? 2 : 1);
@@ -5053,6 +4014,8 @@ const SkyGame = (() => {
     }
     active.wrongThis = true;
     active.anyWrong = true;
+    uiState.streak = 0;
+    uiStreakUpdate(false);
   }
 
   // 🔮 hint-crystal consumable inside quizzes
@@ -5087,15 +4050,19 @@ const SkyGame = (() => {
 
   function renderOptions(options, correctIdx, onCorrect, labeler, onWrong) {
     quiz.opts.innerHTML = '';
+    uiStepAnim();
     options.forEach((opt, i) => {
       const b = document.createElement('button');
       b.className = 'aw-opt';
+      b.dataset.k = 'ABCD'[i] || String(i + 1);
+      b.dataset.c = String(i % 4);
       b.textContent = labeler ? labeler(opt) : opt;
       if (i === correctIdx) b.dataset.correct = '1';
       b.addEventListener('click', () => {
         if (!active) return;
         if (i === correctIdx) {
           b.classList.add('right');
+          uiBurst(b);
           SoundManager.playCorrect();
           quiz.opts.querySelectorAll('button').forEach(x => (x.disabled = true));
           onCorrect();
@@ -5103,6 +4070,10 @@ const SkyGame = (() => {
           b.classList.add('wrong');
           b.disabled = true;
           markWrong();
+          if (!quiz.fb.classList.contains('good')) {
+            quiz.fb.textContent = '再想想看，你可以的！';
+            quiz.fb.className = 'aw-quiz-feedback bad';
+          }
           SoundManager.playWrong();
           onWrong?.();
         }
@@ -5259,6 +4230,8 @@ const SkyGame = (() => {
       if (sel.i === cell.i) {
         sel.btn.classList.add('matched');
         b.classList.add('matched');
+        uiBurst(b);
+        uiBurst(sel.btn);
         SoundManager.playCorrect();
         const word = pairs[cell.i].word;
         TTSManager.speak(word, 'en-US');
@@ -5289,8 +4262,11 @@ const SkyGame = (() => {
     const first = !active.replay;
     save.completed[q.id] = (save.completed[q.id] || 0) + 1;
     persist();
+    let xpGain = 0;
     if (first) {
-      GameEngine.addXP(Math.round(tier.xp * (perks.xpMult || 1)));
+      xpGain = Math.round(tier.xp * (perks.xpMult || 1));
+      GameEngine.addXP(xpGain);
+      uiPop('xp', xpGain);
       skyAddGems(tier.gems);
       GameEngine.recordSkyQuest?.(q.id.startsWith('sqg_'), q.id.startsWith('sqh_'), q.id.startsWith('squ_'));
       if (q.type === 'bridge') {
@@ -5301,6 +4277,7 @@ const SkyGame = (() => {
           buildBridge(b);
           const target = isleById(b.to);
           showWorldToast(`🌉 通往${target ? target.name : '遠方'}的天空之橋出現了！`);
+          uiBanner(target ? `通往${target.name}的橋` : '天空之橋', '橋樑出現了', '🌉');
         }
       }
       if (q.type === 'boss') {
@@ -5315,9 +4292,20 @@ const SkyGame = (() => {
     renderStartScreen();
     quiz.npc.style.display = 'none';
     quiz.tts.style.display = 'none';
-    quiz.prompt.innerHTML = first
-      ? `🎉 任務完成！<div class="aw-clear-reward">+${tier.xp} XP　+${tier.gems} 💎</div>`
-      : '🎉 複習完成！繼續探索其他島嶼吧！';
+    // quest-complete celebration (presentation only; stars just mirror "no wrong answers")
+    const graded = ['chest', 'gate', 'npc', 'listen', 'pillars', 'bridge'].includes(q.type);
+    const flawless = !graded || !active.anyWrong;
+    quiz.root.classList.add('win');
+    quiz.prompt.innerHTML = `<div class="aw-win"><div class="aw-win-rays"></div>
+      <div class="aw-win-trophy">${q.type === 'boss' ? '👑' : '🏆'}</div>
+      <div class="aw-win-title aw-outline-text">${first ? '任務完成！' : '複習完成！'}</div>
+      <div class="aw-win-stars"><i>★</i><i>★</i><i${flawless ? '' : ' class="off"'}>★</i></div>
+      ${graded ? `<div class="aw-win-note">${flawless ? '全部一次答對，太厲害了！' : '再練一次，下次挑戰全對！'}</div>` : ''}
+      ${first
+        ? `<div class="aw-win-rewards"><span class="aw-reward xp">+<b data-count="${xpGain}">0</b> XP</span><span class="aw-reward gem">+<b data-count="${tier.gems}">0</b> 💎</span></div>`
+        : '<div class="aw-win-note">繼續探索其他島嶼吧！</div>'}
+    </div>`;
+    uiCountUp(quiz.prompt);
     const cleared = totalCleared();
     quiz.zh.textContent = !first ? ''
       : cleared >= 22 ? '🌌 銀河傳送門開啟了！去晨曦之島找 🌀 吧！'
@@ -5326,6 +4314,7 @@ const SkyGame = (() => {
     if (first && cleared === 22) {
       updateQuestMarkers();   // portal 🔒 → 🌀
       showWorldToast('🌌 銀河傳送門開啟了！晨曦之島出現了神秘的漩渦！');
+      uiBanner('銀河傳送門開啟！', '新區域解鎖', '🌌');
     }
     quiz.fb.textContent = '';
     quiz.opts.innerHTML = '';
@@ -5460,13 +4449,13 @@ const SkyGame = (() => {
     if (!zoneActive()) { rafId = null; return; }
     rafId = requestAnimationFrame(animate);
 
-    const dt = Math.min(0.1, clock.getDelta());
+    const dt = Math.min(0.1, (clock.update(), clock.getDelta()));
     if (playing) {
       updateWorld(dt);
       updatePlayer(dt);
       updateCamera(dt);
     }
-    renderer.render(scene, camera);
+    SkyArt.frame(dt);   // world animation, atmosphere, sun/sky follow + render (js/sky-art.js)
   }
 
   return { init, onShow };
