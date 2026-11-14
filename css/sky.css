@@ -1532,6 +1532,8 @@
 body.game-max #zone-sky.active .aw-canvas-wrap {
   position: fixed;
   inset: 0;
+  height: auto !important;   /* inset decides, not sky.js' inline height — the box tracks the real
+                                viewport even while the fullscreen / URL-bar resize is in flight */
   z-index: 90;
   border: none;
   border-radius: 0;
@@ -1631,4 +1633,60 @@ body.game-max #zone-sky.active .aw-canvas-wrap {
 
 @media (max-width: 640px) and (min-height: 481px) {
   .aw-world-toast { top: 160px; }
+}
+
+/* ---------- graphics fallback: context-lost notice + owner debug panel ---------- */
+.aw-canvas-wrap .aw-location { pointer-events: auto; touch-action: none; -webkit-touch-callout: none; }
+.aw-gfx-lost {
+  position: absolute;
+  inset: 0;
+  z-index: 4;   /* under the HUD (5) so the island pill can still be long-pressed for the debug panel */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, #5aa9e6, #a9d8ff);
+  color: #fff;
+  text-align: center;
+}
+.aw-gfx-lost > div { display: flex; flex-direction: column; gap: 8px; align-items: center; padding: 16px; }
+.aw-gfx-lost b { font-size: 1.25rem; text-shadow: 0 2px 0 var(--aw-ink); }
+.aw-gfx-lost small { font-size: 0.95rem; }
+.aw-gfx-reload {
+  margin-top: 6px;
+  padding: 10px 18px;
+  border: 3px solid var(--aw-ink);
+  border-radius: 999px;
+  background: linear-gradient(180deg, #ffe07a, #ffa81c);
+  color: var(--aw-ink);
+  font: inherit;
+  font-weight: 700;
+}
+.aw-gfx-diag {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 56px;
+  max-height: 70%;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  background: rgba(10, 14, 30, 0.9);
+  color: #e8f0ff;
+  border: 2px solid #8bd8ff;
+  border-radius: 10px;
+  user-select: text;
+  -webkit-user-select: text;
+  touch-action: pan-y;
+  pointer-events: auto;
+}
+.aw-gfx-diag-bar { display: flex; gap: 6px; align-items: center; padding: 6px 8px; border-bottom: 1px solid #34406a; }
+.aw-gfx-diag-bar b { flex: 1; font-size: 0.85rem; }
+.aw-gfx-diag-bar button { font: inherit; font-size: 0.78rem; padding: 3px 8px; border-radius: 6px; border: 1px solid #8bd8ff; background: #1c2850; color: #fff; }
+.aw-gfx-diag pre {
+  margin: 0;
+  padding: 8px;
+  overflow: auto;
+  font: 11px/1.4 ui-monospace, Menlo, Consolas, monospace;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
