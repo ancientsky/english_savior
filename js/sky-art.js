@@ -66,7 +66,12 @@ const SkyArt = (() => {
   // ---- device feature switches (english_savior_sky_gfx.sw, set by the 🧪 probe) ----
   // Each one turns off a single rendering ingredient this GPU was caught crashing on, so the device
   // can keep the best tier that passed instead of falling to `low`. Defaults = the shipped look.
-  const FEAT_DEF = { occ: 'on', sway: true, glow: true, propRecv: true, propCast: true, env: true, msaa: 4 };
+  // `shadow` is its own axis, orthogonal to post-processing: false = no shadow map, no casting light,
+  // no USE_SHADOWMAP program variant anywhere (the bloom stays). `shadowType` picks the shadow map
+  // flavour when shadows are on (the 🧪 probe may find PCF unstable but another one stable).
+  // `shadow` may be stored as true (the probe vouched for it) — that overrides the PowerVR default.
+  const SHADOW_TYPES = ['pcf', 'pcf512', 'vsm', 'basic'];
+  const FEAT_DEF = { occ: 'on', sway: true, glow: true, propRecv: true, propCast: true, env: true, msaa: 4, shadow: true, shadowType: 'pcf' };
   const FEAT = Object.assign({}, FEAT_DEF);
   function cleanSw(sw) {
     const out = {};
@@ -74,12 +79,17 @@ const SkyArt = (() => {
     if (sw.occ === 'late' || sw.occ === 'off') out.occ = sw.occ;
     ['sway', 'glow', 'propRecv', 'propCast', 'env'].forEach(k => { if (sw[k] === false) out[k] = false; });
     if ([0, 2].includes(sw.msaa)) out.msaa = sw.msaa;
+    if (typeof sw.shadow === 'boolean') out.shadow = sw.shadow;
+    if (SHADOW_TYPES.includes(sw.shadowType) && sw.shadowType !== 'pcf') out.shadowType = sw.shadowType;
     return out;
   }
   function loadFeat() {
     Object.assign(FEAT, FEAT_DEF, cleanSw(gfxRead().sw));
     return FEAT;
   }
+  // PowerVR (Pixel 10 Pro XL, D-Series DXT): three probe runs lost the GPU in ~1 of 4 steps that
+  // rendered a shadow map and in none of ~80 steps without one → shadows default off there
+  const isPowerVR = gpu => /PowerVR/i.test(gpu || '');
   function featSw() { const o = {}; Object.keys(FEAT_DEF).forEach(k => { if (FEAT[k] !== FEAT_DEF[k]) o[k] = FEAT[k]; }); return o; }
   const swText = sw => Object.keys(sw || {}).map(k => k + '=' + (sw[k] === false ? 'off' : sw[k])).join(' ') || 'none';
   const TEX = {};                               // named textures (sky.js reads TEX.crystalTex etc.)
@@ -99,6 +109,13 @@ const SkyArt = (() => {
   //   2 noshadow  + shadow maps off
   //   3 low       the lowPower() path (Lambert, DPR 1, fewer props) — needs a fresh world, so it
   //               applies from the next adventure / page load
+  // Shadows are a second, independent axis (FEAT.shadow, stored as sw.shadow): tier 0 without
+  // shadows = "post": bloom kept, shadow map gone (tier 1 without shadows IS tier 2). A generic
+  // failure (context loss, bad read-back, shader error, crash-loop breaker) drops shadows FIRST:
+  //   full → post (no shadows) → noshadow (no post, no shadows) → low
+  // and nopost (touch start, shadows on) → noshadow → low as before. Composer-specific failures
+  // (no float targets, incomplete framebuffer, framebuffer GL errors) step the post axis instead.
+  // Without shadows, contact shadows are painted into each island's top under its props.
   // Steps come from capability checks before anything is built (no float colour buffer,
   // incomplete framebuffer), from a runtime self-check (real shader/program errors, GL errors,
   // read-backs that come out flat / white / black on a daytime island) and from a WebGL context
@@ -114,27 +131,70 @@ const SkyArt = (() => {
   const TIERS = ['full', 'nopost', 'noshadow', 'low'];
   const GFX_KEY = 'english_savior_sky_gfx';
   const RESUME_KEY = 'english_savior_sky_resume', RELOADS_KEY = 'english_savior_sky_reloads';   // sessionStorage
-  const diag = { tier: 0, steps: [], errors: [], lost: 0, restored: 0, caps: {}, frames: 0, healthy: false, startTier: 0,
+  const diag = { tier: 0, shadow: true, steps: [], errors: [], lost: 0, restored: 0, caps: {}, frames: 0, healthy: false, startTier: 0,
     health: { checks: [], gl: {}, verdict: '-' }, warm: null };
   let gfx = null, tierStart = 0, lastStepAt = -10, pendingStep = null, lostOverlay = null, lostTimer = 0;
   let envOk = true, lostUnproven = false, verifyRestore = false, sentinel2d = null, reloading = false;
   let diagEl = null, diagTimer = 0;
+  const SHADOW_MAP_TYPE = { pcf: THREE.PCFShadowMap, pcf512: THREE.PCFShadowMap, vsm: THREE.VSMShadowMap, basic: THREE.BasicShadowMap };
+  // does this run render a shadow map? (the one question every shadow-related switch asks)
+  function shadowsOn() { return !low && diag.tier < 2 && diag.shadow; }
   function gfxRead() {
     if (gfx) return gfx;
     try { gfx = JSON.parse(localStorage.getItem(GFX_KEY) || 'null'); } catch (e) { gfx = null; }
     if (!gfx || typeof gfx !== 'object') gfx = {};
     gfx.tier = Math.max(0, Math.min(3, gfx.tier | 0));
     if (gfx.sw !== undefined) { gfx.sw = cleanSw(gfx.sw); if (!Object.keys(gfx.sw).length) delete gfx.sw; }
+    if (gfx.v !== GFX_VER) migrateGfx();
+    // the page died while the 🧪 probe was running: that crash is the probe's, not the world's
+    if (gfx.pending !== undefined && probeRunning()) { delete gfx.pending; delete gfx.warm; gfxWrite(); }
     // crash-loop breaker: the last attempt at `pending` never proved healthy → start below it
     if (typeof gfx.pending === 'number' && gfx.pending >= gfx.tier && gfx.pending < 3) {
       const stage = typeof gfx.warm === 'string' ? gfx.warm.slice(0, 80) : '';
-      gfx.lastCrash = { tier: TIERS[gfx.pending], stage: stage || null };
-      gfx.tier = gfx.pending + 1;
-      gfx.why = '上次 ' + TIERS[gfx.pending] + ' 沒有撐過開頭' + (stage ? '（準備「' + stage + '」時）' : '') + '（頁面當掉或 WebGL 遺失）';
-      delete gfx.pending; delete gfx.warm;
+      const sh = gfx.pendingSh !== undefined ? !!gfx.pendingSh : gfx.pending < 2 && !(gfx.sw && gfx.sw.shadow === false);
+      const r = nextRung(gfx.pending, sh, 'any');
+      gfx.lastCrash = { tier: rungName(gfx.pending, sh), stage: stage || null };
+      setStoredRung(r);
+      gfx.why = '上次 ' + rungName(gfx.pending, sh) + ' 沒有撐過開頭' + (stage ? '（準備「' + stage + '」時）' : '') + '（頁面當掉或 WebGL 遺失）';
+      delete gfx.pending; delete gfx.pendingSh; delete gfx.warm;
       gfxWrite();
     }
     return gfx;
+  }
+  // gfx schema 3 (v63): probe v1/v2 verdicts were derived from random crashes (every loss was in a
+  // shadow step) — drop their switches; on PowerVR also drop the tier they / the crash ladder set
+  // (the "low" there was the probe crashing the GPU under a live world) back to the PowerVR default
+  const GFX_VER = 3;
+  function migrateGfx() {
+    const g = gfx;
+    g.v = GFX_VER;
+    if (!g.probe && !g.probeOk) return gfxWrite();
+    let gpu = g.gpu || '';
+    try { if (!gpu) gpu = (JSON.parse(localStorage.getItem('english_savior_sky_probe') || 'null') || {}).gpu || ''; } catch (e) { /* ignore */ }
+    delete g.sw; delete g.probe; delete g.probeOk;
+    if (isPowerVR(gpu)) {
+      if (g.tier !== 2) g.tier = 2;
+      delete g.pending; delete g.pendingSh; delete g.warm; delete g.lastCrash;
+      g.reloads = 0;
+      g.why = '已捨棄 🧪 v2 的結論（隨機當機造成的誤判）→ PowerVR 預設：nopost、不開陰影';
+    } else if (typeof g.why === 'string' && g.why.indexOf('🧪') === 0) g.why += '（v2 開關已清除）';
+    gfxWrite();
+  }
+  function probeRunning() {
+    try { const s = JSON.parse(localStorage.getItem('english_savior_sky_probe') || 'null'); return !!(s && s.running); } catch (e) { return false; }
+  }
+  // the ladder: { t: tier, sh: shadows on } → the next safer rung (see the tier comment above)
+  function nextRung(t, sh, axis) {
+    if (t >= 3) return { t: 3, sh: false };
+    if (axis !== 'post' && sh && t < 2) return t === 1 ? { t: 2, sh: false } : { t: 0, sh: false };
+    const nt = t + 1;
+    return { t: nt === 1 && !sh ? 2 : nt, sh: nt < 2 && sh };
+  }
+  const rungName = (t, sh) => (t === 0 && !sh ? 'post' : TIERS[t]);
+  function setStoredRung(r) {
+    const g = gfx;
+    if (r.t > g.tier) g.tier = r.t;
+    if (!r.sh && g.tier < 2) { g.sw = Object.assign({}, g.sw, { shadow: false }); delete g.sw.shadowType; }
   }
   function gfxWrite() {
     try { localStorage.setItem(GFX_KEY, JSON.stringify(gfx)); } catch (e) { /* storage blocked: tiers still work for this visit */ }
@@ -206,23 +266,33 @@ const SkyArt = (() => {
     try { probeCaps(gl); } catch (e) { logErr('caps', e); }
     const g = gfxRead();
     loadFeat();
+    const pvr = isPowerVR(diag.caps.gpu);
+    if (diag.caps.gpu && g.gpu !== diag.caps.gpu) { g.gpu = String(diag.caps.gpu).slice(0, 120); gfxWrite(); }
     let t = low ? 3 : g.tier;
-    if (g.why) diag.steps.push('啟動於 ' + TIERS[t] + '：' + g.why);
-    if (g.sw) diag.steps.push('功能開關（🧪 相容性測試）：' + swText(g.sw));
+    if (g.why) diag.steps.push('啟動於 ' + rungName(t, FEAT.shadow && t < 2) + '：' + g.why);
+    if (g.sw) diag.steps.push('功能開關：' + swText(g.sw));
+    // PowerVR: shadows off unless the 🧪 probe (v3) vouched for a shadow type on this device; post
+    // only once the probe proved the composer without shadows here (else nopost)
+    if (pvr && !low) {
+      if (!(g.sw && g.sw.shadow !== undefined)) { FEAT.shadow = false; diag.steps.push('PowerVR：預設不開陰影（三次 🧪 測試的當機全部發生在有陰影的步驟）'); }
+      if (t < 1 && !g.probeOk) { t = 1; diag.steps.push('PowerVR：預設 nopost（🧪 v3 證明「有泛光、沒陰影」穩定後才開 post）'); }
+    }
     // first-run policy for touch devices: unknown mobile GPUs start one safe tier below full and are
     // promoted on a later adventure once that tier has proven itself (the 🧪 probe can vouch sooner)
     if (!low && t === 0 && isTouch && !(g.ok <= 1) && !g.probeOk) {
       t = 1;
       diag.steps.push('啟動於 nopost：觸控裝置還沒證明過任何畫質，先用安全畫質（穩定後下次試 full）');
     }
+    if (t === 1 && !FEAT.shadow) t = 2;   // nopost without shadows is noshadow
+    diag.shadow = !low && t < 2 && FEAT.shadow;
     diag.startTier = diag.tier = t;
-    if (!low && diag.tier < 1 && !diag.caps.floatTargets) noteStep(1, 'no EXT_color_buffer_(half_)float → 不開 composer');
+    if (!low && diag.tier < 1 && !diag.caps.floatTargets) noteStep('no EXT_color_buffer_(half_)float → 不開 composer', 'post');
     renderer.setPixelRatio(pixelRatio(w, h));
     renderer.setSize(w, h);
     renderer.toneMapping = THREE.NeutralToneMapping;   // Khronos PBR Neutral: filmic shoulder that keeps toy colours saturated
     renderer.toneMappingExposure = 0.95;
-    renderer.shadowMap.enabled = !low && diag.tier < 2;
-    renderer.shadowMap.type = THREE.PCFShadowMap;
+    renderer.shadowMap.enabled = shadowsOn();
+    renderer.shadowMap.type = SHADOW_MAP_TYPE[FEAT.shadowType] || THREE.PCFShadowMap;
     renderer.info.autoReset = false;   // count shadow + main + post passes together (renderInfo())
     renderer.debug.onShaderError = onShaderError;
     const cv = renderer.domElement;
@@ -231,7 +301,7 @@ const SkyArt = (() => {
     cv.addEventListener('webglcontextlost', onContextLost);
     cv.addEventListener('webglcontextrestored', onContextRestored);
     tierStart = performance.now();
-    if (!low && diag.tier < 3) { g.pending = diag.tier; gfxWrite(); }
+    if (!low && diag.tier < 3) { g.pending = diag.tier; g.pendingSh = diag.shadow; gfxWrite(); }
     // stage the first compile over several frames unless this tier is already proven here (desktop
     // after its first visit: unchanged)
     warmNeeded = isTouch || !(g.ok <= diag.tier);
@@ -285,12 +355,15 @@ const SkyArt = (() => {
   }
 
   // record a step that happens before/without a live renderer change
-  function noteStep(t, why) {
-    if (t <= diag.tier) return;
-    diag.tier = t;
-    diag.steps.push('→ ' + TIERS[t] + '：' + why);
-    const g = gfxRead();
-    if (t > g.tier) { g.tier = t; g.why = why; }
+  // `axis` 'post' = a composer-specific failure (keeps shadows, drops post); otherwise shadows go first
+  function noteStep(why, axis) {
+    if (diag.tier >= 3) return;
+    const r = nextRung(diag.tier, diag.shadow, axis);
+    diag.tier = r.t; diag.shadow = r.sh;
+    diag.steps.push('→ ' + rungName(r.t, r.sh) + '：' + why);
+    const g = gfxRead(), before = g.tier + '/' + !!(g.sw && g.sw.shadow === false);
+    setStoredRung(r);
+    if (g.tier + '/' + !!(g.sw && g.sw.shadow === false) !== before) g.why = why;
     gfxWrite();
   }
 
@@ -323,7 +396,7 @@ const SkyArt = (() => {
     } catch (e) {
       logErr('composer', e && e.message || e);
       dropComposer();
-      noteStep(1, 'composer 無法使用（' + (e && e.message || e) + '）');
+      noteStep('composer 無法使用（' + (e && e.message || e) + '）', 'post');
     }
   }
   // `dead`: the GL objects died with a lost context — just forget them (deleting would warn)
@@ -336,9 +409,9 @@ const SkyArt = (() => {
   // apply a tier to the live renderer (everything except `low`, which needs a fresh world)
   function applyTier() {
     if (diag.tier >= 1) dropComposer();
-    if (diag.tier >= 2 && renderer.shadowMap.enabled) {
+    if (!shadowsOn() && renderer.shadowMap.enabled) {
       renderer.shadowMap.enabled = false;
-      if (sun) sun.castShadow = false;
+      if (sun) { sun.castShadow = false; if (sun.shadow.map) sun.shadow.dispose(); }
       scene.traverse(o => {
         if (!o.material) return;
         (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { m.needsUpdate = true; });
@@ -351,13 +424,13 @@ const SkyArt = (() => {
     }
   }
   // runtime failure → step one tier down at the end of this frame (never mid-render)
-  function requestStep(why) { if (!pendingStep) pendingStep = why; }
-  function stepDown(why) {
+  function requestStep(why, axis) { if (!pendingStep) pendingStep = { why, axis }; }
+  function stepDown(why, axis) {
     if (low || diag.tier >= 3) return;
     const now = performance.now() / 1000;
     if (now - lastStepAt < 1) return;   // one burst of failing programs = one step
     lastStepAt = now;
-    noteStep(diag.tier + 1, why);
+    noteStep(why, axis);
     applyTier();
     restartChecks();
   }
@@ -373,7 +446,7 @@ const SkyArt = (() => {
     checkAt = at || [6, 30, 90];
     diag.health = { checks: [], gl: {}, verdict: 'checking' };
     const g = gfxRead();
-    if (!low && diag.tier < 3) { g.pending = diag.tier; gfxWrite(); }
+    if (!low && diag.tier < 3) { g.pending = diag.tier; g.pendingSh = diag.shadow; gfxWrite(); }
   }
   function drainGl(gl) {
     const out = [];
@@ -390,8 +463,8 @@ const SkyArt = (() => {
     errs.forEach(e => {
       const k = '0x' + e.toString(16);
       H.gl[k] = (H.gl[k] || 0) + 1;
-      logErr('gl', k + ' at frame ' + diag.frames + ' (' + TIERS[diag.tier] + ')');
-      if (e === gl.OUT_OF_MEMORY || e === gl.INVALID_FRAMEBUFFER_OPERATION) requestStep('GL error ' + k);
+      logErr('gl', k + ' at frame ' + diag.frames + ' (' + rungName(diag.tier, diag.shadow) + ')');
+      if (e === gl.OUT_OF_MEMORY || e === gl.INVALID_FRAMEBUFFER_OPERATION) requestStep('GL error ' + k, e === gl.INVALID_FRAMEBUFFER_OPERATION ? 'post' : '');
     });
     if (!ctx.playing || ctx.quizOpen || warm) return 'skip';
     // 3×3 grid of the presented drawing buffer (read in the same task, before compositing)
@@ -447,15 +520,15 @@ const SkyArt = (() => {
       if (!badChecks && ((!checkAt.length && age > 3000) || (done >= 2 && diag.frames >= 20 && age > 12000))) {
         diag.healthy = true;
         verifyRestore = false;
-        H.verdict = 'healthy (' + TIERS[diag.tier] + ', ' + done + ' clean checks, ' + (age / 1000).toFixed(1) + ' s)';
+        H.verdict = 'healthy (' + rungName(diag.tier, diag.shadow) + ', ' + done + ' clean checks, ' + (age / 1000).toFixed(1) + ' s)';
         settle();
       } else H.verdict = 'checking (' + checkAt.length + ' checks left' + (badChecks ? ', ' + badChecks + ' bad' : '') + ')';
     }
-    if (pendingStep) { const w = pendingStep; pendingStep = null; stepDown(w); }
+    if (pendingStep) { const w = pendingStep; pendingStep = null; stepDown(w.why, w.axis); }
   }
   function settle() {
     const g = gfxRead();
-    if (g.pending !== undefined) delete g.pending;
+    if (g.pending !== undefined) { delete g.pending; delete g.pendingSh; }
     if (!low && !(g.ok <= diag.tier)) g.ok = diag.tier;   // best tier this device has proven
     gfxWrite();
   }
@@ -464,7 +537,7 @@ const SkyArt = (() => {
     // (a GPU crash that takes the page down never gets here; a lost context is handled above)
     if (renderer && !diag.healthy && !badChecks && !reloading && diag.lost === 0 && !renderer.getContext().isContextLost()) {
       const g = gfxRead();
-      if (g.pending !== undefined) { delete g.pending; gfxWrite(); }
+      if (g.pending !== undefined) { delete g.pending; delete g.pendingSh; gfxWrite(); }
     }
   }
   if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => { if (document.hidden) idle(); });
@@ -561,12 +634,16 @@ const SkyArt = (() => {
     const visible = !document.hidden;
     // the event lands a frame or two after the GPU died: name the stage before this one too
     const stage = warm && (warm.i > 1 ? warm.stages[warm.i - 2].name + ' → ' : '') + diag.warm.stage;
-    logErr('context', 'webglcontextlost' + (visible ? ' (visible)' : ' (hidden)') + ' after ' + diag.frames + ' frames at ' + TIERS[diag.tier] +
+    logErr('context', 'webglcontextlost' + (visible ? ' (visible)' : ' (hidden)') + ' after ' + diag.frames + ' frames at ' + rungName(diag.tier, diag.shadow) +
       (stage ? ', warming "' + stage + '"' : ''));
     resolveSuspect();
+    // a GPU-process crash kills every context on the page: while the 🧪 probe is running (or just
+    // ran) the probe crashed it, not this world — restore in place, step nothing, count nothing
+    const byProbe = typeof SkyProbe !== 'undefined' && SkyProbe.active();
+    if (byProbe) logErr('context', '（🧪 相容性測試期間：不算這個畫質的失敗）');
     // lost in the foreground before this tier proved itself = this tier is too much for the GPU
-    lostUnproven = visible && (!diag.healthy || performance.now() - tierStart < 60000);
-    if (lostUnproven && !low && diag.tier < 3) noteStep(diag.tier + 1, 'WebGL context lost at ' + TIERS[diag.tier] + (stage ? '（準備「' + stage + '」時）' : '（還沒穩定）'));
+    lostUnproven = !byProbe && visible && (!diag.healthy || performance.now() - tierStart < 60000);
+    if (lostUnproven && !low && diag.tier < 3) noteStep('WebGL context lost at ' + rungName(diag.tier, diag.shadow) + (stage ? '（準備「' + stage + '」時）' : '（還沒穩定）'));
     finishWarm(true);
     dropComposer(true);
     envRT = null;
@@ -611,7 +688,7 @@ const SkyArt = (() => {
     pendingStep = null;
     const g = gfxRead();
     g.reloads = (g.reloads || 0) + 1;
-    delete g.pending; delete g.warm;   // a deliberate reload is not a crash: the breaker must not fire
+    delete g.pending; delete g.pendingSh; delete g.warm;   // a deliberate reload is not a crash: the breaker must not fire
     gfxWrite();
     showLost('自動調整畫質，馬上回來…');
     setTimeout(() => location.reload(), 350);
@@ -682,7 +759,9 @@ const SkyArt = (() => {
       c.maxTex === undefined ? '' : 'ext: color_buffer_half_float=' + c.cbHalf + ' color_buffer_float=' + c.cbFloat + ' float_linear=' + c.floatLinear + ' parallel_compile=' + c.parallel,
       '畫質 tier: ' + (renderer ? TIERS[diag.tier] + '（起始 ' + TIERS[diag.startTier] + '）' : '-') + '  存檔 ' + TIERS[g.tier] +
         (g.pending !== undefined ? '，測試中 ' + TIERS[g.pending] : '') + (g.ok !== undefined ? '，已證明 ' + TIERS[g.ok] : '') +
-        '  lowPower: ' + low + '  composer: ' + !!composer + '  shadows: ' + !!(renderer && renderer.shadowMap.enabled) + '  env: ' + envOk,
+        '  lowPower: ' + low + '  composer: ' + !!composer + '  env: ' + envOk,
+      '陰影 shadows: ' + shadowLine(g),
+      'auto reloads: ' + (g.reloads || 0) + ' total (all sessions; the 🧪 probe resets it)  this tab ' + (() => { try { return +sessionStorage.getItem(RELOADS_KEY) || 0; } catch (e) { return '?'; } })() + '/2',
       '功能開關 switches: ' + swText(g.sw) + (renderer && swText(g.sw) !== swText(featSw()) ? '（這次執行中：' + swText(featSw()) + '，重新載入後生效）' : ''),
       'gfx: ' + JSON.stringify(g),
       'warm-up: ' + (diag.warm ? diag.warm.i + '/' + diag.warm.n + ' ' + (warm ? '… ' + diag.warm.stage : diag.warm.stage + ' in ' + diag.warm.ms + ' ms') : '-'),
@@ -694,6 +773,17 @@ const SkyArt = (() => {
       '錯誤 errors:', ...(diag.errors.length ? diag.errors.map(e => '  ' + e.t + ' ' + e.body + (e.n > 1 ? ' ×' + e.n : '')) : ['  (none)']),
       ...(probe ? [probe] : []),
     ].filter(l => l !== '').join('\n');
+  }
+  // the shadow switch in one line: on/off, the map type, and who decided
+  function shadowLine(g) {
+    const sw = g.sw || {}, ty = FEAT.shadowType;
+    const live = renderer ? shadowsOn() : null;
+    const typeTxt = (ty === 'pcf512' ? 'PCF 512' : ty === 'vsm' ? 'VSM' : ty === 'basic' ? 'Basic' : 'PCF') +
+      (ty === 'pcf512' ? '' : ' ' + (isTouch ? 1024 : 2048));
+    const who = sw.shadow === false ? (g.probe && g.probe.v === 3 ? '🧪 v3 判定關閉' : '畫質階梯關閉') :
+      sw.shadow === true ? '🧪 v3 判定 ' + typeTxt + ' 穩定' : isPowerVR(diag.caps.gpu || g.gpu) ? 'PowerVR 預設關閉' : '預設';
+    return (live === null ? '-' : live ? '開（' + typeTxt + '）' : '關') + '  開關 ' + (sw.shadow === undefined ? '-' : sw.shadow ? 'on' : 'off') +
+      (sw.shadowType ? ' type=' + sw.shadowType : '') + '  由：' + who + (renderer && !live && !low && diag.tier < 2 ? '（有泛光、沒陰影）' : '');
   }
   function renderDiag() {
     if (!diagEl) return;
@@ -718,7 +808,12 @@ const SkyArt = (() => {
         const a = e.target.closest('button') && e.target.closest('button').dataset.a;
         if (a === 'close') { diagEl.remove(); clearInterval(diagTimer); diagTimer = 0; }
         else if (a === 'reset') { gfxReset(); diag.steps.push('（已重設；重新載入後重新判斷畫質）'); renderDiag(); }
-        else if (a === 'probe' && typeof SkyProbe !== 'undefined') SkyProbe.run(diagEl.querySelector('.aw-gfx-probe'), renderDiag);
+        else if (a === 'probe' && typeof SkyProbe !== 'undefined') {
+          // never next to a live world: a GPU-process crash would kill it too (and blame its tier) —
+          // reload without a world and start from there
+          if (renderer) { SkyProbe.goAfterReload(); diagEl.querySelector('.aw-gfx-probe').innerHTML = '<div class="aw-gfx-probe-msg">🧪 先關掉 3D 世界：頁面重新載入後自動開始測試…</div>'; setTimeout(() => { location.href = location.pathname + '?skydebug=1' + location.hash; }, 400); }
+          else SkyProbe.run(diagEl.querySelector('.aw-gfx-probe'), renderDiag);
+        }
         else if (a === 'copy') {
           const txt = diagText();
           try { navigator.clipboard.writeText(txt).catch(() => selectAll()); } catch (err) { selectAll(); }
@@ -731,6 +826,8 @@ const SkyArt = (() => {
     diagEl.classList.toggle('aw-gfx-diag--page', wrap === document.body);
     wrap.appendChild(diagEl);
     renderDiag();
+    // the owner pressed 🧪 inside a world: the page came back without one — start now
+    if (!renderer && typeof SkyProbe !== 'undefined' && SkyProbe.takeGo()) SkyProbe.run(diagEl.querySelector('.aw-gfx-probe'), renderDiag);
     if (!diagTimer) diagTimer = setInterval(renderDiag, 1000);
   }
   // the probe borrows the real material factories and helpers so it can't drift from the game
@@ -738,27 +835,26 @@ const SkyArt = (() => {
     if (!TEX.noise) initTextures();
     return { MK, skyMat, skyUniforms, seaMat, seaUniforms, newFallMat, newAuroraMat, newLavaMat, newTopMat, bakeEnv, cloudGeometry,
       Batch, K, geo, getTuftGeo, mulberry, TEX, OCC, SUN_DIR, fogBase, probeCaps, pixelRatio, isTouch, TIERS, caps: diag.caps,
-      FEAT, FEAT_DEF, withOcclusion,
+      FEAT, FEAT_DEF, withOcclusion, isPowerVR, SHADOW_MAP_TYPE, worldAlive: () => !!renderer,
       asLow: fn => { const p = low; low = true; try { return fn(); } finally { low = p; } } };
   }
-  // the probe's verdict: a start tier plus feature switches. It raises the stored tier when a step
-  // that no switch avoids failed; it may also LOWER it (lift a crash-ladder `low`) — but only when it
-  // found a specific ingredient to switch off, i.e. it proved a configuration the game has not
-  // crashed in yet. Without a switch the ladder's finding stands. Applies from the next page load.
+  // the 🧪 probe v3 verdict: { rec: start tier, sw: { shadow, shadowType?, msaa? }, why }. Every
+  // configuration it names was rendered several times on this device without a crash, so it
+  // REPLACES the stored tier and switches (up or down — this is what lifts a crash-ladder `low`
+  // that the probe itself caused). A crash inside the probe window never reaches the ladder.
   function applyProbe(sum) {
     const g = gfxRead();
-    const sw = cleanSw(sum.sw), nSw = Object.keys(sw).length;
-    g.probe = { at: sum.at, fail: sum.fail || null, rec: typeof sum.rec === 'number' ? sum.rec : null, sw };
-    if (nSw) g.sw = sw; else delete g.sw;
+    const sw = cleanSw(sum.sw);
+    g.probe = { v: 3, at: sum.at, fail: sum.fail || null, rec: typeof sum.rec === 'number' ? sum.rec : null, sw };
+    if (Object.keys(sw).length) g.sw = sw; else delete g.sw;
     if (typeof sum.rec === 'number') {
       const rec = Math.max(0, Math.min(3, sum.rec | 0));
-      if (rec > g.tier) { g.tier = rec; g.why = '🧪 相容性測試：' + (sum.fail || '?') + ' 失敗'; }
-      else if (rec < g.tier && nSw) {
-        g.why = '🧪 相容性測試：關掉 ' + Object.keys(sw).map(k => k + (sw[k] === false ? '' : '=' + sw[k])).join('、') + ' 後 ' + TIERS[rec] + ' 通過（原本存檔 ' + TIERS[g.tier] + '）';
-        g.tier = rec;
-      }
+      if (rec !== g.tier || sum.why) g.why = '🧪 相容性測試 v3：' + (sum.why || TIERS[rec]);
+      g.tier = rec;
       if (rec === 0) g.probeOk = true; else delete g.probeOk;
     }
+    delete g.pending; delete g.pendingSh; delete g.warm; delete g.lastCrash;
+    g.reloads = 0;
     gfxWrite();
   }
 
@@ -1042,8 +1138,8 @@ const SkyArt = (() => {
     sun.position.copy(SUN_DIR).multiplyScalar(80);
     // noshadow must be free of shadows altogether: a casting light still changes every lit
     // program's variant (NUM_DIR_LIGHT_SHADOWS) and its uniforms even with the shadow map off
-    sun.castShadow = !low && diag.tier < 2;
-    const ms = isTouch ? 1024 : 2048;
+    sun.castShadow = shadowsOn();
+    const ms = FEAT.shadowType === 'pcf512' ? 512 : isTouch ? 1024 : 2048;
     sun.shadow.mapSize.set(ms, ms);
     const S = 38;
     sun.shadow.camera.left = -S; sun.shadow.camera.right = S;
@@ -1365,6 +1461,7 @@ const SkyArt = (() => {
   // ============================== init / frame ==============================
   function init(c) {
     ctx = c;
+    Object.assign(c, { shadowsOn });   // SkyAvatar darkens its blob shadows when there is no shadow map
     scene = c.scene;
     camera = c.camera;
     low = !!c.lowPower();
@@ -1389,6 +1486,16 @@ const SkyArt = (() => {
         cam: (theta, phi, radius) => Object.assign(ctx.cam, { theta, phi, radius }),
         bloom: (s, r, t) => { if (bloomPass) Object.assign(bloomPass, { strength: s, radius: r, threshold: t }); },
         exposure: (e, tm) => { renderer.toneMappingExposure = e; if (tm) renderer.toneMapping = THREE[tm]; },
+        // every compiled program: does any of them carry the shadow-map variant?
+        programs: () => {
+          const gl = renderer.getContext();
+          return (renderer.info.programs || []).map(p => {
+            const fs = (gl.getAttachedShaders(p.program) || []).map(sh => gl.getShaderSource(sh) || '').join('\n');
+            return { name: p.name || p.type, shadowmap: /#define USE_SHADOWMAP/.test(fs), casters: /directionalShadowMap\[ 1 \]/.test(fs) ? 1 : 0,
+              shadowSampler: /uniform\s+sampler2DShadow\s+directionalShadowMap/.test(fs) && /#define USE_SHADOWMAP/.test(fs), key: String(p.cacheKey).length };
+          });
+        },
+        shadowState: () => ({ enabled: renderer.shadowMap.enabled, type: renderer.shadowMap.type, sunCast: sun.castShadow, sunMap: !!sun.shadow.map, on: shadowsOn(), feat: FEAT.shadow, fp: islands.reduce((a, it) => a + (it.fp || 0), 0) }),
         perIsland: () => islands.map(it => {
           const t = m => (m ? Math.round(m.geometry.index.count / 3) : 0);
           return it.isle.id + ' props ' + t(it.props) + ' body ' + t(it.group.children[0]) + ' grass ' + (it.grass ? it.grass.count * 24 : 0);
@@ -1580,6 +1687,7 @@ const SkyArt = (() => {
     }
     at(x, y, z, ry, s) {
       s = s || 1;
+      if (this.fp) { this.endFp(); this.cur = { x, z, y, r: 0, h: 0 }; }
       this.base.compose(_bp.set(x, y, z), _bq.setFromEuler(_be.set(0, ry || 0, 0)), _bs.set(s, s, s));
       this.baseY = y; this.scale = s;
       return this;
@@ -1600,6 +1708,12 @@ const SkyArt = (() => {
       for (let i = 0; i < P.count; i++) {
         _bv.fromBufferAttribute(P, i).applyMatrix4(m);
         this.P.push(_bv.x, _bv.y, _bv.z);
+        const fc = this.cur;
+        if (fc) {   // footprint of the current prop: how far it spreads above the ground, how tall
+          const dy = _bv.y - fc.y;
+          if (dy > fc.h) fc.h = dy;
+          if (dy > 0.15) { const d = (_bv.x - fc.x) * (_bv.x - fc.x) + (_bv.z - fc.z) * (_bv.z - fc.z); if (d > fc.r) fc.r = d; }
+        }
         _bn.fromBufferAttribute(N, i).applyMatrix3(_bnm).normalize();
         this.N.push(_bn.x, _bn.y, _bn.z);
         if (VC) this.C.push(VC.getX(i), VC.getY(i), VC.getZ(i));
@@ -1619,7 +1733,15 @@ const SkyArt = (() => {
       }
       this.n += P.count;
     }
+    // record every prop's footprint (where it stands, how wide, how tall) for painted contact shadows
+    track() { this.fp = []; this.cur = null; return this; }
+    endFp() {
+      const c = this.cur;
+      this.cur = null;
+      if (c && Math.abs(c.y) < 0.3 && c.h > 0.8) { c.r = Math.sqrt(c.r); this.fp.push(c); }
+    }
     mesh(mat, shadow) {
+      if (this.fp) this.endFp();
       if (!this.n) return null;
       const g = new THREE.BufferGeometry();
       g.setAttribute('position', new THREE.Float32BufferAttribute(this.P, 3));
@@ -2396,6 +2518,9 @@ const SkyArt = (() => {
       const fc = ['#ff8fb0', '#ffe066', '#ffffff', '#c9a0ff', '#ffb070'];
       for (let i = 0; i < 700; i++) { const [x, z] = rp(); c.fillStyle = fc[i % fc.length]; c.beginPath(); c.arc(X(x), X(z), (0.06 + rng() * 0.08) * k, 0, 6.28); c.fill(); }
     }
+    // no shadow map on this run: paint the props' shadows into the ground instead — a soft contact
+    // patch under each prop plus a fainter one cast away from the sun (costs no draw call)
+    if (info.fp && info.fp.length && !st.water) paintContactShadows(c, info.fp, X, k);
     // rim shading (ambient occlusion feel near the lip)
     const gr = c.createRadialGradient(size / 2, size / 2, isle.r * 0.8 * k, size / 2, size / 2, Rm * k);
     gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, st.water ? 'rgba(0,0,0,0)' : 'rgba(30,40,20,0.22)');
@@ -2405,6 +2530,31 @@ const SkyArt = (() => {
     let emap = null;
     if (em) { emap = canvasTex(em); emap.anisotropy = map.anisotropy; }
     return { map, emap };
+  }
+
+  function paintContactShadows(c, fp, X, k) {
+    const ox = -SUN_DIR.x / SUN_DIR.y, oz = -SUN_DIR.z / SUN_DIR.y;   // ground offset per unit of height
+    const blob = (x, z, r, a) => {
+      const px = X(x), pz = X(z), rr = Math.max(2, r * k);
+      c.save();
+      c.translate(px, pz);
+      const gr = c.createRadialGradient(0, 0, 0, 0, 0, rr);
+      gr.addColorStop(0, 'rgba(16,24,40,' + a + ')');
+      gr.addColorStop(0.55, 'rgba(16,24,40,' + (a * 0.55).toFixed(3) + ')');
+      gr.addColorStop(1, 'rgba(16,24,40,0)');
+      c.fillStyle = gr;
+      c.fillRect(-rr, -rr, rr * 2, rr * 2);
+      c.restore();
+    };
+    c.globalAlpha = 1;
+    for (let i = 0; i < fp.length; i++) {
+      const f = fp[i], r = Math.min(f.r, 4.5), h = Math.min(f.h, 7);
+      // cast: the bulk of the prop (its upper half) projected along the sun, a bit squashed
+      const d = h * 0.5;   // ~ where the bulk of the prop sits
+      blob(f.x + ox * d, f.z + oz * d, r * 0.95 + h * 0.08, Math.min(0.42, 0.14 + h * 0.06));
+      // contact: darkest right at the base
+      blob(f.x, f.z, Math.max(0.6, Math.min(r * 0.6, 1.5)), 0.4);
+    }
   }
 
   // instanced chunky grass tufts that sway
@@ -3047,12 +3197,14 @@ const SkyArt = (() => {
 
     // props
     const B = new Batch();
+    if (!shadowsOn()) B.track();
     const place = makePlacer(isle, rng, info.ex);
     if (DECOR[isle.type]) DECOR[isle.type](B, rng, isle, st, place, info, g, R);
     gateFor(B, rng, st, info);
     portalRing(B, rng, st, info);
     const props = B.mesh(propMat, true);
     if (props) g.add(props);
+    info.fp = B.fp || null;
 
     // painted top (after decor so ponds/pools are known for grass placement)
     const paint = paintTop(isle, st, R, Rm, info, rng, low ? 256 : (isle.id === 'isle_dawn' && !isTouch ? 1024 : isle.r >= 15 ? 512 : 256));
@@ -3069,7 +3221,7 @@ const SkyArt = (() => {
     if (grass) g.add(grass);
 
     scene.add(g);
-    islands.push({ isle, group: g, props, grass, depth, x: isle.pos[0], y: isle.pos[1], z: isle.pos[2] });
+    islands.push({ isle, group: g, props, grass, depth, x: isle.pos[0], y: isle.pos[1], z: isle.pos[2], fp: info.fp ? info.fp.length : 0 });
     return g;
   }
 
