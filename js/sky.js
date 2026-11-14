@@ -44,7 +44,6 @@ const SkyGame = (() => {
   let grounded = false;
   let lastGroundedAt = -10;
   let jumpBufferedAt = -10;
-  let airJumpUsed = false;
   let lastGroundIsland = 'isle_dawn';
   let currentIsland = null;
   let regionUnderground = false; // true while standing on/under an `underground: true` island (地心世界)
@@ -125,8 +124,12 @@ const SkyGame = (() => {
   const motion = { speed: 0, moving: false, sprint: false, vy: 0, grounded: true, airJumps: 0, dashing: false, riding: null };
   // One-shot gameplay events -> visual/audio feedback. Emit from gameplay code,
   // listen from presentation code. Known names (add more, document them here):
-  //   'jump' 'airjump' 'land'{v} 'pad' 'hurt' 'respawn' 'arrive'{isle}
-  //   'start' (adventure begins → camera reveal + wave) 'dash' 'teleport' (camera snaps)
+  //   'jump' 'airjump'{n} 'land'{v} 'pad' 'hurt' 'respawn' 'arrive'{isle}
+  //   'start' (adventure begins → camera reveal + wave) 'teleport' (camera snaps)
+  //   PLAY: 'dash'{x,z,grounded} 'coin'{x,y,z,combo} 'checkpoint'{x,y,z} 'gate'{ok,word}
+  //         'courseStart'{id} 'courseFinish'{id,time,best} 'hatch'{pet,rarity} 'respawn'{course:true}
+  // motion.airJumps = air jumps used this airtime; motion.dashing; motion.platform
+  // (standing on a moving obby platform).
   const fxListeners = [];
   function emitFx(name, data) {
     for (let i = 0; i < fxListeners.length; i++) {
@@ -273,7 +276,7 @@ const SkyGame = (() => {
       renderInfo: () => (renderer ? renderer.info.render : null),
       // quest hooks (Part 2)
       questState: () => ({ completed: { ...save.completed }, total: totalCleared() }),
-      target: () => (currentTarget ? currentTarget.q.id : null),
+      target: () => (currentTarget ? (currentTarget.play ? 'play:' + currentTarget.id : currentTarget.q.id) : null),
       openQuest: id => {
         const q = SKY_QUESTS.find(x => x.id === id);
         if (q) openQuest(q);
@@ -360,6 +363,27 @@ const SkyGame = (() => {
         return s ? { x: s.mesh.position.x, y: s.mesh.position.y, z: s.mesh.position.z, letter: s.letter } : null;
       },
       // puzzle-quest hooks (🧩 Wave 3: order 語序踏石 / maze 傳送迷宮)
+      // PLAY hooks (coins / pets / eggs / obby courses) — see SkyPlay.test in js/sky-play.js
+      play: SkyPlay.test,
+      motion: () => ({ ...motion }),
+      dash: () => requestDash(),
+      jumpHold: v => { if (v && !jumpHeld) jumpBufferedAt = simTime; jumpHeld = !!v; },
+      // deterministic fixed-step play: runs the REAL world + physics updates `sec` seconds
+      // at `step` (headless software GL renders at a few fps; this lets a scripted
+      // controller drive input every step). onStep(i) runs before each step.
+      simulate: (sec, step, onStep) => {
+        step = step || 1 / 60;
+        const n = Math.round(sec / step);
+        for (let i = 0; i < n; i++) {
+          if (onStep && onStep(i) === false) break;
+          if (!playing) break;
+          updateWorld(step);
+          updatePlayer(step);
+        }
+        updateCamera(1);
+      },
+      supportAt: (x, z, maxTop) => { const s = supportAt(x, z, maxTop); return { y: s.y, kind: s.col && s.col.kind, play: !!(s.col && s.col.play) }; },
+      setCam: (theta, phi, radius) => { cam.theta = theta; if (phi !== undefined) cam.phi = phi; if (radius !== undefined) cam.radius = radius; },
       puzzle: () => (orderActive
         ? {
           type: 'order', idx: orderActive.idx, expected: orderActive.words.slice(),
@@ -630,6 +654,7 @@ const SkyGame = (() => {
     // active-use items reset per adventure (they're activated in-world, not consumed at start)
     clearActiveItemEffects();
     updateItemTray();
+    SkyPlay.onAdventureStart?.();   // PLAY: welcome-back card / tutorial pointer
     if (!rafId) animate();
   }
 
@@ -687,6 +712,7 @@ const SkyGame = (() => {
     AMBIENT_MOBS.forEach(a => spawnMob(a.mob, a.island, a.dx, a.dz));
     buildPlayer();
     setupPointerControls();
+    SkyPlay.init(ctx);   // PLAY: coins, pets, egg stand, obby courses (js/sky-play.js)
 
     clock = new THREE.Timer();
     threeReady = true;
@@ -1144,9 +1170,19 @@ const SkyGame = (() => {
       const d = Math.hypot(pos.x - it.x, pos.z - it.z);
       if (d < bestD) { bestD = d; best = it; }
     }
-    if (best === currentTarget) return;
+    // PLAY interactables (egg stand, course arches): a stable { play: true, label, use }
+    // object per target, closer than the nearest quest → it wins; `label` may change
+    const pt = SkyPlay.target ? SkyPlay.target(pos.x, pos.y, pos.z, bestD) : null;
+    if (pt) best = pt;
+    if (best === currentTarget && !(best && best.play && best.shown !== best.label)) return;
     currentTarget = best;
     if (!best) { els.hint.style.display = 'none'; return; }
+    if (best.play) {
+      best.shown = best.label;
+      els.hint.textContent = `${isTouch ? '點 ⚡' : '按 E'}　${best.label}`;
+      els.hint.style.display = '';
+      return;
+    }
     const q = best.q;
     const key = isTouch ? '點 ⚡' : '按 E';
     let label;
@@ -1229,6 +1265,8 @@ const SkyGame = (() => {
       ctx.fillStyle = isCleared(it.q) ? '#4ade80' : (isLocked(it.q) ? '#9aa5b5' : '#ffd166');
       ctx.fill();
     }
+    // PLAY points of interest: egg stand, course arches, coin trails
+    SkyPlay.drawMinimap?.(ctx, C, scale, pos.x, pos.z);
     // tracked quest: pulsing ring (clamped to the rim when far)
     if (save.tracked) {
       const it = interactables.find(x => x.q.id === save.tracked);
@@ -1311,11 +1349,12 @@ const SkyGame = (() => {
 
   function updateTracker() {
     if (!els.tracker) return;
-    const it = save.tracked && interactables.find(x => x.q.id === save.tracked);
+    let it = save.tracked && interactables.find(x => x.q.id === save.tracked);
     if (!it || isCleared(it.q)) {
-      els.tracker.style.display = 'none';
       if (it && isCleared(it.q)) { save.tracked = null; persist(); }
-      return;
+      // PLAY: with no tracked quest, point newcomers at the tutorial course / egg stand
+      it = SkyPlay.tracker ? SkyPlay.tracker() : null;   // { x, z, q: { name } } or null
+      if (!it) { els.tracker.style.display = 'none'; return; }
     }
     els.tracker.style.display = '';
     const dx = it.x - pos.x, dz = it.z - pos.z;
@@ -1896,7 +1935,7 @@ const SkyGame = (() => {
       SkyAvatar.animateMob(mob, dt);
       if (mob.shieldT > 0) mob.shieldT -= dt;
       mob.mesh.position.y = isleTop;
-      if (quizOpen) continue;   // combat/quiz pauses mob AI (kid-friendly)
+      if (quizOpen || playLocked()) continue;   // combat/quiz (or a PLAY panel: egg hatching, shop) pauses mob AI
       mob.cooldown -= dt;
       mob.boost -= dt;
 
@@ -3356,7 +3395,7 @@ const SkyGame = (() => {
       // (not mid-quiz/quest, boss fight or race) — being busy pauses the
       // countdown rather than silently spending it on a roll that would
       // just get rejected by canStartEvent() anyway
-      if (playing && !quizOpen && !bossActive && !raceActive) {
+      if (playing && !quizOpen && !bossActive && !raceActive && !(SkyPlay.inRun && SkyPlay.inRun())) {   // PLAY: no events mid-obby
         eventTimer += dt;
         if (eventTimer > eventCooldown) {
           eventTimer = 0;
@@ -3366,7 +3405,7 @@ const SkyGame = (() => {
       }
       return;
     }
-    if (quizOpen) return; // events pause while any quiz is open
+    if (quizOpen || playLocked()) return; // events pause while any quiz / PLAY panel is open
     worldEvent.t += dt;
     if (worldEvent.type === 'meteor') updateMeteorShower(dt);
     else updateAirRaid(dt);
@@ -3374,7 +3413,6 @@ const SkyGame = (() => {
 
   // ===================== player =====================
   // The hero's look, animation, movement FX and the camera live in js/sky-avatar.js.
-  Object.defineProperty(ctx, 'quizOpen', { get: () => quizOpen });
   SkyAvatar.init(ctx);
 
   function buildPlayer() {
@@ -3408,7 +3446,70 @@ const SkyGame = (() => {
   // ===================== physics & collision =====================
   function bobOf(isleId) { return islandBob[isleId] || 0; }
 
-  // highest support top at (x,z) that is not above maxTop
+  // ---- PLAY: movement-ability state (air jumps, dash) — see SKY_PLAY_PHYS ----
+  let groundCol = null;          // collider under the feet while grounded (carry / SkyPlay hooks)
+  let airJumpsUsed = 0;
+  let jumpBaseTop = 0;           // top of the surface the current airtime started from
+  let jumpCapV = 11;             // take-off speed that sets the air-jump height cap
+  let dashT = 0, dashUsed = false, dashReadyAt = 0, dashQueuedAt = -10, dashDirX = 0, dashDirZ = 1;
+  function maxAirJumps() { return SKY_PLAY_PHYS.airJumps + (perks.doubleJump ? 1 : 0); }
+  // An air jump is SKY_CONFIG.jumpV × airJumpMult — never scaled by jump titles / boots —
+  // and can't lift you above H(take-off speed) + maxAir × H(airV) over the take-off
+  // surface. That keeps jump-height titles meaning a higher ground jump without letting
+  // them stack with air jumps onto gated/secret islands (check_sky_play.js proves it).
+  function airJumpVel() {
+    const g2 = -2 * SKY_CONFIG.gravity;
+    const airV = SKY_CONFIG.jumpV * SKY_PLAY_PHYS.airJumpMult;
+    const cap = jumpBaseTop + (jumpCapV * jumpCapV + maxAirJumps() * airV * airV) / g2;
+    const room = cap - pos.y;
+    return room <= 0 ? 0 : Math.min(airV, Math.sqrt(g2 * room));
+  }
+  function playLocked() { return !!(SkyPlay.locked && SkyPlay.locked()); }
+  function requestDash() { dashQueuedAt = simTime; }
+  // teleport used by SkyPlay (course checkpoints / finish / start)
+  function setPlayerPos(x, y, z, yaw) {
+    pos.x = x; pos.y = y; pos.z = z;
+    vy = 0; dashT = 0; dashUsed = false; airJumpsUsed = 0;
+    groundCol = null; grounded = false;
+    if (yaw !== undefined) heroYaw = yaw;
+  }
+  // English answered correctly inside a SkyPlay activity (word gates). Same rates and
+  // paths as awardAnswer(): SKY_REWARD[diff].ans XP (+1 💎) first try, half XP retry.
+  function playReward(diff, firstTry, word) {
+    const tier = SKY_REWARD[diff] || SKY_REWARD.easy;
+    const xp = Math.round((firstTry ? tier.ans : Math.ceil(tier.ans / 2)) * (perks.xpMult || 1));
+    GameEngine.addXP(xp);
+    if (firstTry) skyAddGems(1);
+    if (word && firstTry) GameEngine.recordWord(word);
+    GameEngine.recordSkyAnswer?.();
+    return { xp, gems: firstTry ? 1 : 0 };
+  }
+  // course clear: pays like a quest first clear of that difficulty; replays half XP, no gems
+  function playClear(diff, first) {
+    const tier = SKY_REWARD[diff] || SKY_REWARD.easy;
+    const xp = Math.round((first ? tier.xp : Math.round(tier.xp / 2)) * (perks.xpMult || 1));
+    GameEngine.addXP(xp);
+    if (first) skyAddGems(tier.gems);
+    return { xp, gems: first ? tier.gems : 0 };
+  }
+  Object.assign(ctx, {
+    setPlayerPos, playReward, playClear, requestDash,
+    setDeferLevelUp: v => { if (!quizOpen) GameEngine.setDeferLevelUp(v); if (!v && !quizOpen) GameEngine.flushPendingLevelUps(); },
+    flash: () => { els.flash.classList.add('on'); setTimeout(() => els.flash.classList.remove('on'), 420); },
+  });
+  // (getters must be defined, not Object.assign-ed — assign would copy today's value)
+  Object.defineProperties(ctx, {
+    grounded: { get: () => grounded },
+    groundCol: { get: () => groundCol },
+    heroYaw: { get: () => heroYaw },
+    quizOpen: { get: () => quizOpen },
+    lastGroundIsland: { get: () => lastGroundIsland },
+    wrap: { get: () => els.wrap },
+  });
+
+  // highest support top at (x,z) that is not above maxTop.
+  // PLAY: a collider may also be a rotated rectangle (`box: {hw, hd, c, s}`, `r` = its
+  // bounding radius) and may be switched `off` (vanishing / not-yet-solid obby platforms).
   function supportAt(x, z, maxTop) {
     let best = -Infinity;
     let bestCol = null;
@@ -3416,6 +3517,11 @@ const SkyGame = (() => {
       const c = colliders[i];
       const dx = x - c.x, dz = z - c.z;
       if (dx * dx + dz * dz > c.r * c.r) continue;
+      if (c.off) continue;
+      if (c.box) {
+        const b = c.box;
+        if (Math.abs(dx * b.c - dz * b.s) > b.hw || Math.abs(dx * b.s + dz * b.c) > b.hd) continue;
+      }
       const top = c.top + (c.isle ? bobOf(c.isle) : 0);
       if (top <= maxTop && top > best) { best = top; bestCol = c; }
     }
@@ -3427,6 +3533,7 @@ const SkyGame = (() => {
     pos.z = isle.pos[2];
     pos.y = isle.pos[1] + bobOf(isle.id) + 2;
     vy = 0;
+    dashT = 0; dashUsed = false; airJumpsUsed = 0; groundCol = null;
     if (hurt && !perks.voidSafe) {
       hearts--;
       if (hearts <= 0) {
@@ -3442,6 +3549,8 @@ const SkyGame = (() => {
   }
 
   function voidFall() {
+    // PLAY: falling off an obby course pops you back to its checkpoint — no heart lost
+    if (SkyPlay.onVoid && SkyPlay.onVoid()) return;
     els.flash.classList.add('on');
     setTimeout(() => els.flash.classList.remove('on'), 420);
     SoundManager.playWrong();
@@ -3506,9 +3615,27 @@ const SkyGame = (() => {
   function updatePlayer(dt) {
     simTime += dt;
 
-    // input vector relative to camera yaw (frozen while a quiz is open)
+    // PLAY: moving / rotating / conveyor supports (SkyPlay obby platforms) carry the
+    // player. SkyPlay.update() already moved them this frame and left the deltas on
+    // the collider (mdx/mdz/mdy/myaw); island colliders never set these, so islands,
+    // bridges and pads behave exactly as before.
+    if (grounded && groundCol && mountT <= 0) {
+      if (groundCol.moving) {
+        pos.x += groundCol.mdx; pos.z += groundCol.mdz; pos.y += groundCol.mdy;
+        if (groundCol.myaw) {
+          const ox = pos.x - groundCol.x, oz = pos.z - groundCol.z;
+          const c = Math.cos(groundCol.myaw), s = Math.sin(groundCol.myaw);
+          pos.x = groundCol.x + ox * c + oz * s;
+          pos.z = groundCol.z - ox * s + oz * c;
+          heroYaw += groundCol.myaw;
+        }
+      }
+      if (groundCol.conv) { pos.x += groundCol.conv.x * dt; pos.z += groundCol.conv.z * dt; }
+    }
+
+    // input vector relative to camera yaw (frozen while a quiz or a SkyPlay panel is open)
     let ix = 0, iz = 0;
-    if (quizOpen) {
+    if (quizOpen || playLocked()) {
       // no movement input
     } else if (joy.active) {
       ix = joy.dx;
@@ -3529,7 +3656,25 @@ const SkyGame = (() => {
     let mx = fx * iz + rx * ix;
     let mz = fz * iz + rz * ix;
     const mlen = Math.hypot(mx, mz);
-    if (mlen > 0.001) {
+    // PLAY: dash (C key / 💨 button) — a short burst with gravity paused, usable on the
+    // ground and once per airtime (a ground dash that runs off an edge counts as it)
+    if (dashQueuedAt >= 0 && simTime - dashQueuedAt < 0.2 && dashT <= 0 && !dashUsed &&
+        simTime >= dashReadyAt && mountT <= 0 && !quizOpen && !playLocked()) {
+      if (mlen > 0.001) { dashDirX = mx / mlen; dashDirZ = mz / mlen; }
+      else { dashDirX = Math.sin(heroYaw); dashDirZ = Math.cos(heroYaw); }
+      dashT = SKY_PLAY_PHYS.dashTime;
+      dashReadyAt = simTime + SKY_PLAY_PHYS.dashCooldown;
+      dashUsed = true;
+      dashQueuedAt = -10;
+      heroYaw = Math.atan2(dashDirX, dashDirZ);
+      emitFx('dash', { x: dashDirX, z: dashDirZ, grounded });
+    }
+    if (dashT > 0) {
+      const step = Math.min(dt, dashT);
+      pos.x += dashDirX * SKY_PLAY_PHYS.dashSpeed * step;
+      pos.z += dashDirZ * SKY_PLAY_PHYS.dashSpeed * step;
+      walkTime += dt * 13;
+    } else if (mlen > 0.001) {
       mx /= mlen; mz /= mlen;
       const speed = SKY_CONFIG.walkSpeed * (perks.speedMult || 1) *
         (sprint ? SKY_CONFIG.sprintMult : 1) * Math.min(1, mag || 1) * (mountT > 0 ? 1.6 : 1);
@@ -3555,8 +3700,13 @@ const SkyGame = (() => {
       pos.y += vy * dt;
       grounded = false;
     } else {
-    vy += SKY_CONFIG.gravity * dt;
-    if (jumpHeld && vy < -3.2 && (perks.glide || gliderOn)) vy = -3.2;
+    if (dashT > 0) {
+      dashT -= dt;          // gravity paused for the dash
+      vy = 0;
+    } else {
+      vy += SKY_CONFIG.gravity * dt;
+      if (jumpHeld && vy < -3.2 && (perks.glide || gliderOn)) vy = -3.2;
+    }
     pos.y += vy * dt;
 
     const sup = supportAt(pos.x, pos.z, prevFeet + 0.55);
@@ -3565,6 +3715,11 @@ const SkyGame = (() => {
       vy = 0;
       grounded = true;
       lastGroundedAt = simTime;
+      groundCol = sup.col;
+      jumpBaseTop = sup.y;
+      jumpCapV = SKY_CONFIG.jumpV;
+      if (dashT <= 0) dashUsed = false;
+      if (sup.col.play) SkyPlay.onGround(sup.col);
       if (sup.col.isle) {
         lastGroundIsland = sup.col.isle;
         if (currentIsland !== sup.col.isle) {
@@ -3594,10 +3749,11 @@ const SkyGame = (() => {
       if (sup.col.kind === 'pad') {
         vy = sup.col.launch * (perks.padMult || 1);
         grounded = false;
+        jumpCapV = vy;
         SoundManager.playCorrect();
         emitFx('pad');
       }
-      airJumpUsed = false;
+      airJumpsUsed = 0;
     } else {
       grounded = false;
     }
@@ -3611,13 +3767,14 @@ const SkyGame = (() => {
         grounded = false;
         jumpBufferedAt = -10;
         lastGroundedAt = -10;
+        jumpCapV = SKY_CONFIG.jumpV;
         emitFx('jump');
-      } else if (perks.doubleJump && !airJumpUsed && vy < jumpV * 0.5) {
-        // 傳說勇者 double jump
-        vy = jumpV * 0.92;
-        airJumpUsed = true;
+      } else if (airJumpsUsed < maxAirJumps() && vy < jumpV * 0.5 && dashT <= 0) {
+        // PLAY: everyone has an air jump; 傳說勇者 (perks.doubleJump) gets a second one
+        vy = airJumpVel();
+        airJumpsUsed++;
         jumpBufferedAt = -10;
-        emitFx('airjump');
+        emitFx('airjump', { n: airJumpsUsed });
       }
     }
     }
@@ -3627,15 +3784,19 @@ const SkyGame = (() => {
     // skipped while ☁️ 飛天雲 is active so the free-flight ride never gets
     // interrupted by a stray void check.
     if (mountT <= 0 && pos.y < (regionUnderground ? SKY_CONFIG.undergroundVoidY : SKY_CONFIG.voidY)) voidFall();
+    if (!grounded) groundCol = null;
 
     // movement snapshot for avatar / camera / FX (see `motion` contract at the top)
-    motion.moving = mlen > 0.001;
+    motion.moving = mlen > 0.001 || dashT > 0;
     motion.sprint = motion.moving && sprint;
-    motion.speed = motion.moving ? SKY_CONFIG.walkSpeed * (sprint ? SKY_CONFIG.sprintMult : 1) : 0;
+    motion.speed = dashT > 0 ? SKY_PLAY_PHYS.dashSpeed
+      : motion.moving ? SKY_CONFIG.walkSpeed * (sprint ? SKY_CONFIG.sprintMult : 1) : 0;
     motion.vy = vy;
     motion.grounded = grounded;
-    motion.airJumps = airJumpUsed ? 1 : 0;
+    motion.airJumps = airJumpsUsed;
+    motion.dashing = dashT > 0;
     motion.riding = mountT > 0 ? 'cloud' : null;
+    motion.platform = !!(groundCol && groundCol.moving);   // standing on a moving obby platform
 
     // ---- presentation half (avatar animation) below; physics above ----
     SkyAvatar.animatePlayer(dt, { yaw: heroYaw, quiz: quizOpen });
@@ -3675,6 +3836,7 @@ const SkyGame = (() => {
     updateMaze(dt);
     checkSecretDiscovery();
     updateWorldEvent(dt);
+    SkyPlay.update(dt);   // PLAY: moves obby platforms (before updatePlayer reads them), coins, pets
     // slowly regain hearts out of combat
     if (playing && hearts < maxHearts() && simTime - lastDamageAt > 20) {
       hearts++;
@@ -3751,6 +3913,11 @@ const SkyGame = (() => {
         if (e.code === 'Escape') closeQuiz();
         return;
       }
+      // PLAY panels (egg shop / hatching / pet collection) own the keyboard while open
+      if (playLocked()) {
+        if (e.code === 'Escape') SkyPlay.onEscape?.();
+        return;
+      }
       // IME (Chinese/Japanese/Korean input method) composition steals WASD —
       // detect it and nudge the player to switch back to English, but keep
       // falling into the switch below so movement still works once it does.
@@ -3773,6 +3940,8 @@ const SkyGame = (() => {
         case 'KeyQ': useActiveItem('lightning_staff'); break;
         case 'KeyR': useActiveItem('bubble_shield'); break;
         case 'KeyF': useActiveItem('cloud_mount'); break;
+        case 'KeyC': requestDash(); break;           // PLAY: dash
+        case 'KeyP': SkyPlay.togglePets?.(); break;  // PLAY: pet collection
         default: return;
       }
       e.preventDefault();
@@ -3796,7 +3965,8 @@ const SkyGame = (() => {
   }
 
   function interact() {
-    if (quizOpen) return;
+    if (quizOpen || playLocked()) return;
+    if (currentTarget && currentTarget.play) { currentTarget.use(); return; }   // PLAY interactables
     if (!currentTarget) {
       const mob = nearestMob(10);
       if (mob) { openCombatQuiz(mob); return; }
