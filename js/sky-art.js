@@ -25,6 +25,34 @@ const SkyArt = (() => {
   let time = 0;
   const isTouch = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
   const U = { time: { value: 0 } };            // shared shader time uniform
+  // see-through cutout: scenery (props, quest props, matOf materials) standing between the camera
+  // and the hero is dithered away in a soft screen-space circle around the hero, and anything
+  // closer than ~1.6 to the lens fades — so the camera can ignore trees/arches for collision
+  // without ever losing the hero behind them. uOccDist = 0 disables it (cover, quiz, no hero).
+  const OCC = {
+    uOccScr: { value: new THREE.Vector2(0.5, 0.5) },    // hero chest, 0..1 drawing-buffer coords
+    uOccRes: { value: new THREE.Vector2(1, 1) },        // drawing-buffer size (px)
+    uOccDist: { value: 0 },                             // view depth of the hero (0 = off)
+    uOccR: { value: 0.12 },                             // cutout radius (fraction of screen height)
+  };
+  const OCC_FRAG = `
+    if (uOccDist > 0.0) {
+      float occZ = vViewPosition.z;
+      vec2 occP = floor(mod(gl_FragCoord.xy, 4.0));
+      float occB = mod(occP.x * 4.0 + occP.y * 11.0 + occP.x * occP.y * 5.0, 16.0) / 16.0 + 0.03;
+      float occK = 1.0;
+      if (occZ < uOccDist - 1.1) {
+        vec2 occD = (gl_FragCoord.xy / uOccRes - uOccScr) * vec2(uOccRes.x / uOccRes.y, 1.0);
+        occK = smoothstep(uOccR * 0.55, uOccR, length(occD));
+      }
+      occK = min(occK, smoothstep(0.9, 1.9, occZ));
+      if (occK < occB) discard;
+    }`;
+  function withOcclusion(sh) {
+    Object.assign(sh.uniforms, OCC);
+    sh.fragmentShader = 'uniform vec2 uOccScr;\nuniform vec2 uOccRes;\nuniform float uOccDist;\nuniform float uOccR;\n' +
+      sh.fragmentShader.replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n' + OCC_FRAG);
+  }
   const TEX = {};                               // named textures (sky.js reads TEX.crystalTex etc.)
   const fogBase = new THREE.Color(0xa9d8ff);    // daytime haze colour; sky.js' storm-boss victory brightens it
   const state = { gt: 0, ut: 0 };               // galaxy / underground blend 0..1 (read by sky.js test hooks)
@@ -101,6 +129,7 @@ const SkyArt = (() => {
       // up on the back face too, or every blade seen from behind is lit like an overhang (near-black)
       if (key === 'grass') sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>',
         '#include <normal_fragment_begin>\n  normal = normalize( vNormal );');
+      else withOcclusion(sh);
     };
     mat.customProgramCacheKey = () => 'skyart-' + key;
     return mat;
@@ -131,6 +160,8 @@ const SkyArt = (() => {
       if (texKey && TEX[texKey]) opts.map = TEX[texKey];
       if (emissive) { opts.emissive = new THREE.Color(emissive); opts.emissiveIntensity = low ? 1 : 1.6; }
       MAT[key] = litMat(opts);
+      MAT[key].onBeforeCompile = withOcclusion;
+      MAT[key].customProgramCacheKey = () => 'skyart-occ';
     }
     return MAT[key];
   }
@@ -712,9 +743,27 @@ const SkyArt = (() => {
     updateIslandsLod(cp);
     updateAnims(dt);
     TEX.ripple.offset.set(time * 0.02, time * 0.013);
+    updateOcclusion();
     renderer.info.reset();
     if (composer && !ctx.lowPower()) composer.render(dt);
     else renderer.render(scene, camera);
+  }
+
+  const _occV = new THREE.Vector3(), _occS = new THREE.Vector2();
+  function updateOcclusion() {
+    if (!ctx.playing || ctx.quizOpen || !ctx.player || !ctx.player.visible) { OCC.uOccDist.value = 0; return; }
+    camera.updateMatrixWorld();
+    _occV.set(ctx.pos.x, ctx.pos.y + 1.0, ctx.pos.z).applyMatrix4(camera.matrixWorldInverse);
+    const depth = -_occV.z;
+    if (depth < 0.5) { OCC.uOccDist.value = 0; return; }
+    OCC.uOccDist.value = depth;
+    _occV.set(ctx.pos.x, ctx.pos.y + 1.0, ctx.pos.z).project(camera);
+    OCC.uOccScr.value.set(_occV.x * 0.5 + 0.5, _occV.y * 0.5 + 0.5);
+    renderer.getDrawingBufferSize(_occS);
+    OCC.uOccRes.value.copy(_occS);
+    // the hero is ~2 units tall: keep the hole a bit larger than the hero on screen
+    const fovH = 2 * depth * Math.tan(camera.fov * Math.PI / 360);
+    OCC.uOccR.value = Math.min(0.32, Math.max(0.1, 1.9 / fovH));
   }
 
   // ============================== helpers ==============================
