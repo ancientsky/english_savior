@@ -4396,7 +4396,7 @@ const SkyGame = (() => {
       // (not mid-quiz/quest, boss fight or race) — being busy pauses the
       // countdown rather than silently spending it on a roll that would
       // just get rejected by canStartEvent() anyway
-      if (playing && !quizOpen && !bossActive && !raceActive) {
+      if (playing && !quizOpen && !bossActive && !raceActive && !(SkyPlay.inRun && SkyPlay.inRun())) {   // PLAY: no events mid-obby
         eventTimer += dt;
         if (eventTimer > eventCooldown) {
           eventTimer = 0;

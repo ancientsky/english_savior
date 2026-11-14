@@ -37,6 +37,23 @@ const SkyPlay = (() => {
     if (typeof P.hatched !== 'number') P.hatched = 0;
     if (!P.seen || typeof P.seen !== 'object') P.seen = {};
     if (P.pendingEgg && !SKY_EGGS.some(e => e.id === P.pendingEgg)) P.pendingEgg = null;
+    // imported saves are untrusted: keep only known ids and finite numbers
+    const num = (v, lo, hi, d) => (typeof v === 'number' && isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d);
+    for (const id of Object.keys(P.pets)) {
+      const st = P.pets[id];
+      if (!petDef(id) || !st || typeof st !== 'object') { delete P.pets[id]; continue; }
+      st.n = num(st.n, 1, 9999, 1); st.stars = Math.round(num(st.stars, 1, 5, 1));
+    }
+    for (const id of Object.keys(P.courses)) {
+      const st = P.courses[id];
+      if (!st || typeof st !== 'object') { delete P.courses[id]; continue; }
+      st.best = num(st.best, 0, 1e6, 0); st.clears = Math.round(num(st.clears, 0, 1e6, 0));
+    }
+    for (const gid of Object.keys(P.groups)) {
+      const st = P.groups[gid];
+      if (!st || typeof st !== 'object' || typeof st.t !== 'number' || typeof st.got !== 'number') delete P.groups[gid];
+    }
+    P.equip = P.equip.filter(id => P.pets[id]);
   }
   let persistAt = 0;
   function persistSoon() { if (!persistAt) persistAt = simT + 2; }
@@ -192,7 +209,7 @@ const SkyPlay = (() => {
     }
     s.closePath();
     const g = new THREE.ExtrudeGeometry(s, {
-      depth: 0.12, bevelEnabled: true, bevelThickness: 0.08, bevelSize: 0.07, bevelSegments: 2, curveSegments: 1,
+      depth: 0.12, bevelEnabled: true, bevelThickness: 0.08, bevelSize: 0.07, bevelSegments: 1, curveSegments: 1,
     });
     g.center();
     return g;
@@ -1789,6 +1806,7 @@ const SkyPlay = (() => {
     const runEl = document.createElement('div');
     runEl.className = 'aw-run-hud';
     runEl.id = 'sky-run-hud';
+    runEl.style.display = 'none';
     wrap.appendChild(runEl);
     const gate = document.createElement('div');
     gate.className = 'aw-gate-banner';
@@ -2186,5 +2204,7 @@ const SkyPlay = (() => {
     forceRespawnGroups: () => { for (const k in P.groups) P.groups[k].t = 0; respawnGroups(); },
   };
 
-  return { init, update, onGround, onVoid, target, tracker, drawMinimap, locked, onEscape, togglePets, onAdventureStart, test };
+  function inRun() { return !!(run && !run.done); }
+
+  return { init, update, onGround, onVoid, target, tracker, drawMinimap, locked, onEscape, togglePets, onAdventureStart, inRun, test };
 })();
