@@ -132,6 +132,7 @@ const SkyGame = (() => {
   // One-shot gameplay events -> visual/audio feedback. Emit from gameplay code,
   // listen from presentation code. Known names (add more, document them here):
   //   'jump' 'airjump' 'land'{v} 'pad' 'hurt' 'respawn' 'arrive'{isle}
+  //   'start' (adventure begins → camera reveal + wave) 'dash' 'teleport' (camera snaps)
   const fxListeners = [];
   function emitFx(name, data) {
     for (let i = 0; i < fxListeners.length; i++) {
@@ -618,6 +619,7 @@ const SkyGame = (() => {
     const isle = isleById(save.lastIsland) || SKY_ISLANDS[0];
     respawnAt(isle, false);
     refreshEquipment();
+    emitFx('start');
     hearts = maxHearts();
     playing = true;
     updateHudHearts();
@@ -1828,21 +1830,9 @@ const SkyGame = (() => {
     }
   }
 
+  // little NPC characters (built + idle-animated by js/sky-avatar.js)
   function makeNpcFigure(emoji, tint) {
-    const g = new THREE.Group();
-    const legs = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.6, 0.3), matOf(0x6a5a4a));
-    legs.position.y = 0.3;
-    g.add(legs);
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.7, 0.36), matOf(tint));
-    body.position.y = 0.95;
-    body.castShadow = true;
-    g.add(body);
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.52, 0.52),
-      new THREE.MeshLambertMaterial({ map: emojiTexture(emoji, '#f2c99a') }));
-    head.position.y = 1.58;
-    head.castShadow = true;
-    g.add(head);
-    return g;
+    return SkyAvatar.makeNpc(emoji, tint);
   }
 
   function makeQuestVisual(q) {
@@ -2450,6 +2440,7 @@ const SkyGame = (() => {
 
   // ---- confetti celebration ----
   function spawnConfetti(n = 36) {
+    SkyAvatar.celebrate(n); // 3D confetti burst + the hero cheers
     const colors = ['#ffd166', '#ff6b81', '#4ade80', '#7fd4ff', '#c77dff', '#fff'];
     const shapes = ['', 'round', 'star', ''];
     for (let i = 0; i < n; i++) {
@@ -2636,73 +2627,9 @@ const SkyGame = (() => {
 
   function mobDef(id) { return SKY_MOBS.find(m => m.id === id); }
 
+  // creature look + animation live in js/sky-avatar.js (keeps g.userData.body / .wings)
   function makeMobMesh(def) {
-    const shape = def.shape || def.id;
-    const g = new THREE.Group();
-    const eyeMat = matOf(0xffffff);
-    const pupilMat = matOf(0x222233);
-    if (shape === 'slime') {
-      const body = new THREE.Mesh(new THREE.SphereGeometry(0.75, 10, 8),
-        new THREE.MeshLambertMaterial({ color: def.color, transparent: true, opacity: 0.92 }));
-      body.scale.y = 0.72;
-      body.position.y = 0.55;
-      body.castShadow = true;
-      g.add(body);
-      g.userData.body = body;
-    } else if (shape === 'wisp') {
-      const body = new THREE.Mesh(new THREE.ConeGeometry(0.55, 1.5, 8),
-        new THREE.MeshLambertMaterial({ color: def.color, emissive: 0x1a6a4a }));
-      body.position.y = 1.1;
-      body.castShadow = true;
-      g.add(body);
-      g.userData.body = body;
-    } else if (shape === 'flyer') {
-      // hawk-like: streamlined stretched body, small forward head, big swept wings
-      const body = new THREE.Mesh(new THREE.SphereGeometry(0.4, 8, 6),
-        new THREE.MeshLambertMaterial({ color: def.color }));
-      body.scale.set(1, 0.8, 1.9);
-      body.position.y = 1.4;
-      body.castShadow = true;
-      g.add(body);
-      const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 7, 6),
-        new THREE.MeshLambertMaterial({ color: def.color }));
-      head.position.set(0, 1.46, 0.6);
-      g.add(head);
-      [-1, 1].forEach(s => {
-        const wing = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.07, 0.65), matOf(0x33415f));
-        wing.position.set(s * 1.15, 1.42, -0.05);
-        wing.rotation.z = s * 0.18;
-        g.add(wing);
-        (g.userData.wings = g.userData.wings || []).push(wing);
-      });
-      g.userData.body = body;
-    } else {
-      const body = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 6),
-        new THREE.MeshLambertMaterial({ color: def.color }));
-      body.position.y = 1.6;
-      body.castShadow = true;
-      g.add(body);
-      [-1, 1].forEach(s => {
-        const wing = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.08, 0.5), matOf(0x3a3050));
-        wing.position.set(s * 0.75, 1.7, 0);
-        g.add(wing);
-        (g.userData.wings = g.userData.wings || []).push(wing);
-      });
-      g.userData.body = body;
-    }
-    // eyes
-    [-0.22, 0.22].forEach(x => {
-      const eyeY = shape === 'bat' ? 1.68 : (shape === 'wisp' ? 1.35 : (shape === 'flyer' ? 1.46 : 0.72));
-      const eyeZ = shape === 'slime' ? 0.62 : (shape === 'flyer' ? 0.72 : 0.42);
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.11, 6, 5), eyeMat);
-      eye.position.set(x, eyeY, eyeZ);
-      g.add(eye);
-      const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.055, 5, 4), pupilMat);
-      pupil.position.set(x, eyeY, eyeZ + 0.09);
-      g.add(pupil);
-    });
-    if (def.scale) g.scale.setScalar(def.scale);
-    return g;
+    return SkyAvatar.makeMob(def);
   }
 
   function spawnMob(defId, isleId, dx, dz, questId) {
@@ -2906,11 +2833,7 @@ const SkyGame = (() => {
 
   function fireBolt(mob) {
     if (!bolt) {
-      bolt = {
-        mesh: new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 6),
-          new THREE.MeshLambertMaterial({ color: 0xffe066, emissive: 0xcc8800 })),
-        t: -1, mob: null,
-      };
+      bolt = { mesh: SkyAvatar.makeBolt(), t: -1, mob: null };
       scene.add(bolt.mesh);
       bolt.mesh.visible = false;
     }
@@ -2936,10 +2859,13 @@ const SkyGame = (() => {
       bolt.from.y + (ty - bolt.from.y) * bolt.t + Math.sin(bolt.t * Math.PI) * 1.2,
       bolt.from.z + (m.z - bolt.from.z) * bolt.t
     );
+    bolt.mesh.rotation.z += dt * 12;
+    SkyAvatar.boltTrail(bolt.mesh.position.x, bolt.mesh.position.y, bolt.mesh.position.z);
   }
 
   function hitMob(mob) {
     if (mob.dead) return;
+    SkyAvatar.mobHit(mob);
     mob.hp -= perks.dmg || 1;   // 冠軍 ×2 / 五十級傳說 ×1.5
     if (mob.isBoss) { onBossHit(mob); return; }
     if (mob.hp <= 0) {
@@ -2970,13 +2896,8 @@ const SkyGame = (() => {
 
   // ===================== ⚡ active-use item consumables (Wave 4) =====================
   function spawnLightningLine(mob) {
-    const points = [
-      new THREE.Vector3(pos.x, pos.y + 1.4, pos.z),
-      new THREE.Vector3(mob.mesh.position.x, mob.mesh.position.y + 1, mob.mesh.position.z),
-    ];
-    const geo = new THREE.BufferGeometry().setFromPoints(points);
-    const mat = new THREE.LineBasicMaterial({ color: 0xbfe8ff, transparent: true, opacity: 1 });
-    const line = new THREE.Line(geo, mat);
+    const line = SkyAvatar.lightning(pos.x, pos.y + 1.4, pos.z,
+      mob.mesh.position.x, mob.mesh.position.y + 1, mob.mesh.position.z);
     scene.add(line);
     lightningLines.push({ mesh: line, t: 0.3 });
   }
@@ -2997,10 +2918,7 @@ const SkyGame = (() => {
 
   function ensureShieldMesh() {
     if (shieldMesh || !player) return;
-    shieldMesh = new THREE.Mesh(
-      new THREE.SphereGeometry(1.6, 12, 10),
-      new THREE.MeshBasicMaterial({ color: 0x8fe0ff, transparent: true, opacity: 0.25, depthWrite: false })
-    );
+    shieldMesh = SkyAvatar.makeShield();
     shieldMesh.position.y = 1.05;
     shieldMesh.visible = false;
     player.add(shieldMesh);
@@ -3008,21 +2926,8 @@ const SkyGame = (() => {
 
   function ensureMountMesh() {
     if (mountMesh || !player) return;
-    const g = new THREE.Group();
-    const base = new THREE.Mesh(new THREE.SphereGeometry(0.75, 10, 6), new THREE.MeshLambertMaterial({ color: 0xffffff }));
-    base.scale.set(1, 0.35, 1);
-    g.add(base);
-    const puff = new THREE.Mesh(new THREE.SphereGeometry(0.42, 8, 6), new THREE.MeshLambertMaterial({ color: 0xffffff }));
-    puff.position.set(0.4, 0.14, 0.1);
-    puff.scale.set(1, 0.55, 1);
-    g.add(puff);
-    const puff2 = new THREE.Mesh(new THREE.SphereGeometry(0.38, 8, 6), new THREE.MeshLambertMaterial({ color: 0xffffff }));
-    puff2.position.set(-0.38, 0.1, -0.12);
-    puff2.scale.set(1, 0.5, 1);
-    g.add(puff2);
-    g.position.y = -0.05;
-    g.visible = false;
-    mountMesh = g;
+    mountMesh = SkyAvatar.makeMount();
+    mountMesh.visible = false;
     player.add(mountMesh);
   }
 
@@ -3072,25 +2977,15 @@ const SkyGame = (() => {
       const isleTop = mob.isle.pos[1] + bobOf(mob.isle.id);
       if (mob.dead) {
         mob.fade += dt;
-        const s = Math.max(0.01, 1 - mob.fade * 1.8);
-        mob.mesh.scale.set(1 + mob.fade, s, 1 + mob.fade);
+        SkyAvatar.mobDying(mob, dt); // wobble → poof
         if (mob.fade > 0.55) { mob.gone = true; scene.remove(mob.mesh); }
         continue;
       }
       if (mob.isBoss) continue; // boss animated in updateBoss
       if (mob.def.flies) { updateFlyer(mob, dt); continue; } // free-flight AI (☄️ world events)
-      // idle animation
-      const b = mob.mesh.userData.body;
-      const shape = mob.def.shape || mob.def.id;
-      if (shape === 'slime' && b) b.position.y = 0.55 + Math.abs(Math.sin(simTime * 4 + mob.angle)) * 0.3;
-      if (shape === 'wisp' && b) b.position.y = 1.1 + Math.sin(simTime * 2.4 + mob.angle) * 0.25;
-      if (mob.mesh.userData.wings) {
-        mob.mesh.userData.wings.forEach((w, i) => { w.rotation.z = Math.sin(simTime * 10) * 0.5 * (i ? -1 : 1); });
-      }
-      if (mob.shieldT > 0) {
-        mob.shieldT -= dt;
-        if (b) b.material.emissive = new THREE.Color(mob.shieldT > 0 ? 0x888888 : 0x000000);
-      }
+      // idle animation / hop / hit flash (presentation: js/sky-avatar.js)
+      SkyAvatar.animateMob(mob, dt);
+      if (mob.shieldT > 0) mob.shieldT -= dt;
       mob.mesh.position.y = isleTop;
       if (quizOpen) continue;   // combat/quiz pauses mob AI (kid-friendly)
       mob.cooldown -= dt;
@@ -3163,14 +3058,8 @@ const SkyGame = (() => {
   }
 
   function updateFlyer(mob, dt) {
-    if (mob.mesh.userData.wings) {
-      mob.mesh.userData.wings.forEach((w, i) => { w.rotation.z = Math.sin(simTime * 14) * 0.55 * (i ? -1 : 1); });
-    }
-    if (mob.shieldT > 0) {
-      mob.shieldT -= dt;
-      const b = mob.mesh.userData.body;
-      if (b) b.material.emissive = new THREE.Color(mob.shieldT > 0 ? 0x888888 : 0x000000);
-    }
+    SkyAvatar.animateMob(mob, dt);
+    if (mob.shieldT > 0) mob.shieldT -= dt;
     if (quizOpen) return; // combat quiz freezes state timers (kid-friendly)
     const air = mob.air;
     air.t += dt;
@@ -4026,44 +3915,12 @@ const SkyGame = (() => {
   function buildBossMesh(q) {
     const d = bossDef(q);
     const isle = isleById(q.island);
-    const g = new THREE.Group();
-    const torso = new THREE.Mesh(new THREE.BoxGeometry(3.6, 4.4, 2.6),
-      new THREE.MeshLambertMaterial({ color: d.body, emissive: d.bodyEm }));
-    torso.position.y = 4;
-    torso.castShadow = true;
-    g.add(torso);
-    const head = new THREE.Mesh(new THREE.BoxGeometry(2, 1.9, 1.9),
-      new THREE.MeshLambertMaterial({ color: d.head }));
-    head.position.y = 7.2;
-    head.castShadow = true;
-    g.add(head);
-    const eyeMat = new THREE.MeshLambertMaterial({ color: d.eye, emissive: d.eyeEm });
-    [-0.5, 0.5].forEach(x => {
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.26, 8, 6), eyeMat);
-      eye.position.set(x, 7.35, 1);
-      g.add(eye);
-    });
-    [-2.4, 2.4].forEach(x => {
-      const arm = new THREE.Mesh(new THREE.BoxGeometry(1, 3.6, 1),
-        new THREE.MeshLambertMaterial({ color: d.arm }));
-      arm.position.set(x, 4.2, 0);
-      arm.castShadow = true;
-      g.add(arm);
-    });
-    // the dragon gets wings
-    if (q.id === 'sqg_dragon_boss') {
-      [-1, 1].forEach(s => {
-        const wing = new THREE.Mesh(new THREE.BoxGeometry(3.4, 2.4, 0.25),
-          new THREE.MeshLambertMaterial({ color: 0x3a2a5e, emissive: 0x1a0a3a, transparent: true, opacity: 0.9 }));
-        wing.position.set(s * 3.4, 5.6, -1);
-        wing.rotation.z = s * 0.5;
-        g.add(wing);
-      });
-    }
+    const built = SkyAvatar.makeBoss(q.id, d); // { group, eyeMat, torso }
+    const g = built.group;
     g.scale.setScalar(d.scale);
     g.position.set(isle.pos[0], isle.pos[1], isle.pos[2] - 7);
     scene.add(g);
-    bossParts = { group: g, eyeMat, torso };
+    bossParts = built;
     return g;
   }
 
@@ -4195,6 +4052,7 @@ const SkyGame = (() => {
     if (!bossActive.mob.dead) {
       mesh.position.y = bossActive.mob.isle.pos[1] + bobOf(bossActive.mob.isle.id) + Math.sin(simTime * 0.8) * 0.3;
       mesh.rotation.y = Math.sin(simTime * 0.4) * 0.15;
+      SkyAvatar.animateBoss(mesh, dt, bossActive.phase);
     }
     if (bossActive.phase !== 2 || quizOpen) return;
     ensureShockRings();
@@ -4606,100 +4464,26 @@ const SkyGame = (() => {
   }
 
   // ===================== player =====================
-  function emojiTexture(emoji, bg) {
-    const cv = document.createElement('canvas');
-    cv.width = cv.height = 128;
-    const ctx = cv.getContext('2d');
-    ctx.fillStyle = bg;
-    ctx.fillRect(0, 0, 128, 128);
-    ctx.font = '92px serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(emoji, 64, 72);
-    return canvasTex(cv);
-  }
-
-  function badgeTexture(text) {
-    const cv = document.createElement('canvas');
-    cv.width = 512; cv.height = 128;
-    const ctx = cv.getContext('2d');
-    ctx.fillStyle = 'rgba(10,40,70,0.78)';
-    const w = Math.min(500, 90 + text.length * 34);
-    const x = (512 - w) / 2;
-    ctx.beginPath();
-    ctx.roundRect ? ctx.roundRect(x, 20, w, 88, 22) : ctx.rect(x, 20, w, 88);
-    ctx.fill();
-    ctx.strokeStyle = '#ffd166';
-    ctx.lineWidth = 5;
-    ctx.stroke();
-    ctx.fillStyle = '#ffe9a8';
-    ctx.font = 'bold 52px "Noto Sans TC", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(text, 256, 66);
-    return canvasTex(cv);
-  }
+  // The hero's look, animation, movement FX and the camera live in js/sky-avatar.js.
+  Object.defineProperty(ctx, 'quizOpen', { get: () => quizOpen });
+  SkyAvatar.init(ctx);
 
   function buildPlayer() {
     player = new THREE.Group();
-    playerParts = {};
-
-    const tint = 0x3aa6a0;
-    const bodyMat = new THREE.MeshLambertMaterial({ color: tint });
-    const limbMat = new THREE.MeshLambertMaterial({ color: tint });
-    const skinTone = new THREE.MeshLambertMaterial({ color: 0xf2c99a });
-    playerParts.bodyMat = bodyMat;
-    playerParts.limbMat = limbMat;
-
-    // legs (pivot at hip: geometry translated down)
-    const legGeo = new THREE.BoxGeometry(0.24, 0.7, 0.26);
-    legGeo.translate(0, -0.35, 0);
-    const legL = new THREE.Mesh(legGeo, limbMat);
-    legL.position.set(-0.16, 0.7, 0);
-    legL.castShadow = true;
-    const legR = new THREE.Mesh(legGeo, limbMat);
-    legR.position.set(0.16, 0.7, 0);
-    legR.castShadow = true;
-    player.add(legL, legR);
-
-    // torso
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.72, 0.36), bodyMat);
-    body.position.y = 1.06;
-    body.castShadow = true;
-    player.add(body);
-
-    // arms (pivot at shoulder)
-    const armGeo = new THREE.BoxGeometry(0.2, 0.66, 0.22);
-    armGeo.translate(0, -0.28, 0);
-    const armL = new THREE.Mesh(armGeo, limbMat);
-    armL.position.set(-0.44, 1.38, 0);
-    armL.castShadow = true;
-    const armR = new THREE.Mesh(armGeo, limbMat);
-    armR.position.set(0.44, 1.38, 0);
-    armR.castShadow = true;
-    player.add(armL, armR);
-
-    // head — emoji face on the front (+z)
-    const headMats = [skinTone, skinTone, skinTone, skinTone, skinTone, skinTone];
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.56, 0.56), headMats);
-    head.position.y = 1.72;
-    head.castShadow = true;
-    player.add(head);
-    playerParts.head = head;
-    playerParts.armL = armL;
-    playerParts.armR = armR;
-    playerParts.legL = legL;
-    playerParts.legR = legR;
-    playerParts.body = body;
-
-    // floating title badge
-    const badge = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true }));
-    badge.scale.set(2.6, 0.65, 1);
-    badge.position.y = 2.45;
-    player.add(badge);
-    playerParts.badge = badge;
-
+    playerParts = SkyAvatar.buildPlayer(player);
     scene.add(player);
+    if (window.__skyTest) {
+      Object.assign(window.__skyTest, {
+        avatar: () => SkyAvatar.debug(),
+        fx: (name, data) => emitFx(name, data),
+        celebrate: n => spawnConfetti(n || 36),
+        motion: () => ({ ...motion }),
+        cam: () => ({ ...cam }),
+        setCam: o => Object.assign(cam, o),
+        spawnMobHere: (id, dx, dz) => { const isle = isleById(currentIsland) || SKY_ISLANDS[0]; return mobs.indexOf(spawnMob(id, isle.id, pos.x - isle.pos[0] + dx, pos.z - isle.pos[2] + dz)); },
+        hitMob: i => hitMob(mobs[i]),
+      });
+    }
   }
 
   // re-read equipped skin/title and recompute title perks
@@ -4708,17 +4492,7 @@ const SkyGame = (() => {
     if (!playerParts) return;
     const skin = GameEngine.getEquippedSkin();
     const title = GameEngine.getEquippedTitle();
-    const tint = SKY_SKIN_TINTS[skin.id] || SKY_SKIN_TINTS.default;
-    playerParts.bodyMat.color.setHex(tint);
-    playerParts.limbMat.color.setHex(tint);
-    // emoji face
-    const faceTex = emojiTexture(skin.icon, '#f2c99a');
-    const faceMat = new THREE.MeshLambertMaterial({ map: faceTex });
-    playerParts.head.material[4] = faceMat; // +z face
-    playerParts.head.material.needsUpdate = true;
-    // badge
-    playerParts.badge.material.map = badgeTexture(title.display || title.name);
-    playerParts.badge.material.needsUpdate = true;
+    SkyAvatar.refreshLook(skin.id, SKY_SKIN_TINTS[skin.id], title.display || title.name);
     if (els.titleBadge) els.titleBadge.textContent = `⭐ ${title.display || title.name}`;
   }
 
@@ -4955,36 +4729,14 @@ const SkyGame = (() => {
     motion.riding = mountT > 0 ? 'cloud' : null;
 
     // ---- presentation half (avatar animation) below; physics above ----
-    // apply to mesh
-    player.position.set(pos.x, pos.y, pos.z);
-    player.rotation.y = heroYaw;
-    const swing = Math.sin(walkTime) * 0.55;
-    playerParts.armL.rotation.x = swing;
-    playerParts.armR.rotation.x = -swing;
-    playerParts.legL.rotation.x = -swing;
-    playerParts.legR.rotation.x = swing;
-    if (!grounded) {
-      playerParts.armL.rotation.x = -2.6;
-      playerParts.armR.rotation.x = -2.6;
-    }
-    // idle breathing
-    playerParts.body.scale.y = 1 + Math.sin(simTime * 2.2) * 0.015;
+    SkyAvatar.animatePlayer(dt, { yaw: heroYaw, quiz: quizOpen });
+    SkyAvatar.update(dt);
 
     if (!quizOpen) updateInteractTarget();
   }
 
   function updateCamera(dt) {
-    const targetX = pos.x + Math.sin(cam.theta) * Math.cos(cam.phi) * cam.radius;
-    const targetY = pos.y + 1.6 + Math.sin(cam.phi) * cam.radius;
-    const targetZ = pos.z + Math.cos(cam.theta) * Math.cos(cam.phi) * cam.radius;
-    const k = 1 - Math.pow(0.0001, dt); // frame-rate independent smoothing
-    _v1.set(targetX, targetY, targetZ);
-    camera.position.lerp(_v1, k);
-    // keep the camera above whatever it hovers over
-    const gs = supportAt(camera.position.x, camera.position.z, Infinity);
-    if (gs.col && camera.position.y < gs.y + 0.6) camera.position.y = gs.y + 0.6;
-    _v2.set(pos.x, pos.y + 1.5, pos.z);
-    camera.lookAt(_v2);
+    SkyAvatar.updateCamera(dt); // collision, follow lag, FOV kick, shake, start reveal
 
     // sun + shadow frustum follow the player
     sunLight.position.set(pos.x + 40, pos.y + 60, pos.z + 20);
