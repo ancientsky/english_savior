@@ -1684,6 +1684,8 @@ body.game-max #zone-sky.active .aw-canvas-wrap {
 .aw-gfx-diag-bar button:disabled { opacity: 0.55; }
 .aw-gfx-probe:empty { display: none; }
 .aw-gfx-probe { padding: 6px 8px 0; }
+.aw-gfx-probe-msg { padding: 8px 10px; border: 1px solid #ffb84d; border-radius: 6px; background: #3a2a10; color: #ffe2b0; font-size: 0.82rem; line-height: 1.45; }
+.aw-gfx-probe-msg small { opacity: 0.8; }
 .aw-gfx-probe canvas { display: block; width: 160px; height: auto; border: 1px solid #34406a; border-radius: 4px; background: #000; }
 /* staged shader warm-up cover (first frames of an adventure) */
 .aw-gfx-warm {

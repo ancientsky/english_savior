@@ -52,11 +52,36 @@ const SkyArt = (() => {
       occK = min(occK, smoothstep(0.9, 1.9, occZ));
       if (occK < occB) discard;
     }`;
-  function withOcclusion(sh) {
+  // mode (a device feature switch, see FEAT): 'on' discards at the top of main() (shipped),
+  // 'late' runs the same test after the colour is written (no discard ahead of the lighting),
+  // 'off' leaves the material untouched (no see-through on this device)
+  function withOcclusion(sh, mode) {
+    mode = mode || FEAT.occ;
+    if (mode === 'off') return;
     Object.assign(sh.uniforms, OCC);
+    const at = mode === 'late' ? '#include <dithering_fragment>' : '#include <clipping_planes_fragment>';
     sh.fragmentShader = 'uniform vec2 uOccScr;\nuniform vec2 uOccRes;\nuniform float uOccDist;\nuniform float uOccR;\n' +
-      sh.fragmentShader.replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n' + OCC_FRAG);
+      sh.fragmentShader.replace(at, at + '\n' + OCC_FRAG);
   }
+  // ---- device feature switches (english_savior_sky_gfx.sw, set by the 🧪 probe) ----
+  // Each one turns off a single rendering ingredient this GPU was caught crashing on, so the device
+  // can keep the best tier that passed instead of falling to `low`. Defaults = the shipped look.
+  const FEAT_DEF = { occ: 'on', sway: true, glow: true, propRecv: true, propCast: true, env: true, msaa: 4 };
+  const FEAT = Object.assign({}, FEAT_DEF);
+  function cleanSw(sw) {
+    const out = {};
+    if (!sw || typeof sw !== 'object') return out;
+    if (sw.occ === 'late' || sw.occ === 'off') out.occ = sw.occ;
+    ['sway', 'glow', 'propRecv', 'propCast', 'env'].forEach(k => { if (sw[k] === false) out[k] = false; });
+    if ([0, 2].includes(sw.msaa)) out.msaa = sw.msaa;
+    return out;
+  }
+  function loadFeat() {
+    Object.assign(FEAT, FEAT_DEF, cleanSw(gfxRead().sw));
+    return FEAT;
+  }
+  function featSw() { const o = {}; Object.keys(FEAT_DEF).forEach(k => { if (FEAT[k] !== FEAT_DEF[k]) o[k] = FEAT[k]; }); return o; }
+  const swText = sw => Object.keys(sw || {}).map(k => k + '=' + (sw[k] === false ? 'off' : sw[k])).join(' ') || 'none';
   const TEX = {};                               // named textures (sky.js reads TEX.crystalTex etc.)
   const fogBase = new THREE.Color(0xa9d8ff);    // daytime haze colour; sky.js' storm-boss victory brightens it
   const state = { gt: 0, ut: 0 };               // galaxy / underground blend 0..1 (read by sky.js test hooks)
@@ -99,6 +124,7 @@ const SkyArt = (() => {
     try { gfx = JSON.parse(localStorage.getItem(GFX_KEY) || 'null'); } catch (e) { gfx = null; }
     if (!gfx || typeof gfx !== 'object') gfx = {};
     gfx.tier = Math.max(0, Math.min(3, gfx.tier | 0));
+    if (gfx.sw !== undefined) { gfx.sw = cleanSw(gfx.sw); if (!Object.keys(gfx.sw).length) delete gfx.sw; }
     // crash-loop breaker: the last attempt at `pending` never proved healthy → start below it
     if (typeof gfx.pending === 'number' && gfx.pending >= gfx.tier && gfx.pending < 3) {
       const stage = typeof gfx.warm === 'string' ? gfx.warm.slice(0, 80) : '';
@@ -179,8 +205,10 @@ const SkyArt = (() => {
     const gl = renderer.getContext();
     try { probeCaps(gl); } catch (e) { logErr('caps', e); }
     const g = gfxRead();
+    loadFeat();
     let t = low ? 3 : g.tier;
     if (g.why) diag.steps.push('啟動於 ' + TIERS[t] + '：' + g.why);
+    if (g.sw) diag.steps.push('功能開關（🧪 相容性測試）：' + swText(g.sw));
     // first-run policy for touch devices: unknown mobile GPUs start one safe tier below full and are
     // promoted on a later adventure once that tier has proven itself (the 🧪 probe can vouch sooner)
     if (!low && t === 0 && isTouch && !(g.ok <= 1) && !g.probeOk) {
@@ -277,7 +305,7 @@ const SkyArt = (() => {
   function setupComposer(w, h) {
     if (low || diag.tier >= 1) return;
     try {
-      const samples = (diag.caps.f16Samples || []).filter(n => n <= 4).reduce((a, n) => Math.max(a, n), 0);
+      const samples = (diag.caps.f16Samples || []).filter(n => n <= Math.min(4, FEAT.msaa)).reduce((a, n) => Math.max(a, n), 0);
       diag.caps.composerSamples = samples;
       const rt = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples });
       composer = new THREE.EffectComposer(renderer, rt);
@@ -655,6 +683,7 @@ const SkyArt = (() => {
       '畫質 tier: ' + (renderer ? TIERS[diag.tier] + '（起始 ' + TIERS[diag.startTier] + '）' : '-') + '  存檔 ' + TIERS[g.tier] +
         (g.pending !== undefined ? '，測試中 ' + TIERS[g.pending] : '') + (g.ok !== undefined ? '，已證明 ' + TIERS[g.ok] : '') +
         '  lowPower: ' + low + '  composer: ' + !!composer + '  shadows: ' + !!(renderer && renderer.shadowMap.enabled) + '  env: ' + envOk,
+      '功能開關 switches: ' + swText(g.sw) + (renderer && swText(g.sw) !== swText(featSw()) ? '（這次執行中：' + swText(featSw()) + '，重新載入後生效）' : ''),
       'gfx: ' + JSON.stringify(g),
       'warm-up: ' + (diag.warm ? diag.warm.i + '/' + diag.warm.n + ' ' + (warm ? '… ' + diag.warm.stage : diag.warm.stage + ' in ' + diag.warm.ms + ' ms') : '-'),
       'frames: ' + diag.frames + '  healthy: ' + diag.healthy + '  health: ' + H.verdict + '  gl errors: ' + glErr +
@@ -709,40 +738,60 @@ const SkyArt = (() => {
     if (!TEX.noise) initTextures();
     return { MK, skyMat, skyUniforms, seaMat, seaUniforms, newFallMat, newAuroraMat, newLavaMat, newTopMat, bakeEnv, cloudGeometry,
       Batch, K, geo, getTuftGeo, mulberry, TEX, OCC, SUN_DIR, fogBase, probeCaps, pixelRatio, isTouch, TIERS, caps: diag.caps,
+      FEAT, FEAT_DEF, withOcclusion,
       asLow: fn => { const p = low; low = true; try { return fn(); } finally { low = p; } } };
   }
+  // the probe's verdict: a start tier plus feature switches. It raises the stored tier when a step
+  // that no switch avoids failed; it may also LOWER it (lift a crash-ladder `low`) — but only when it
+  // found a specific ingredient to switch off, i.e. it proved a configuration the game has not
+  // crashed in yet. Without a switch the ladder's finding stands. Applies from the next page load.
   function applyProbe(sum) {
     const g = gfxRead();
-    g.probe = sum;
-    if (sum.allOk) g.probeOk = true; else delete g.probeOk;
-    if (typeof sum.rec === 'number' && sum.rec > g.tier) { g.tier = sum.rec; g.why = '🧪 相容性測試：' + sum.fail + ' 失敗'; }
+    const sw = cleanSw(sum.sw), nSw = Object.keys(sw).length;
+    g.probe = { at: sum.at, fail: sum.fail || null, rec: typeof sum.rec === 'number' ? sum.rec : null, sw };
+    if (nSw) g.sw = sw; else delete g.sw;
+    if (typeof sum.rec === 'number') {
+      const rec = Math.max(0, Math.min(3, sum.rec | 0));
+      if (rec > g.tier) { g.tier = rec; g.why = '🧪 相容性測試：' + (sum.fail || '?') + ' 失敗'; }
+      else if (rec < g.tier && nSw) {
+        g.why = '🧪 相容性測試：關掉 ' + Object.keys(sw).map(k => k + (sw[k] === false ? '' : '=' + sw[k])).join('、') + ' 後 ' + TIERS[rec] + ' 通過（原本存檔 ' + TIERS[g.tier] + '）';
+        g.tier = rec;
+      }
+      if (rec === 0) g.probeOk = true; else delete g.probeOk;
+    }
     gfxWrite();
   }
 
   // ============================== materials ==============================
   const MAT = {};
-  // inject wind sway (aSway) + per-vertex glow (aGlow) into a lit material
-  function swayGlow(mat, key) {
-    mat.onBeforeCompile = sh => {
-      sh.uniforms.uTime = U.time;
-      sh.vertexShader = 'attribute float aSway;\nattribute float aGlow;\nvarying float vGlow;\nuniform float uTime;\n' +
-        sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
-          vGlow = aGlow;
+  // inject wind sway (aSway) + per-vertex glow (aGlow) into a lit material. `f` picks the
+  // ingredients ({ sway, glow, occ }) — the device switches by default; the 🧪 probe passes its own
+  // to bisect them. With everything on, the shader text is exactly the shipped one.
+  const SWAY_VS = `
           if (aSway > 0.0) {
             vec4 swW = modelMatrix * vec4(transformed, 1.0);
             float swP = uTime * 1.7 + swW.x * 0.23 + swW.z * 0.19;
             transformed.x += (sin(swP) * 0.09 + sin(swP * 2.3) * 0.03) * aSway;
             transformed.z += cos(swP * 0.83) * 0.07 * aSway;
-          }`);
-      sh.fragmentShader = 'varying float vGlow;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>',
+          }`;
+  function swayGlow(mat, key, f) {
+    const grass = key === 'grass';
+    f = Object.assign({ sway: grass || FEAT.sway, glow: grass || FEAT.glow, occ: grass ? 'off' : FEAT.occ }, f);
+    mat.onBeforeCompile = sh => {
+      if (f.sway) sh.uniforms.uTime = U.time;
+      sh.vertexShader = (f.sway ? 'attribute float aSway;\n' : '') + (f.glow ? 'attribute float aGlow;\nvarying float vGlow;\n' : '') +
+        (f.sway ? 'uniform float uTime;\n' : '') +
+        sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>' + (f.glow ? '\n          vGlow = aGlow;' : '') + (f.sway ? SWAY_VS : ''));
+      if (f.glow) sh.fragmentShader = 'varying float vGlow;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>',
         '#include <emissivemap_fragment>\n  totalEmissiveRadiance += diffuseColor.rgb * vGlow;');
       // grass blades are double-sided cards with straight-up normals: keep the normal pointing
       // up on the back face too, or every blade seen from behind is lit like an overhang (near-black)
-      if (key === 'grass') sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>',
+      if (grass) sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>',
         '#include <normal_fragment_begin>\n  normal = normalize( vNormal );');
-      else withOcclusion(sh);
+      else withOcclusion(sh, f.occ);
     };
-    mat.customProgramCacheKey = () => 'skyart-' + key;
+    const variant = (f.sway ? '' : '-nosway') + (f.glow ? '' : '-noglow') + (grass || f.occ === 'on' ? '' : '-occ' + f.occ) + (mat.vertexColors ? '' : '-novc');
+    mat.customProgramCacheKey = () => 'skyart-' + key + variant;
     mat.name = key;   // named programs: shader errors and the 🧪 probe say which material
     return mat;
   }
@@ -757,17 +806,19 @@ const SkyArt = (() => {
   let propMat = null, grassMat = null, cloudMat = null, waterMat = null, fallMat = null;
   // factories (also used by the 🧪 probe, so it compiles exactly what the world compiles)
   const MK = {
-    prop: std => swayGlow(litMat({ vertexColors: true, roughness: 0.7 }, std), 'prop'),
+    // f (probe only): { vc, sway, glow, occ } — omitted keys follow the device switches
+    prop: (std, f) => swayGlow(litMat({ vertexColors: !(f && f.vc === false), roughness: 0.7 }, std), 'prop', f),
     grass: std => swayGlow(litMat({ vertexColors: true, roughness: 0.95, side: THREE.DoubleSide }, std), 'grass'),
     cloud: std => Object.assign(litMat({ color: 0xffffff, roughness: 1, emissive: 0xaec4e6, emissiveIntensity: 0.16 }, std), { name: 'cloud' }),
     water: std => Object.assign(litMat({
       color: 0x3fb8ec, roughness: 0.12, emissive: 0x0c4a6e, emissiveIntensity: 0.6,
       map: TEX.ripple, transparent: true, opacity: 0.92,
     }, std), { name: 'water' }),
-    occ: (opts, std) => {
+    occ: (opts, std, mode) => {
       const m = litMat(opts, std);
-      m.onBeforeCompile = withOcclusion;
-      m.customProgramCacheKey = () => 'skyart-occ';
+      mode = mode || FEAT.occ;
+      m.onBeforeCompile = sh => withOcclusion(sh, mode);
+      m.customProgramCacheKey = () => 'skyart-occ' + (mode === 'on' ? '' : '-' + mode);
       m.name = 'occ';
       return m;
     },
@@ -973,7 +1024,7 @@ const SkyArt = (() => {
   }
   let envRT = null;
   function buildEnvironment() {
-    if (low || !diag.caps.floatTargets) { envOk = false; return; }   // PMREM bakes into HalfFloat targets
+    if (low || !diag.caps.floatTargets || !FEAT.env) { envOk = false; return; }   // PMREM bakes into HalfFloat targets
     try {
       envRT = bakeEnv(renderer);
       scene.environment = envRT.texture;
@@ -989,7 +1040,9 @@ const SkyArt = (() => {
     scene.add(hemi);
     sun = new THREE.DirectionalLight(0xfff0d8, SUN_I());
     sun.position.copy(SUN_DIR).multiplyScalar(80);
-    sun.castShadow = !low;
+    // noshadow must be free of shadows altogether: a casting light still changes every lit
+    // program's variant (NUM_DIR_LIGHT_SHADOWS) and its uniforms even with the shadow map off
+    sun.castShadow = !low && diag.tier < 2;
     const ms = isTouch ? 1024 : 2048;
     sun.shadow.mapSize.set(ms, ms);
     const S = 38;
@@ -1315,6 +1368,7 @@ const SkyArt = (() => {
     scene = c.scene;
     camera = c.camera;
     low = !!c.lowPower();
+    if (!FEAT.env) envOk = false;   // device switch: no PMREM ambient (hemi fill makes up for it)
     scene.fog = new THREE.Fog(fogBase.getHex(), 70, 420);
     initTextures();
     initMaterials();
@@ -1576,7 +1630,9 @@ const SkyArt = (() => {
       g.setIndex(this.n > 65535 ? new THREE.Uint32BufferAttribute(this.I, 1) : new THREE.Uint16BufferAttribute(this.I, 1));
       g.computeBoundingSphere();
       const m = new THREE.Mesh(g, mat || propMat);
-      m.castShadow = !!shadow; m.receiveShadow = true;
+      // device switches: merged props may be told not to cast / receive shadows on this GPU
+      const prop = m.material && m.material.name === 'prop';
+      m.castShadow = !!shadow && !(prop && !FEAT.propCast); m.receiveShadow = !(prop && !FEAT.propRecv);
       m.matrixAutoUpdate = false; m.updateMatrix();
       return m;
     }
@@ -3329,7 +3385,7 @@ const SkyArt = (() => {
   }
   function questMesh(name) {
     const m = new THREE.Mesh(questGeo(name), propMat);
-    m.castShadow = !low && !/^(mk_|orb|shard)/.test(name);
+    m.castShadow = !low && FEAT.propCast && !/^(mk_|orb|shard)/.test(name);
     return m;
   }
 
