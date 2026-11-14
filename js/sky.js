@@ -22,13 +22,11 @@ const SkyGame = (() => {
   let rafId = null;
   let threeReady = false;
   let playing = false;
-  let hemiLight, sunLight, skyDome;
-  let cloudMesh = null;
-  const cloudData = [];
-  // altitude atmosphere: base sky ↔ deep-space purple (galaxy region sits high)
-  // ↔ deep-red cave gloom (地心世界 sits far below, y ≈ -70..-95)
-  let fogBase = null, fogGalaxy = null, hemiBase = null, hemiGalaxy = null;
-  let fogUnderground = null, hemiUnderground = null;
+  let hemiLight, sunLight, skyDome;   // owned by js/sky-art.js (SkyArt.hemi/sun/dome)
+  // altitude atmosphere (computed in SkyArt): base sky ↔ deep-space purple (galaxy
+  // region sits high) ↔ deep-red cave gloom (地心世界 sits far below, y ≈ -70..-95).
+  // fogBase is SkyArt.fogBase — the daytime haze colour the storm-boss victory brightens.
+  let fogBase = null;
   let galaxyBlend = -1;
   let undergroundBlend = -1;
 
@@ -89,10 +87,6 @@ const SkyGame = (() => {
     bubble_shield: { icon: '🫧', name: '泡泡護罩', key: 'R' },
     cloud_mount: { icon: '☁️', name: '飛天雲', key: 'F' },
   };
-  // ambient decoration Points systems (☁️ Wave 4 polish)
-  let waterMistSystems = [];
-  let fireflySystems = [];
-
   function computePerks() {
     const id = GameEngine.getEquippedTitle().id;
     perks = {
@@ -502,7 +496,6 @@ const SkyGame = (() => {
   // ---------- art pipeline: everything visual about the world lives in js/sky-art.js ----------
   // (sky, lights, clouds, island terrain + props, bridges, pads, particles, post FX)
   const GEO = {};
-  const MAT = {};
   function geoBox() { return GEO.box || (GEO.box = new THREE.BoxGeometry(1, 1, 1)); }
   function matOf(color, emissive, texKey) { return SkyArt.matOf(color, emissive, texKey); }
   const TEX = SkyArt.TEX;
@@ -996,7 +989,6 @@ const SkyGame = (() => {
   let buffBarTimer = 0;
   let trackerTimer = 0;
   let journalEl = null;
-  let particles = null;
   let cullIdx = 0;
   let fpsFrames = 0, fpsTime = 0, lowPowerSuggested = false;
 

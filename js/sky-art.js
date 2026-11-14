@@ -662,6 +662,19 @@ const SkyArt = (() => {
           const t = m => (m ? Math.round(m.geometry.index.count / 3) : 0);
           return it.isle.id + ' props ' + t(it.props) + ' body ' + t(it.group.children[0]) + ' grass ' + (it.grass ? it.grass.count * 24 : 0);
         }).join('\n'),
+        calls: () => {
+          // visible draw objects in front of the camera, split into art-owned vs everything else
+          const fr = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+          const out = { art: 0, other: 0, otherNames: {} };
+          const artMats = new Set([propMat, grassMat, cloudMat, waterMat, fallMat, auroraMat, lavaMat, padRingMat]);
+          scene.traverseVisible(o => {
+            if (!(o.isMesh || o.isPoints || o.isSprite)) return;
+            if (o.frustumCulled && !o.isSprite && o.geometry && !fr.intersectsObject(o)) return;
+            const art = artMats.has(o.material) || (o.parent && islands.some(it => it.group === o.parent && it.group.children.indexOf(o) < 4)) || o === dome || o === sea;
+            if (art) out.art++; else { out.other++; const k = (o.material && o.material.type) + (o.isSprite ? ':sprite' : ''); out.otherNames[k] = (out.otherNames[k] || 0) + 1; }
+          });
+          return out;
+        },
         tris: () => {
           const out = {};
           scene.traverseVisible(o => {
@@ -1259,7 +1272,7 @@ const SkyArt = (() => {
     forest: { g: [0x4a9a48, 0x68b85a, 0x387d3c], path: 0xc6a068, edge: 0x45923f, dirt: 0x8a5a36, rock: [0x8e7560, 0x76604f, 0x5f4e42], tuft: [0x3f9a40, 0x78c858], under: 'roots', gate: 'lantern' },
     water: { g: [0x67c45c, 0x8fdc78, 0x4ea84e], path: 0xe8d3a0, edge: 0x5cb951, dirt: 0x9a6a40, rock: [0xa8987e, 0x8c8070, 0x6f675c], tuft: [0x58b450, 0x92dc72], under: 'roots', gate: 'lantern' },
     flower: { g: [0x86d266, 0xb0e886, 0x6abd56], path: 0xf2d9a8, edge: 0x7acb5c, dirt: 0xa8704a, rock: [0xc49a78, 0xa98065, 0x8e6c58], tuft: [0x7ccc58, 0xb8ee86], under: 'roots', gate: 'lantern' },
-    mushroom: { g: [0x5aa884, 0x7cc89c, 0x8a74c4], path: 0xd9c7a8, edge: 0x4f9c78, dirt: 0x7a5a4a, rock: [0x7a6a8a, 0x66587a, 0x544868], tuft: [0x4fae7e, 0x8fdcb0], under: 'roots', gate: 'torch' },
+    mushroom: { g: [0x5aa884, 0x7cc89c, 0x4e9a80], path: 0xd9c7a8, edge: 0x4f9c78, dirt: 0x7a5a4a, rock: [0x7a6a8a, 0x66587a, 0x544868], tuft: [0x4fae7e, 0x8fdcb0], under: 'roots', gate: 'torch' },
     ruin: { g: [0xbfae86, 0xd4c7a2, 0xa2916c], path: 0xebe2c8, edge: 0x8fb862, dirt: 0xa8946e, rock: [0xc8b892, 0xae9f7c, 0x948666], tuft: [0x92bc60, 0xc4dc7a], tuftK: 0.35, under: 'roots', gate: 'torch', tiles: true },
     crystal: { g: [0xb4e1ec, 0xd8f4f8, 0x8cc4d8], path: 0xeaf8fc, edge: 0xc8ecf4, dirt: 0x8aa0c0, rock: [0x7c8fb8, 0x66789f, 0x55628a], tuft: null, under: 'crystals', glowC: 0x7fe8ff, gate: 'crystal' },
     cloud: { g: [0xf2f7ff, 0xffffff, 0xdbe6f6], path: 0xffefc6, edge: 0xffffff, dirt: 0xeef4fd, rock: [0xf4f8ff, 0xe4edf9, 0xd6e2f3], tuft: null, under: 'none', gate: 'post', cloudy: true },
@@ -1663,7 +1676,7 @@ const SkyArt = (() => {
   }
   function buildGrass(isle, st, rng, info) {
     if (!st.tuft) return null;
-    let N = Math.round(isle.r * isle.r * 0.85 * (st.tuftK || 1));
+    let N = Math.round(isle.r * isle.r * 0.7 * (st.tuftK || 1));
     if (low) N = Math.round(N * 0.35);
     N = Math.min(N, 760);
     const im = new THREE.InstancedMesh(getTuftGeo(), grassMat, N);
@@ -2014,7 +2027,7 @@ const SkyArt = (() => {
     },
     lava(B, rng, isle, st, place, info, g) {
       place(Math.round(isle.r * 0.42), 0.66, 0.97, 1.3, 2.8, (x, z) => K.spire(B, rng, x, z, 0.8 + rng() * 0.6, 0x3a3034, 0xff6a1a));
-      lavaPool(B, rng, isle, info, 0.3);
+      lavaPool(B, rng, isle, info, 0.3, g);
       place(5, 0.4, 0.95, 0.8, 2, (x, z) => K.rock(B, rng, x, z, 0.5 + rng() * 0.5, 0x2c2426));
       addFireflies(g, isle, 0xff8a3a, 30, 4);
     },
@@ -2117,7 +2130,7 @@ const SkyArt = (() => {
     },
     vault(B, rng, isle, st, place, info, g) {
       place(7, 0.6, 0.92, 1.2, 2.8, (x, z) => K.column(B, rng, x, z, 2 + rng() * 3.5, 0x1a1414, 0xff5a1a));
-      lavaPool(B, rng, isle, info, 0.26);
+      lavaPool(B, rng, isle, info, 0.26, g);
       place(3, 0.4, 0.8, 1, 3, (x, z) => K.brazier(B, rng, x, z));
       addFireflies(g, isle, 0xff8a3a, 24, 3);
     },
@@ -2160,7 +2173,7 @@ const SkyArt = (() => {
       addFireflies(g, isle, 0x9fd8ff, 24, 4);
     },
     magma(B, rng, isle, st, place, info, g) {
-      lavaPool(B, rng, isle, info, 0.34);
+      lavaPool(B, rng, isle, info, 0.34, g);
       place(Math.round(isle.r * 0.4), 0.66, 0.97, 1.3, 2.8, (x, z) => K.spire(B, rng, x, z, 0.8 + rng() * 0.6, 0x1a100e, 0xff5a1a));
       addFireflies(g, isle, 0xff8a3a, 30, 4);
     },
@@ -2188,13 +2201,47 @@ const SkyArt = (() => {
     }
     return [isle.r * f, 0];
   }
-  function lavaPool(B, rng, isle, info, f) {
+  // animated molten pool: bright flowing lava with drifting dark crust plates
+  let lavaMat = null;
+  function getLavaMat() {
+    if (lavaMat) return lavaMat;
+    lavaMat = new THREE.ShaderMaterial({
+      uniforms: { uNoise: { value: TEX.noise }, uTime: U.time },
+      vertexShader: 'attribute vec2 uv2s; varying vec2 vUv; varying vec2 vE; void main(){ vUv = uv; vE = uv2s; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+      fragmentShader: `uniform sampler2D uNoise; uniform float uTime; varying vec2 vUv; varying vec2 vE;
+        void main() {
+          vec2 p = vUv;
+          float n1 = texture2D(uNoise, p * 0.35 + vec2(uTime * 0.012, uTime * 0.008)).r;
+          float n2 = texture2D(uNoise, p * 0.9 - vec2(uTime * 0.02, 0.0)).r;
+          float n = n1 * 0.65 + n2 * 0.35;
+          vec3 hot = vec3(2.0, 0.42, 0.04) * (0.85 + 0.25 * sin(uTime * 1.7 + n * 14.0));
+          vec3 crust = vec3(0.09, 0.02, 0.012);
+          float c = smoothstep(0.5, 0.6, n);
+          vec3 col = mix(hot, crust, c);
+          col += vec3(2.4, 0.9, 0.15) * (1.0 - smoothstep(0.0, 0.03, abs(n - 0.5)));
+          float edge = smoothstep(0.5, 0.42, length(vE - 0.5));
+          col = mix(vec3(0.6, 0.08, 0.02), col, edge);
+          gl_FragColor = vec4(col, 1.0);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+        }`,
+    });
+    return lavaMat;
+  }
+  function lavaPool(B, rng, isle, info, f, g) {
     let px = -isle.r * 0.12, pz = isle.r * 0.14;
     const pr = isle.r * f;
     for (let i = 0; i < 20 && blocked(info.ex.filter(e => !e.bridge), px, pz, pr * 0.6); i++) { const a = rng() * 6.28; px = Math.cos(a) * isle.r * 0.4; pz = Math.sin(a) * isle.r * 0.4; }
     B.at(px, 0, pz, 0, 1);
     B.part(geo('disc'), 0, 0, 0, pr + 0.5, 0.06, pr + 0.5, 0x2a1c1a);
-    B.part(geo('disc'), 0, 0.01, 0, pr, 0.06, pr, 0xff4a0a, { glow: 1.1 });
+    const cg = new THREE.CircleGeometry(pr, 36);
+    cg.setAttribute('uv2s', cg.attributes.uv.clone());
+    const uvA = cg.attributes.uv;   // world-scale uvs (one noise tile per ~3 units); edge fade uses uv2s
+    for (let i = 0; i < uvA.count; i++) uvA.setXY(i, uvA.getX(i) * pr / 3, uvA.getY(i) * pr / 3);
+    const m = new THREE.Mesh(cg, getLavaMat());
+    m.rotation.x = -Math.PI / 2;
+    m.position.set(px, 0.08, pz);
+    g.add(m);
     for (let i = 0; i < 12; i++) { const a = i / 12 * 6.28; K.rock(B, rng, px + Math.cos(a) * (pr + 0.5), pz + Math.sin(a) * (pr + 0.5), 0.35 + rng() * 0.25, 0x2a2224); }
     info.water = { x: px, z: pz, r: pr };
   }
@@ -2229,10 +2276,23 @@ const SkyArt = (() => {
     if (props) g.add(props);
 
     // painted top (after decor so ponds/pools are known for grass placement)
-    const paint = paintTop(isle, st, R, Rm, info, rng, low ? 256 : (isle.r >= 19 ? 512 : 256));
+    const paint = paintTop(isle, st, R, Rm, info, rng, low ? 256 : (isle.id === 'isle_dawn' && !isTouch ? 1024 : isle.r >= 15 ? 512 : 256));
     const topOpts = { map: paint.map, roughness: st.rough || 0.92 };
     if (paint.emap) { topOpts.emissiveMap = paint.emap; topOpts.emissive = new THREE.Color(0xffffff); topOpts.emissiveIntensity = 1.6; }
-    const top = new THREE.Mesh(topGeometry(isle, R, Rm), litMat(topOpts));
+    const topMat = litMat(topOpts);
+    // crisp close-up grain: a world-scale tiling noise multiplies the painted canvas
+    const detailScale = { value: 2 * Rm / 3.2 };
+    topMat.onBeforeCompile = sh => {
+      sh.uniforms.uDetail = { value: TEX.noise };
+      sh.uniforms.uDetailScale = detailScale;
+      sh.fragmentShader = 'uniform sampler2D uDetail;\nuniform float uDetailScale;\n' + sh.fragmentShader.replace('#include <map_fragment>',
+        `#include <map_fragment>
+        float dt1 = texture2D(uDetail, vMapUv * uDetailScale).r;
+        float dt2 = texture2D(uDetail, vMapUv * uDetailScale * 0.27 + 0.31).r;
+        diffuseColor.rgb *= 0.8 + dt1 * 0.28 + dt2 * 0.12;`);
+    };
+    topMat.customProgramCacheKey = () => 'skyart-top';
+    const top = new THREE.Mesh(topGeometry(isle, R, Rm), topMat);
     top.receiveShadow = true;
     top.matrixAutoUpdate = false; top.updateMatrix();
     g.add(top);
@@ -2246,7 +2306,7 @@ const SkyArt = (() => {
   }
 
   function updateIslandsLod(cp) {
-    const propD = low ? 150 : 210, grassD = low ? 70 : 110;
+    const propD = low ? 140 : 190, grassD = low ? 60 : 95;
     for (let i = 0; i < islands.length; i++) {
       const it = islands[i];
       if (!it.group.visible) continue;
@@ -2380,6 +2440,9 @@ const SkyArt = (() => {
     createRenderer, init, resize, frame, matOf,
     buildIsland, buildBridge, buildPad,
     TEX, fogBase, state,
+    // prop kit for sibling modules: const B = new SkyArt.Batch(); SkyArt.K.oak(B, rng, x, z, 1, 0x5cb34c);
+    // group.add(B.mesh()) — one merged, swaying, glow-capable draw call (shares propMat)
+    Batch, K, geo, get propMat() { return propMat; },
     get hemi() { return hemi; }, get sun() { return sun; }, get dome() { return dome; },
     get composer() { return composer; },
   };
