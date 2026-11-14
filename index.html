@@ -1102,30 +1102,123 @@
         <button class="zone-fs-btn" title="遊戲畫面最大化">⛶</button>
       </div>
 
-      <!-- Start screen -->
+      <!-- Start screen (cover): CSS/SVG illustrated scene, no image files -->
       <div id="sky-start">
-        <div class="aw-start-title">SKY CITADEL</div>
-        <p class="aw-start-sub">
-          傳說中漂浮在雲海之上的天空之城！<br>
-          在 16 座浮空島之間跑酷探索，完成英語解謎任務，打倒暴風魔王吧！
-        </p>
-        <div class="aw-isle-art">
-          <div class="aw-isle small i1"><span class="deco">🌲</span><div class="top"></div><div class="rock"></div></div>
-          <div class="aw-isle i2"><span class="deco">🏰</span><div class="top"></div><div class="rock"></div></div>
-          <div class="aw-isle small i3"><span class="deco">💎</span><div class="top"></div><div class="rock"></div></div>
+        <div class="aw-sun" aria-hidden="true"></div>
+        <div class="aw-cloud c1" aria-hidden="true"></div>
+        <div class="aw-cloud c2" aria-hidden="true"></div>
+        <div class="aw-cloud c3" aria-hidden="true"></div>
+        <div class="aw-start-grid">
+          <div class="aw-start-copy">
+            <h1 class="aw-logo" data-text="天空之城"><span>天空之城</span></h1>
+            <div class="aw-logo-sub"><span>SKY CITADEL</span></div>
+            <p class="aw-start-sub">在雲海上的浮空島跑酷、收集、孵寵物，用英語打倒暴風魔王！</p>
+            <ul class="aw-promise" aria-label="遊戲特色">
+              <li><b>⭐</b>星星硬幣</li>
+              <li><b>🥚</b>孵化寵物</li>
+              <li><b>🏁</b>障礙跑酷</li>
+              <li><b>🦘</b>二段跳</li>
+              <li><b>💨</b>衝刺</li>
+            </ul>
+            <div class="aw-play-row">
+              <button class="aw-start-btn" id="sky-start-btn">⚔️ 開始冒險</button>
+              <div class="aw-resume" id="sky-start-resume"></div>
+            </div>
+          </div>
+          <div class="aw-start-art" aria-hidden="true">
+            <svg viewBox="0 0 440 380" class="aw-art" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <linearGradient id="awGrass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a6f27a"/><stop offset="1" stop-color="#3fbf4f"/></linearGradient>
+                <linearGradient id="awRock" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d9a877"/><stop offset="1" stop-color="#8a5a3e"/></linearGradient>
+                <linearGradient id="awRockD" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b98458"/><stop offset="1" stop-color="#6e4630"/></linearGradient>
+                <linearGradient id="awCoin" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff39a"/><stop offset="1" stop-color="#ffb21c"/></linearGradient>
+                <linearGradient id="awEgg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fffdf2"/><stop offset="1" stop-color="#ffe0f1"/></linearGradient>
+                <linearGradient id="awCrystal" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#c8fbff"/><stop offset="1" stop-color="#2ec4ff"/></linearGradient>
+                <radialGradient id="awGlow"><stop offset="0" stop-color="#fff" stop-opacity=".9"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+              </defs>
+              <!-- rope bridge main -> right -->
+              <g fill="none" stroke-linecap="round">
+                <path d="M330 232 Q362 252 392 218" stroke="#14224f" stroke-width="9"/>
+                <path d="M330 232 Q362 252 392 218" stroke="#e6b66a" stroke-width="5"/>
+              </g>
+              <!-- far-left island with crystal -->
+              <g class="aw-bob b2">
+                <path d="M30 112 Q30 98 70 98 Q110 98 110 112 Q104 126 70 128 Q36 126 30 112Z" fill="url(#awGrass)" stroke="#14224f" stroke-width="4"/>
+                <path d="M38 122 L50 160 L64 182 L72 150 L86 172 L102 124 Q70 134 38 122Z" fill="url(#awRock)" stroke="#14224f" stroke-width="4" stroke-linejoin="round"/>
+                <ellipse cx="70" cy="70" rx="34" ry="30" fill="url(#awGlow)" class="aw-pulse"/>
+                <path d="M70 52 L82 76 L70 100 L58 76Z" fill="url(#awCrystal)" stroke="#14224f" stroke-width="4" stroke-linejoin="round"/>
+                <path d="M70 52 L76 76 L70 100" fill="none" stroke="#fff" stroke-opacity=".7" stroke-width="3"/>
+              </g>
+              <!-- far-right island with flag tower -->
+              <g class="aw-bob b3">
+                <path d="M360 214 Q360 198 398 198 Q436 198 436 214 Q430 228 398 230 Q366 228 360 214Z" fill="url(#awGrass)" stroke="#14224f" stroke-width="4"/>
+                <path d="M368 224 L380 258 L394 280 L402 250 L416 266 L430 226 Q398 236 368 224Z" fill="url(#awRock)" stroke="#14224f" stroke-width="4" stroke-linejoin="round"/>
+                <rect x="386" y="160" width="24" height="42" rx="4" fill="#ff8fb3" stroke="#14224f" stroke-width="4"/>
+                <path d="M382 162 L398 144 L414 162Z" fill="#ffcf3f" stroke="#14224f" stroke-width="4" stroke-linejoin="round"/>
+                <path d="M398 144 L398 124" stroke="#14224f" stroke-width="4" stroke-linecap="round"/>
+                <path class="aw-flag" d="M398 124 L418 130 L398 138Z" fill="#ff4d5e" stroke="#14224f" stroke-width="3" stroke-linejoin="round"/>
+              </g>
+              <!-- main island -->
+              <g class="aw-bob b1">
+                <path d="M92 236 Q92 204 218 204 Q344 204 344 236 Q332 262 218 266 Q104 262 92 236Z" fill="url(#awGrass)" stroke="#14224f" stroke-width="5"/>
+                <path d="M118 238 Q218 250 322 236" stroke="#fff" stroke-opacity=".35" stroke-width="5" fill="none" stroke-linecap="round"/>
+                <path d="M104 252 L128 300 L150 330 L168 288 L190 346 L218 300 L242 356 L264 296 L288 330 L306 292 L330 252 Q218 276 104 252Z" fill="url(#awRock)" stroke="#14224f" stroke-width="5" stroke-linejoin="round"/>
+                <path d="M190 346 L218 300 L242 356 L264 296 L250 280 L230 282 L214 300Z" fill="url(#awRockD)" opacity=".55"/>
+                <!-- tree -->
+                <rect x="298" y="176" width="10" height="34" rx="4" fill="#9a6a3c" stroke="#14224f" stroke-width="4"/>
+                <circle cx="303" cy="166" r="24" fill="#4fd36a" stroke="#14224f" stroke-width="4"/>
+                <circle cx="294" cy="158" r="7" fill="#b9ffa4" opacity=".7"/>
+                <!-- sign -->
+                <rect x="126" y="186" width="6" height="26" rx="2" fill="#9a6a3c" stroke="#14224f" stroke-width="3"/>
+                <rect x="112" y="170" width="34" height="20" rx="5" fill="#ffe08a" stroke="#14224f" stroke-width="4"/>
+                <path d="M120 180 H138" stroke="#14224f" stroke-width="3" stroke-linecap="round"/>
+                <!-- pet egg -->
+                <g class="aw-egg">
+                  <ellipse cx="262" cy="208" rx="22" ry="5" fill="#14224f" opacity=".25"/>
+                  <path d="M262 164 C282 164 290 188 290 198 C290 210 278 214 262 214 C246 214 234 210 234 198 C234 188 242 164 262 164Z" fill="url(#awEgg)" stroke="#14224f" stroke-width="4"/>
+                  <circle cx="254" cy="184" r="5" fill="#ff8fb3"/><circle cx="272" cy="194" r="6" fill="#7fd6ff"/><circle cx="260" cy="203" r="4" fill="#ffd45c"/>
+                  <path d="M248 176 Q250 170 256 168" stroke="#fff" stroke-width="4" stroke-linecap="round" fill="none" opacity=".9"/>
+                </g>
+                <!-- hero -->
+                <g class="aw-hero" transform="translate(186 152)">
+                  <ellipse cx="0" cy="62" rx="26" ry="6" fill="#14224f" opacity=".22"/>
+                  <rect x="-15" y="38" width="13" height="24" rx="6" fill="#38b6ff" stroke="#14224f" stroke-width="4"/>
+                  <rect x="2" y="38" width="13" height="24" rx="6" fill="#38b6ff" stroke="#14224f" stroke-width="4"/>
+                  <rect x="-33" y="12" width="13" height="28" rx="6.5" fill="#ffd9ae" stroke="#14224f" stroke-width="4"/>
+                  <rect x="-21" y="8" width="42" height="36" rx="11" fill="#ff5a5f" stroke="#14224f" stroke-width="4"/>
+                  <rect x="-21" y="22" width="42" height="8" fill="#fff" opacity=".85"/>
+                  <g class="aw-wave"><rect x="20" y="12" width="13" height="28" rx="6.5" fill="#ffd9ae" stroke="#14224f" stroke-width="4"/></g>
+                  <rect x="-21" y="-28" width="42" height="38" rx="14" fill="#ffd9ae" stroke="#14224f" stroke-width="4"/>
+                  <path d="M-24 -10 Q-26 -40 0 -40 Q26 -40 24 -10 Q10 -24 -24 -10Z" fill="#6b3fd4" stroke="#14224f" stroke-width="4" stroke-linejoin="round"/>
+                  <path d="M-8 -36 Q0 -48 8 -36Z" fill="#ffcf3f" stroke="#14224f" stroke-width="3"/>
+                  <circle cx="-8" cy="-6" r="3.6" fill="#14224f"/><circle cx="8" cy="-6" r="3.6" fill="#14224f"/>
+                  <path d="M-6 2 Q0 8 6 2" stroke="#14224f" stroke-width="3" fill="none" stroke-linecap="round"/>
+                  <circle cx="-14" cy="1" r="3.5" fill="#ff8fa3" opacity=".7"/><circle cx="14" cy="1" r="3.5" fill="#ff8fa3" opacity=".7"/>
+                </g>
+              </g>
+              <!-- coins -->
+              <g class="aw-coin k1"><circle cx="140" cy="130" r="13" fill="url(#awCoin)" stroke="#14224f" stroke-width="4"/><path d="M140 122 L142.5 128 L149 128.6 L144 132.8 L145.6 139 L140 135.6 L134.4 139 L136 132.8 L131 128.6 L137.5 128Z" fill="#fff" opacity=".9"/></g>
+              <g class="aw-coin k2"><circle cx="300" cy="110" r="13" fill="url(#awCoin)" stroke="#14224f" stroke-width="4"/><path d="M300 102 L302.5 108 L309 108.6 L304 112.8 L305.6 119 L300 115.6 L294.4 119 L296 112.8 L291 108.6 L297.5 108Z" fill="#fff" opacity=".9"/></g>
+              <g class="aw-coin k3"><circle cx="200" cy="82" r="13" fill="url(#awCoin)" stroke="#14224f" stroke-width="4"/><path d="M200 74 L202.5 80 L209 80.6 L204 84.8 L205.6 91 L200 87.6 L194.4 91 L196 84.8 L191 80.6 L197.5 80Z" fill="#fff" opacity=".9"/></g>
+              <g class="aw-coin k4"><circle cx="352" cy="170" r="11" fill="url(#awCoin)" stroke="#14224f" stroke-width="4"/></g>
+              <!-- sparkles -->
+              <path class="aw-twinkle t1" d="M236 108 l4 10 l10 4 l-10 4 l-4 10 l-4 -10 l-10 -4 l10 -4z" fill="#fff"/>
+              <path class="aw-twinkle t2" d="M110 190 l3 7 l7 3 l-7 3 l-3 7 l-3 -7 l-7 -3 l7 -3z" fill="#fff"/>
+              <path class="aw-twinkle t3" d="M336 70 l3 7 l7 3 l-7 3 l-3 7 l-3 -7 l-7 -3 l7 -3z" fill="#fff"/>
+            </svg>
+          </div>
         </div>
         <div class="aw-start-stats" id="sky-start-stats"></div>
         <div class="aw-controls-guide" id="sky-controls-guide"></div>
         <label class="aw-lowpower">
           <input type="checkbox" id="sky-lowpower"> 🔋 省電模式（畫質降低、更順暢，舊裝置建議開啟）
         </label>
-        <button class="aw-start-btn" id="sky-start-btn">⚔️ 開始冒險</button>
       </div>
 
       <!-- 3D world -->
       <div class="aw-canvas-wrap" id="sky-canvas-wrap" style="display:none">
         <div class="aw-hud">
-          <div class="aw-hearts" id="sky-hearts"></div>
+          <div class="aw-hearts" id="sky-hearts" aria-label="生命"></div>
           <div class="aw-location" id="sky-location">🏝️ 晨曦之島</div>
           <div class="aw-badge-title" id="sky-title-badge"></div>
           <div class="aw-buffs" id="sky-buffs"></div>
@@ -1146,8 +1239,8 @@
         <div class="aw-joy-base" id="sky-joy"><div class="aw-joy-knob" id="sky-joy-knob"></div></div>
         <div class="aw-item-tray" id="sky-item-tray"></div>
         <div class="aw-touch-btns">
-          <button class="aw-touch-btn" id="sky-btn-jump" title="跳躍">🦘</button>
-          <button class="aw-touch-btn" id="sky-btn-act" title="互動">⚡</button>
+          <button class="aw-touch-btn is-act" id="sky-btn-act" title="互動">⚡</button>
+          <button class="aw-touch-btn is-jump" id="sky-btn-jump" title="跳躍">🦘</button>
         </div>
         <div class="aw-flash" id="sky-flash"></div>
       </div>

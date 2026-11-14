@@ -119,6 +119,7 @@ const SkyGame = (() => {
     let bonus = 0;
     while (gemCarry >= 1) { gemCarry -= 1; bonus++; }
     GameEngine.addGems(n + bonus);
+    uiPop('gem', n + bonus);
   }
 
   // reused temp vectors (zero allocation inside animate)
@@ -236,6 +237,7 @@ const SkyGame = (() => {
     };
     if (!els.zone) return;
 
+    uiInit();
     loadSave();
     renderStartScreen();
     if (els.minimap) minimapCtx = els.minimap.getContext('2d');
@@ -383,24 +385,219 @@ const SkyGame = (() => {
     }
   }
 
-  function renderStartScreen() {
-    const clearedCount = totalCleared();
-    els.startStats.innerHTML = `
-      <div class="aw-stat"><span>🏝️</span><b>${SKY_ISLANDS.length}</b><small>座浮空島嶼</small></div>
-      <div class="aw-stat"><span>📜</span><b>${clearedCount} / ${visibleQuestTotal()}</b><small>完成任務</small></div>
-      <div class="aw-stat"><span>🌉</span><b>${SKY_BRIDGES.length}</b><small>空中橋樑</small></div>
-    `;
-    els.guide.innerHTML = isTouch
-      ? `📱 <b>手機操作</b><br>
-         🕹️ 左半邊拖曳＝虛擬搖桿移動（推到底衝刺）<br>
-         👆 右半邊拖曳＝轉動視角 ・ 雙指縮放<br>
-         🦘 跳躍鈕 ・ ⚡ 互動鈕`
-      : `⌨️ <b>電腦操作</b><br>
-         <span class="kbd">W</span><span class="kbd">A</span><span class="kbd">S</span><span class="kbd">D</span> 移動 ・
-         <span class="kbd">Space</span> 跳躍 ・ <span class="kbd">Shift</span> 衝刺<br>
-         🖱️ 拖曳畫面轉視角 ・ 滾輪縮放 ・ <span class="kbd">E</span> 互動`;
-    els.startBtn.textContent = clearedCount > 0 ? '⚔️ 繼續冒險' : '⚔️ 開始冒險';
+  // ===================== SkyUI: presentation helpers (UI workstream) =====================
+  // Everything below is DOM/CSS presentation only (css/sky.css, prefix aw-). It never
+  // changes what is asked, how answers are judged or what is paid. Other modules reach
+  // it through `ctx.ui`:
+  //   ctx.ui.pop(kind, amount, {text})   floating "+12 XP" chip that flies to the top bar
+  //                                       (kind: 'xp' | 'gem' | 'coin' | 'text')
+  //   ctx.ui.banner(title, small, icon)  big ribbon (island arrival / unlock); queued while a quiz is open
+  //   ctx.ui.toast(msg)                  the in-world toast (kind picked from the leading emoji)
+  //   ctx.ui.addStartStat(fn)            fn() -> html chip(s) appended to the cover's stats row
+  //   ctx.ui.addControl({id, icon, kbd:['Q'], touch:'💨 衝刺鈕', text:'衝刺', isNew:true})
+  //                                       adds/overrides a row of the cover's controls guide
+  //   ctx.ui.refreshStart()              re-render the cover (after a save change)
+  // HUD chips: append `.aw-chip` elements to `.aw-hud` (top-left column) for extra HUD pieces.
+  const uiState = {
+    streak: 0, hearts: -1, heartsMax: 0, bossW: 100, live: 0,
+    lastBanner: 0, queue: [], arriveT: 0,
+    startStats: [], controls: {},
+  };
+  function uiReduced() {
+    return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   }
+  function uiInit() {
+    Object.assign(ctx, {
+      ui: {
+        pop: uiPop, banner: uiBanner, toast: msg => showWorldToast(msg),
+        addStartStat: fn => { uiState.startStats.push(fn); renderStartScreen(); },
+        addControl: c => { if (c && c.id) { uiState.controls[c.id] = c; renderStartScreen(); } },
+        refreshStart: () => renderStartScreen(),
+      },
+    });
+    ctx.onFx((name, d) => {
+      if (name === 'arrive' && d && d.isle) uiBanner(d.isle.name, '抵達', d.isle.underground ? '🌋' : '🏝️');
+    });
+  }
+
+  // ---- floating reward pop-ups ----
+  function uiPop(kind, amount, opts) {
+    if (!els.wrap || !(amount > 0 || (opts && opts.text))) return;
+    const el = document.createElement('div');
+    el.className = 'aw-pop ' + kind;
+    el.textContent = (opts && opts.text) ||
+      (kind === 'xp' ? `+${amount} XP` : kind === 'gem' ? `+${amount} 💎` : kind === 'coin' ? `+${amount} ⭐` : String(amount));
+    document.body.appendChild(el);
+    const wr = els.wrap.getBoundingClientRect();
+    let ox = wr.left + wr.width / 2;
+    let oy = wr.top + wr.height * 0.4;
+    const card = quizOpen && quiz && quiz.root.querySelector('.aw-quiz-card');
+    if (card) { const cr = card.getBoundingClientRect(); ox = cr.left + cr.width / 2; oy = cr.top + 30; }
+    const idx = uiState.live++;
+    oy -= Math.min(idx, 4) * 38;
+    ox += (idx % 2 ? 1 : -1) * Math.min(idx, 3) * 14;
+    const targetEl = kind === 'xp' ? document.getElementById('xp-text') : (kind === 'gem' ? document.getElementById('hud-gems') : null);
+    let tr = targetEl ? targetEl.getBoundingClientRect() : null;
+    if (tr && (!tr.width || tr.bottom < 0)) tr = null;
+    const tx = tr ? tr.left + tr.width / 2 : ox;
+    const ty = tr ? Math.max(14, tr.top + tr.height / 2) : oy - 90;
+    const at = (x, y, sc) => `translate(${Math.round(x)}px,${Math.round(y)}px) translate(-50%,-50%) scale(${sc})`;
+    const done = () => {
+      el.remove();
+      uiState.live = Math.max(0, uiState.live - 1);
+      if (tr && targetEl) {
+        const b = targetEl.closest('.hud-coins') || targetEl.closest('.xp-bar-container') || targetEl;
+        b.classList.remove('aw-bump');
+        void b.offsetWidth;
+        b.classList.add('aw-bump');
+      }
+    };
+    if (!el.animate) { setTimeout(done, 900); return; }
+    const frames = uiReduced()
+      ? [{ transform: at(ox, oy, 1), opacity: 0 }, { transform: at(ox, oy, 1), opacity: 1, offset: 0.2 }, { transform: at(ox, oy, 1), opacity: 1, offset: 0.8 }, { transform: at(ox, oy, 1), opacity: 0 }]
+      : [
+        { transform: at(ox, oy + 24, 0.3), opacity: 0 },
+        { transform: at(ox, oy - 8, 1.3), opacity: 1, offset: 0.16 },
+        { transform: at(ox, oy - 22, 1), opacity: 1, offset: 0.45 },
+        { transform: at(tx, ty, 0.45), opacity: 0.95, offset: 0.94 },
+        { transform: at(tx, ty, 0.3), opacity: 0 },
+      ];
+    const a = el.animate(frames, { duration: uiReduced() ? 1100 : 1350 + idx * 60, easing: 'cubic-bezier(.35,.05,.3,1)', fill: 'forwards' });
+    a.onfinish = done;
+    a.oncancel = done;
+  }
+
+  // ---- banner (arrival / unlock) ----
+  function uiBanner(title, small, icon) {
+    if (!els.wrap) return;
+    if (quizOpen) { uiState.queue.push([title, small, icon]); return; }
+    els.wrap.querySelectorAll('.aw-banner').forEach(b => b.remove());
+    const el = document.createElement('div');
+    el.className = 'aw-banner';
+    el.innerHTML = `<div class="aw-banner-card"><div class="aw-banner-small"></div><div class="aw-banner-title aw-outline-text"></div></div>`;
+    el.querySelector('.aw-banner-small').textContent = small || '';
+    el.querySelector('.aw-banner-title').textContent = `${icon || ''} ${title}`.trim();
+    els.wrap.appendChild(el);
+    uiState.lastBanner = Date.now();
+    setTimeout(() => el.remove(), 2700);
+  }
+  function uiFlushBanners() {
+    const q = uiState.queue.splice(0);
+    q.forEach((a, i) => setTimeout(() => uiBanner(a[0], a[1], a[2]), 350 + i * 2700));
+  }
+
+  // ---- little star burst on a button ----
+  function uiBurst(el) {
+    if (uiReduced() || !el) return;
+    for (let i = 0; i < 8; i++) {
+      const sp = document.createElement('i');
+      sp.className = 'aw-spark';
+      const ang = (i / 8) * Math.PI * 2 + Math.random() * 0.4;
+      const d = 34 + Math.random() * 26;
+      sp.style.setProperty('--dx', Math.cos(ang) * d + 'px');
+      sp.style.setProperty('--dy', Math.sin(ang) * d + 'px');
+      sp.style.background = ['#ffe45c', '#fff', '#7dff9a', '#8bd8ff'][i % 4];
+      el.appendChild(sp);
+      setTimeout(() => sp.remove(), 800);
+    }
+  }
+  function uiStepAnim() {
+    if (!quiz || !quiz.card || uiReduced()) return;
+    quiz.card.classList.remove('step');
+    void quiz.card.offsetWidth;
+    quiz.card.classList.add('step');
+  }
+  function uiStreakUpdate(bump) {
+    if (!quiz || !quiz.streak) return;
+    const n = uiState.streak;
+    quiz.streak.classList.toggle('on', n >= 2);
+    quiz.streak.textContent = `🔥 ×${n}`;
+    if (bump && n >= 2) {
+      quiz.streak.classList.remove('bump');
+      void quiz.streak.offsetWidth;
+      quiz.streak.classList.add('bump');
+      if (n === 3 || n === 5 || n === 8 || n === 12) uiPop('text', 0, { text: `🔥 連續答對 ${n} 題！` });
+    }
+  }
+  function uiCountUp(root) {
+    root.querySelectorAll('[data-count]').forEach((b, i) => {
+      const target = +b.dataset.count || 0;
+      if (uiReduced()) { b.textContent = target; return; }
+      const t0 = performance.now() + 500 + i * 200;
+      const tick = now => {
+        if (!b.isConnected) return;
+        const k = Math.min(1, Math.max(0, (now - t0) / 700));
+        b.textContent = Math.round(target * (1 - Math.pow(1 - k, 3)));
+        if (k < 1) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+  }
+
+  // ---- cover: explorer's passport + controls guide ----
+  const SKY_RANKS = [
+    [0, '🌱 見習旅人'], [0.08, '🧭 探險新手'], [0.25, '🎒 空島冒險家'],
+    [0.5, '⚔️ 雲海戰士'], [0.75, '👑 天空勇者'], [1, '🌟 天空之城傳說'],
+  ];
+  function guideHtml() {
+    const C = uiState.controls;
+    const kbd = (...k) => k.map(x => `<span class="kbd">${x}</span>`).join('');
+    const row = (ico, html, isNew) => `<div class="aw-guide-row${isNew ? ' new' : ''}"><span class="aw-guide-ico">${ico}</span><span>${html}</span></div>`;
+    const extraK = Object.values(C).filter(c => c.kbd).map(c => row(c.icon || '✨', `${kbd(...c.kbd)} ${c.text || ''}`, c.isNew));
+    const extraT = Object.values(C).filter(c => c.touch).map(c => row(c.icon || '✨', c.touch, c.isNew));
+    const keyboard = [
+      row('🏃', `${kbd('W', 'A', 'S', 'D')} 或方向鍵 移動`),
+      row('🦘', `${kbd('Space')} 跳躍`),
+      row('🦘', `空中再按一次 ${kbd('Space')} ＝ 二段跳`, true),
+      ...extraK,
+      row('💨', `按住 ${kbd('Shift')} 奔跑`),
+      row('⚡', `${kbd('E')} 互動／攻擊怪物`),
+      row('🖱️', '拖曳畫面轉視角、滾輪縮放'),
+    ].join('');
+    const touch = [
+      row('🕹️', '左半邊拖曳＝搖桿（推到底奔跑）'),
+      row('👆', '右半邊拖曳＝轉視角・雙指縮放'),
+      row('🦘', '綠色鈕＝跳躍，空中再按一次＝二段跳', true),
+      row('⚡', '橘色鈕＝互動（也可直接點怪物）'),
+      ...extraT,
+    ].join('');
+    const first = isTouch ? ['📱 手機操作', touch] : ['⌨️ 電腦操作', keyboard];
+    const other = isTouch ? ['⌨️ 有鍵盤時', keyboard] : ['📱 手機／平板', touch];
+    return `<div class="aw-guide-h">${first[0]}</div><div class="aw-guide-grid">${first[1]}</div>
+      <details class="aw-guide-more"><summary>${other[0]}怎麼玩？</summary><div class="aw-guide-grid" style="margin-top:6px">${other[1]}</div></details>`;
+  }
+
+  function renderStartScreen() {
+    if (!els.startStats) return;
+    const cleared = totalCleared();
+    const total = visibleQuestTotal();
+    const frac = total ? cleared / total : 0;
+    const pct = Math.round(frac * 100);
+    let rank = SKY_RANKS[0][1];
+    for (const r of SKY_RANKS) if (frac >= r[0] && (r[0] < 1 || cleared >= total)) rank = r[1];
+    const bridges = Object.keys(save.bridgesBuilt || {}).filter(k => save.bridgesBuilt[k]).length;
+    const secrets = Object.keys(save.secretsFound || {}).length;
+    let extra = '';
+    for (const fn of uiState.startStats) { try { extra += fn() || ''; } catch (e) { console.error('[sky ui]', e); } }
+    els.startStats.innerHTML = `
+      <div class="aw-passport">
+        <div class="aw-ring" style="--p:${pct}"><b>${pct}%</b></div>
+        <div><div class="aw-rank">${rank}</div>
+          <div class="aw-passport-sub">任務 ${cleared} / ${total}</div></div>
+      </div>
+      <div class="aw-stat"><span>🌉</span><div><b>${bridges} / ${SKY_BRIDGES.length}</b><small>空中橋樑</small></div></div>
+      <div class="aw-stat"><span>🏝️</span><div><b>${SKY_ISLANDS.length}</b><small>座浮空島</small></div></div>
+      ${secrets ? `<div class="aw-stat"><span>🔮</span><div><b>${secrets}</b><small>秘密發現</small></div></div>` : ''}
+      ${extra}`;
+    els.guide.innerHTML = guideHtml();
+    els.startBtn.textContent = cleared > 0 ? '⚔️ 繼續冒險' : '⚔️ 開始冒險';
+    const resume = document.getElementById('sky-start-resume');
+    if (resume) {
+      const isle = save.lastIsland && isleById(save.lastIsland);
+      resume.textContent = isle ? `📍 上次到過：${isle.name}` : '';
+    }
+  }
+
 
   function startAdventure() {
     els.start.style.display = 'none';
@@ -2161,7 +2358,10 @@ const SkyGame = (() => {
       journalEl = document.createElement('div');
       journalEl.className = 'aw-journal';
       els.wrap.appendChild(journalEl);
+      journalEl.addEventListener('click', e => { if (e.target === journalEl) journalEl.style.display = 'none'; });
     }
+    const prevList = journalEl.querySelector('.aw-j-list');
+    const prevScroll = prevList ? prevList.scrollTop : -1;
     const diffLabel = { easy: '簡單', medium: '中等', hard: '困難', boss: '魔王' };
     const groups = new Map();
     for (const q of SKY_QUESTS) {
@@ -2178,7 +2378,14 @@ const SkyGame = (() => {
       const revealed = !isle.secret || SKY_PORTALS.some(p => p.secret && p.to === isleId && save.secretsFound[p.id])
         || SKY_SWITCHES.some(sw => sw.to === isleId && save.secretsFound[sw.id])
         || qs.some(q => isCleared(q));
-      rows += `<div class="aw-j-island">${revealed ? `🏝️ ${isle.name}` : '❓ ？？？（秘境）'}</div>`;
+      const shown = qs.filter(q => !(q.hidden && !revealed));
+      const done = shown.filter(q => isCleared(q)).length;
+      const full = revealed && shown.length > 0 && done === shown.length;
+      const here = revealed && isleId === currentIsland;
+      rows += `<div class="aw-j-island${here ? ' here' : ''}${full ? ' full' : ''}">
+          <span>${revealed ? `${full ? '🏅' : (isle.underground ? '🌋' : '🏝️')} ${isle.name}` : '❓ ？？？（秘境）'}</span>
+          ${revealed ? `<span class="aw-j-n">${here ? '📍 ' : ''}${done}/${shown.length}</span><span class="aw-bar"><i style="--p:${shown.length ? done / shown.length * 100 : 0}%"></i></span>` : ''}
+        </div>`;
       for (const q of qs) {
         if (q.hidden && !revealed) {
           rows += `
@@ -2200,21 +2407,34 @@ const SkyGame = (() => {
           <div class="aw-j-row${cleared ? ' done' : ''}">
             <span class="aw-j-icon">${icon}</span>
             <span class="aw-j-name">${q.name}${count}</span>
-            <span class="aw-j-diff">${diffLabel[q.diff]}</span>
+            <span class="aw-j-diff ${q.diff}">${diffLabel[q.diff]}</span>
             <span class="aw-j-reward">${tier.xp}XP+${tier.gems}💎</span>
             ${trackBtn}
           </div>`;
       }
     }
+    const tc = totalCleared(), tv = visibleQuestTotal();
     journalEl.innerHTML = `
       <div class="aw-j-card">
         <div class="aw-j-head">
-          <b>📜 任務日誌　${totalCleared()} / ${visibleQuestTotal()}</b>
-          <button class="aw-quiz-close" id="sky-j-close">✕</button>
+          <span class="aw-j-title">📜 任務日誌</span>
+          <span class="aw-j-total"><span class="aw-bar"><i style="--p:${tv ? tc / tv * 100 : 0}%"></i></span>${tc} / ${tv}</span>
+          <button class="aw-quiz-close" id="sky-j-close" title="關閉">✕</button>
         </div>
         <div class="aw-j-list">${rows}</div>
       </div>`;
     journalEl.style.display = '';
+    const list = journalEl.querySelector('.aw-j-list');
+    if (prevScroll >= 0) {
+      list.style.scrollBehavior = 'auto';
+      list.scrollTop = prevScroll;
+    } else {
+      const here = list.querySelector('.aw-j-island.here');
+      if (here) {
+        list.style.scrollBehavior = 'auto';
+        list.scrollTop = Math.max(0, here.getBoundingClientRect().top - list.getBoundingClientRect().top - 8);
+      }
+    }
     journalEl.querySelector('#sky-j-close').addEventListener('click', () => {
       journalEl.style.display = 'none';
     });
@@ -2231,16 +2451,17 @@ const SkyGame = (() => {
   // ---- confetti celebration ----
   function spawnConfetti(n = 36) {
     const colors = ['#ffd166', '#ff6b81', '#4ade80', '#7fd4ff', '#c77dff', '#fff'];
+    const shapes = ['', 'round', 'star', ''];
     for (let i = 0; i < n; i++) {
       const c = document.createElement('div');
-      c.className = 'aw-confetti';
-      c.style.left = 8 + Math.random() * 84 + '%';
+      c.className = 'aw-confetti ' + shapes[i % shapes.length];
+      c.style.left = 4 + Math.random() * 92 + '%';
       c.style.background = colors[i % colors.length];
       c.style.animationDelay = Math.random() * 0.5 + 's';
       c.style.animationDuration = 1.6 + Math.random() * 1.2 + 's';
-      c.style.transform = `rotate(${Math.random() * 360}deg)`;
+      c.style.setProperty('--sway', (Math.random() * 120 - 60) + 'px');
       els.wrap.appendChild(c);
-      setTimeout(() => c.remove(), 3200);
+      setTimeout(() => c.remove(), 3400);
     }
   }
 
@@ -2731,6 +2952,7 @@ const SkyGame = (() => {
   function killMob(mob) {
     mob.dead = true;
     GameEngine.addGems(2);
+    uiPop('gem', 2);
     SoundManager.playCorrect();
     showWorldToast(`⚔️ 擊敗 ${mob.def.name}！+2💎`);
     if (active && active.combat === mob) closeQuiz();
@@ -3077,11 +3299,13 @@ const SkyGame = (() => {
     quiz.tts.style.display = 'none';
     const slotsEl = quiz.prompt.querySelector('#sky-spell-slots');
     const renderSlots = () => {
-      slotsEl.textContent = word.split('').map((c, i) => (i < idx ? c : '＿')).join(' ');
+      slotsEl.innerHTML = word.split('').map((c, i) =>
+        `<span class="aw-tile${i < idx ? ' on' : ''}${i === idx - 1 ? ' pop' : ''}">${i < idx ? c : ''}</span>`).join('');
     };
     renderSlots();
     const letters = shuffled([...word.split(''), ...(extraLetters || [])]);
     quiz.opts.innerHTML = '';
+    uiStepAnim();
     const grid = document.createElement('div');
     grid.className = 'aw-letters';
     letters.forEach(ch => {
@@ -3095,6 +3319,7 @@ const SkyGame = (() => {
           idx++;
           b.disabled = true;
           b.classList.add('right');
+          uiBurst(b);
           SoundManager.playCorrect();
           renderSlots();
           if (idx >= word.length) {
@@ -3885,7 +4110,14 @@ const SkyGame = (() => {
     const m = bossActive.mob;
     const d = bossDef(bossActive.q);
     combatHud.bossLabel.textContent = `${d.icon} ${d.name} ${bossActive.phase === 2 ? '(狂暴!)' : ''}`;
-    combatHud.bossFill.style.width = Math.max(0, (m.hp / m.def.hp) * 100) + '%';
+    const bw = Math.max(0, (m.hp / m.def.hp) * 100);
+    combatHud.bossFill.style.width = bw + '%';
+    if (bw < uiState.bossW - 0.1) {
+      combatHud.bossBar.classList.remove('hit');
+      void combatHud.bossBar.offsetWidth;
+      combatHud.bossBar.classList.add('hit');
+    }
+    uiState.bossW = bw;
   }
 
   function onBossHit(mob) {
@@ -4536,17 +4768,56 @@ const SkyGame = (() => {
     emitFx('respawn');
   }
 
+  const HEART_PATH = 'M16 28C14 26.6 2.5 19.4 2.5 10.6 2.5 6 5.9 2.8 10 2.8c2.4 0 4.6 1.2 6 3.2 1.4-2 3.6-3.2 6-3.2 4.1 0 7.5 3.2 7.5 7.8 0 8.8-11.5 16-13.5 17.4z';
   function updateHudHearts() {
     if (!els.hearts) return;
-    els.hearts.textContent = '❤️'.repeat(Math.max(0, hearts)) + '🖤'.repeat(Math.max(0, maxHearts() - hearts));
+    const max = maxHearts();
+    const h = Math.max(0, Math.min(hearts, max));
+    const box = els.hearts;
+    if (uiState.heartsMax !== max || box.children.length !== max) {
+      uiState.heartsMax = max;
+      uiState.hearts = -1;
+      box.innerHTML = Array.from({ length: max }, () =>
+        `<span class="aw-heart empty"><svg viewBox="0 0 32 30" aria-hidden="true"><path class="hb" d="${HEART_PATH}"/><path class="hs" d="M8 8.4c1.4-2 4-2.6 5.6-1.4-2.4.2-4.2 1.6-4.8 3.6-.6-.6-1-1.4-.8-2.2z"/></svg></span>`).join('');
+    }
+    const prev = uiState.hearts;
+    for (let i = 0; i < max; i++) {
+      const el = box.children[i];
+      const full = i < h;
+      const was = prev >= 0 ? i < prev : full;
+      el.classList.toggle('full', full);
+      el.classList.toggle('empty', !full);
+      el.classList.remove('lose', 'gain');
+      if (prev >= 0 && full !== was) {
+        void el.offsetWidth;
+        el.classList.add(full ? 'gain' : 'lose');
+      }
+    }
+    box.classList.toggle('low', h === 1 && max > 1);
+    box.setAttribute('aria-label', `生命 ${h} / ${max}`);
+    uiState.hearts = h;
   }
 
   function showWorldToast(msg) {
     if (!els.toast) return;
+    // arrival is shown as a big banner (fx 'arrive'); only fall back to the toast if no banner came
+    if (/^🏝️ 抵達「/.test(msg) && !uiState.noBanner) {
+      clearTimeout(uiState.arriveT);
+      uiState.arriveT = setTimeout(() => {
+        if (Date.now() - uiState.lastBanner > 600) { uiState.noBanner = true; showWorldToast(msg); uiState.noBanner = false; }
+      }, 80);
+      return;
+    }
+    const kind = /^(💫|⚠️|🔒|😢|🏃|🦅 牠|⏳|哎呀|🔍)/.test(msg) ? 'warn'
+      : /^(✅|✨|🎆|🌉|💗|💖|🍀|🌌|📦|🌟|⚔️ 擊敗|🛡️)/.test(msg) ? 'good'
+      : /^(🏝️|🔮|🪂|🌨️|☄️|🏁|🔋)/.test(msg) ? 'gold' : '';
     els.toast.textContent = msg;
+    els.toast.dataset.kind = kind;
+    els.toast.classList.remove('on');
+    void els.toast.offsetWidth;
     els.toast.classList.add('on');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => els.toast.classList.remove('on'), 2200);
+    toastTimer = setTimeout(() => els.toast.classList.remove('on'), 1900 + Math.min(2200, msg.length * 50));
   }
 
   function updatePlayer(dt) {
@@ -5014,20 +5285,25 @@ const SkyGame = (() => {
       <div class="aw-quiz-card">
         <div class="aw-quiz-head">
           <span class="aw-quiz-name" id="sky-qz-name"></span>
+          <span class="aw-quiz-streak" id="sky-qz-streak"></span>
           <span class="aw-quiz-prog" id="sky-qz-prog"></span>
           <button class="aw-quiz-close" id="sky-qz-close" title="離開任務">✕</button>
         </div>
-        <div class="aw-quiz-npc" id="sky-qz-npc" style="display:none"></div>
-        <div class="aw-quiz-prompt" id="sky-qz-prompt"></div>
-        <div class="aw-quiz-zh" id="sky-qz-zh"></div>
-        <button class="aw-quiz-tts" id="sky-qz-tts" style="display:none">🔊 再聽一次</button>
-        <button class="aw-quiz-hint" id="sky-qz-hint" style="display:none">🔮 使用提示水晶</button>
-        <div class="aw-quiz-options" id="sky-qz-opts"></div>
-        <div class="aw-quiz-feedback" id="sky-qz-fb"></div>
+        <div class="aw-quiz-body">
+          <div class="aw-quiz-npc" id="sky-qz-npc" style="display:none"></div>
+          <div class="aw-quiz-prompt" id="sky-qz-prompt"></div>
+          <div class="aw-quiz-zh" id="sky-qz-zh"></div>
+          <button class="aw-quiz-tts" id="sky-qz-tts" style="display:none">🔊 再聽一次</button>
+          <button class="aw-quiz-hint" id="sky-qz-hint" style="display:none">🔮 使用提示水晶</button>
+          <div class="aw-quiz-options" id="sky-qz-opts"></div>
+          <div class="aw-quiz-feedback" id="sky-qz-fb"></div>
+        </div>
       </div>`;
     els.wrap.appendChild(div);
     quiz = {
       root: div,
+      card: div.querySelector('.aw-quiz-card'),
+      streak: div.querySelector('#sky-qz-streak'),
       name: div.querySelector('#sky-qz-name'),
       prog: div.querySelector('#sky-qz-prog'),
       close: div.querySelector('#sky-qz-close'),
@@ -5061,7 +5337,10 @@ const SkyGame = (() => {
     keys.f = keys.b = keys.l = keys.r = 0;
     joy.dx = joy.dy = 0;
     GameEngine.setDeferLevelUp(true);
+    quiz.root.classList.remove('win');
     quiz.root.classList.add('on');
+    uiState.streak = 0;
+    uiStreakUpdate(false);
     quiz.name.textContent = `📜 ${q.name}`;
     quiz.npc.style.display = 'none';
     quiz.tts.style.display = 'none';
@@ -5082,16 +5361,25 @@ const SkyGame = (() => {
     if (!quizOpen) return;
     quizOpen = false;
     active = null;
-    quiz.root.classList.remove('on');
+    quiz.root.classList.remove('on', 'win');
     TTSManager.stop();
     GameEngine.setDeferLevelUp(false);
     GameEngine.flushPendingLevelUps();
+    uiFlushBanners();
   }
 
   function renderProg() {
     if (!active) return;
     const n = active.q.n;
-    quiz.prog.textContent = '●'.repeat(active.step) + '○'.repeat(Math.max(0, n - active.step));
+    const st = Math.min(active.step, n);
+    const pct = n ? (st / n) * 100 : 0;
+    const bar = quiz.prog.querySelector('.aw-prog-bar');
+    if (bar) {
+      bar.style.setProperty('--p', pct + '%');
+      quiz.prog.querySelector('.aw-prog-n').textContent = `${st}/${n}`;
+    } else {
+      quiz.prog.innerHTML = `<span class="aw-prog"><span class="aw-prog-bar" style="--p:${pct}%"><span class="aw-prog-fill"></span></span><span class="aw-prog-n">${st}/${n}</span></span>`;
+    }
   }
 
   // reward one correct answer (call BEFORE step++ so wrongThis is per-question)
@@ -5099,7 +5387,11 @@ const SkyGame = (() => {
     const tier = SKY_REWARD[active.q.diff];
     const firstTry = !active.wrongThis && !active.replay;
     const base = firstTry ? tier.ans : Math.ceil(tier.ans / 2);
-    GameEngine.addXP(Math.round(base * (perks.xpMult || 1)));
+    const xpGain = Math.round(base * (perks.xpMult || 1));
+    GameEngine.addXP(xpGain);
+    uiPop('xp', xpGain);
+    uiState.streak = firstTry ? uiState.streak + 1 : 0;
+    uiStreakUpdate(true);
     if (firstTry) {
       // 收藏之王: chests pay double per-answer gems
       skyAddGems(perks.chestGem && active.q.type === 'chest' ? 2 : 1);
@@ -5119,6 +5411,8 @@ const SkyGame = (() => {
     }
     active.wrongThis = true;
     active.anyWrong = true;
+    uiState.streak = 0;
+    uiStreakUpdate(false);
   }
 
   // 🔮 hint-crystal consumable inside quizzes
@@ -5153,15 +5447,19 @@ const SkyGame = (() => {
 
   function renderOptions(options, correctIdx, onCorrect, labeler, onWrong) {
     quiz.opts.innerHTML = '';
+    uiStepAnim();
     options.forEach((opt, i) => {
       const b = document.createElement('button');
       b.className = 'aw-opt';
+      b.dataset.k = 'ABCD'[i] || String(i + 1);
+      b.dataset.c = String(i % 4);
       b.textContent = labeler ? labeler(opt) : opt;
       if (i === correctIdx) b.dataset.correct = '1';
       b.addEventListener('click', () => {
         if (!active) return;
         if (i === correctIdx) {
           b.classList.add('right');
+          uiBurst(b);
           SoundManager.playCorrect();
           quiz.opts.querySelectorAll('button').forEach(x => (x.disabled = true));
           onCorrect();
@@ -5169,6 +5467,10 @@ const SkyGame = (() => {
           b.classList.add('wrong');
           b.disabled = true;
           markWrong();
+          if (!quiz.fb.classList.contains('good')) {
+            quiz.fb.textContent = '再想想看，你可以的！';
+            quiz.fb.className = 'aw-quiz-feedback bad';
+          }
           SoundManager.playWrong();
           onWrong?.();
         }
@@ -5325,6 +5627,8 @@ const SkyGame = (() => {
       if (sel.i === cell.i) {
         sel.btn.classList.add('matched');
         b.classList.add('matched');
+        uiBurst(b);
+        uiBurst(sel.btn);
         SoundManager.playCorrect();
         const word = pairs[cell.i].word;
         TTSManager.speak(word, 'en-US');
@@ -5355,8 +5659,11 @@ const SkyGame = (() => {
     const first = !active.replay;
     save.completed[q.id] = (save.completed[q.id] || 0) + 1;
     persist();
+    let xpGain = 0;
     if (first) {
-      GameEngine.addXP(Math.round(tier.xp * (perks.xpMult || 1)));
+      xpGain = Math.round(tier.xp * (perks.xpMult || 1));
+      GameEngine.addXP(xpGain);
+      uiPop('xp', xpGain);
       skyAddGems(tier.gems);
       GameEngine.recordSkyQuest?.(q.id.startsWith('sqg_'), q.id.startsWith('sqh_'), q.id.startsWith('squ_'));
       if (q.type === 'bridge') {
@@ -5367,6 +5674,7 @@ const SkyGame = (() => {
           buildBridge(b);
           const target = isleById(b.to);
           showWorldToast(`🌉 通往${target ? target.name : '遠方'}的天空之橋出現了！`);
+          uiBanner(target ? `通往${target.name}的橋` : '天空之橋', '橋樑出現了', '🌉');
         }
       }
       if (q.type === 'boss') {
@@ -5381,9 +5689,20 @@ const SkyGame = (() => {
     renderStartScreen();
     quiz.npc.style.display = 'none';
     quiz.tts.style.display = 'none';
-    quiz.prompt.innerHTML = first
-      ? `🎉 任務完成！<div class="aw-clear-reward">+${tier.xp} XP　+${tier.gems} 💎</div>`
-      : '🎉 複習完成！繼續探索其他島嶼吧！';
+    // quest-complete celebration (presentation only; stars just mirror "no wrong answers")
+    const graded = ['chest', 'gate', 'npc', 'listen', 'pillars', 'bridge'].includes(q.type);
+    const flawless = !graded || !active.anyWrong;
+    quiz.root.classList.add('win');
+    quiz.prompt.innerHTML = `<div class="aw-win"><div class="aw-win-rays"></div>
+      <div class="aw-win-trophy">${q.type === 'boss' ? '👑' : '🏆'}</div>
+      <div class="aw-win-title aw-outline-text">${first ? '任務完成！' : '複習完成！'}</div>
+      <div class="aw-win-stars"><i>★</i><i>★</i><i${flawless ? '' : ' class="off"'}>★</i></div>
+      ${graded ? `<div class="aw-win-note">${flawless ? '全部一次答對，太厲害了！' : '再練一次，下次挑戰全對！'}</div>` : ''}
+      ${first
+        ? `<div class="aw-win-rewards"><span class="aw-reward xp">+<b data-count="${xpGain}">0</b> XP</span><span class="aw-reward gem">+<b data-count="${tier.gems}">0</b> 💎</span></div>`
+        : '<div class="aw-win-note">繼續探索其他島嶼吧！</div>'}
+    </div>`;
+    uiCountUp(quiz.prompt);
     const cleared = totalCleared();
     quiz.zh.textContent = !first ? ''
       : cleared >= 22 ? '🌌 銀河傳送門開啟了！去晨曦之島找 🌀 吧！'
@@ -5392,6 +5711,7 @@ const SkyGame = (() => {
     if (first && cleared === 22) {
       updateQuestMarkers();   // portal 🔒 → 🌀
       showWorldToast('🌌 銀河傳送門開啟了！晨曦之島出現了神秘的漩渦！');
+      uiBanner('銀河傳送門開啟！', '新區域解鎖', '🌌');
     }
     quiz.fb.textContent = '';
     quiz.opts.innerHTML = '';
