@@ -22,13 +22,11 @@ const SkyGame = (() => {
   let rafId = null;
   let threeReady = false;
   let playing = false;
-  let hemiLight, sunLight, skyDome;
-  let cloudMesh = null;
-  const cloudData = [];
-  // altitude atmosphere: base sky ↔ deep-space purple (galaxy region sits high)
-  // ↔ deep-red cave gloom (地心世界 sits far below, y ≈ -70..-95)
-  let fogBase = null, fogGalaxy = null, hemiBase = null, hemiGalaxy = null;
-  let fogUnderground = null, hemiUnderground = null;
+  let hemiLight, sunLight, skyDome;   // owned by js/sky-art.js (SkyArt.hemi/sun/dome)
+  // altitude atmosphere (computed in SkyArt): base sky ↔ deep-space purple (galaxy
+  // region sits high) ↔ deep-red cave gloom (地心世界 sits far below, y ≈ -70..-95).
+  // fogBase is SkyArt.fogBase — the daytime haze colour the storm-boss victory brightens.
+  let fogBase = null;
   let galaxyBlend = -1;
   let undergroundBlend = -1;
 
@@ -89,10 +87,6 @@ const SkyGame = (() => {
     bubble_shield: { icon: '🫧', name: '泡泡護罩', key: 'R' },
     cloud_mount: { icon: '☁️', name: '飛天雲', key: 'F' },
   };
-  // ambient decoration Points systems (☁️ Wave 4 polish)
-  let waterMistSystems = [];
-  let fireflySystems = [];
-
   function computePerks() {
     const id = GameEngine.getEquippedTitle().id;
     perks = {
@@ -654,7 +648,7 @@ const SkyGame = (() => {
   function resizeRenderer() {
     if (!threeReady) return;
     const { w, h } = canvasSize();
-    renderer.setSize(w, h);
+    SkyArt.resize(w, h);
     els.wrap.style.height = h + 'px';
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
@@ -663,11 +657,8 @@ const SkyGame = (() => {
   function initThree() {
     const { w, h } = canvasSize();
 
-    renderer = new THREE.WebGLRenderer({ antialias: !lowPower() });
-    renderer.setPixelRatio(lowPower() ? 1 : Math.min(window.devicePixelRatio, 2));
-    renderer.setSize(w, h);
-    renderer.shadowMap.enabled = !lowPower();
-    renderer.shadowMap.type = THREE.PCFShadowMap;
+    // renderer, post FX, sky, lights, clouds and particles: js/sky-art.js
+    renderer = SkyArt.createRenderer(w, h, lowPower());
     renderer.domElement.className = 'aw-canvas';
     els.wrap.insertBefore(renderer.domElement, els.wrap.firstChild);
     els.wrap.style.height = h + 'px';
@@ -676,20 +667,13 @@ const SkyGame = (() => {
     _v2 = new THREE.Vector3();
 
     scene = new THREE.Scene();
-    scene.fog = new THREE.Fog(SKY_CONFIG.fogColor, SKY_CONFIG.fogNear, SKY_CONFIG.fogFar);
-    fogBase = new THREE.Color(SKY_CONFIG.fogColor);
-    fogGalaxy = new THREE.Color(0x241a4e);
-    hemiBase = new THREE.Color(0xdfefff);
-    hemiGalaxy = new THREE.Color(0xb09ae8);
-    fogUnderground = new THREE.Color(0x2a0c06);
-    hemiUnderground = new THREE.Color(0x8a4a20);
-
     camera = new THREE.PerspectiveCamera(55, w / h, 0.1, 1800);
+    SkyArt.init(ctx);
+    hemiLight = SkyArt.hemi;
+    sunLight = SkyArt.sun;
+    skyDome = SkyArt.dome;
+    fogBase = SkyArt.fogBase;   // the storm-boss victory brightens the haze through this
 
-    buildSkyDome();
-    buildLights();
-    buildClouds();
-    initTextures();
     SKY_ISLANDS.forEach(buildIsland);
     SKY_BRIDGES.forEach(b => {
       if (b.quest && !isBridgeBuilt(b.quest)) return; // built by its quest
@@ -701,8 +685,6 @@ const SkyGame = (() => {
     buildPortals();
     buildSwitches();
     AMBIENT_MOBS.forEach(a => spawnMob(a.mob, a.island, a.dx, a.dz));
-    buildParticles();
-    buildEmberParticles();
     buildPlayer();
     setupPointerControls();
 
@@ -710,946 +692,18 @@ const SkyGame = (() => {
     threeReady = true;
   }
 
-  function buildSkyDome() {
-    const cv = document.createElement('canvas');
-    cv.width = 64; cv.height = 512;
-    const ctx = cv.getContext('2d');
-    const grad = ctx.createLinearGradient(0, 0, 0, 512);
-    grad.addColorStop(0, '#2a7fd4');
-    grad.addColorStop(0.42, '#69b8ef');
-    grad.addColorStop(0.62, '#aee3ff');
-    grad.addColorStop(0.78, '#e8f7ff');
-    grad.addColorStop(1, '#fdf0d5');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, 64, 512);
-    const tex = canvasTex(cv);
-    skyDome = new THREE.Mesh(
-      new THREE.SphereGeometry(820, 24, 16),
-      new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, fog: false })
-    );
-    scene.add(skyDome);
-
-    // sun glow sprite
-    const sc = document.createElement('canvas');
-    sc.width = sc.height = 128;
-    const sctx = sc.getContext('2d');
-    const g = sctx.createRadialGradient(64, 64, 6, 64, 64, 64);
-    g.addColorStop(0, 'rgba(255,250,220,1)');
-    g.addColorStop(0.25, 'rgba(255,236,160,0.9)');
-    g.addColorStop(1, 'rgba(255,236,160,0)');
-    sctx.fillStyle = g;
-    sctx.fillRect(0, 0, 128, 128);
-    const sun = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: canvasTex(sc), transparent: true, fog: false,
-    }));
-    sun.scale.set(220, 220, 1);
-    sun.position.set(420, 460, -520);
-    scene.add(sun);
-  }
-
-  function buildLights() {
-    hemiLight = new THREE.HemisphereLight(0xdfefff, 0x8a9db5, 0.75 * Math.PI);
-    scene.add(hemiLight);
-    sunLight = new THREE.DirectionalLight(0xfff3d6, 1.05 * Math.PI);
-    sunLight.position.set(40, 60, 20);
-    sunLight.castShadow = true;
-    sunLight.shadow.mapSize.set(1024, 1024);
-    sunLight.shadow.camera.left = -45; sunLight.shadow.camera.right = 45;
-    sunLight.shadow.camera.top = 45; sunLight.shadow.camera.bottom = -45;
-    sunLight.shadow.camera.near = 5; sunLight.shadow.camera.far = 220;
-    scene.add(sunLight);
-    scene.add(sunLight.target);
-  }
-
-  function buildClouds() {
-    const rng = mulberry32(SKY_CONFIG.worldSeed);
-    const COUNT = lowPower() ? 36 : 70;
-    const geo = new THREE.SphereGeometry(1, 7, 5);
-    const mat = new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.85 });
-    cloudMesh = new THREE.InstancedMesh(geo, mat, COUNT);
-    cloudMesh.castShadow = false;
-    const m = new THREE.Matrix4();
-    const q = new THREE.Quaternion();
-    const s = new THREE.Vector3();
-    const p = new THREE.Vector3();
-    for (let i = 0; i < COUNT; i++) {
-      const d = {
-        x: -420 + rng() * 840,
-        y: -20 + rng() * 140,
-        z: -420 + rng() * 840,
-        sx: 7 + rng() * 14,
-        sy: 2 + rng() * 3.2,
-        sz: 5 + rng() * 9,
-        speed: 1.2 + rng() * 2.4,
-      };
-      cloudData.push(d);
-      p.set(d.x, d.y, d.z); s.set(d.sx, d.sy, d.sz);
-      m.compose(p, q, s);
-      cloudMesh.setMatrixAt(i, m);
-    }
-    scene.add(cloudMesh);
-  }
-
-  // ---------- shared geometry / material caches ----------
+  // ---------- art pipeline: everything visual about the world lives in js/sky-art.js ----------
+  // (sky, lights, clouds, island terrain + props, bridges, pads, particles, post FX)
   const GEO = {};
-  const MAT = {};
   function geoBox() { return GEO.box || (GEO.box = new THREE.BoxGeometry(1, 1, 1)); }
-  function matOf(color, emissive, texKey) {
-    const key = color + '_' + (emissive || 0) + '_' + (texKey || '');
-    if (!MAT[key]) {
-      const opts = { color };
-      if (texKey && TEX[texKey]) opts.map = TEX[texKey];
-      MAT[key] = new THREE.MeshLambertMaterial(opts);
-      if (emissive) { MAT[key].emissive = new THREE.Color(emissive); }
-    }
-    return MAT[key];
-  }
-
-  // ---------- procedural surface textures (cosmetic-only, no new draw calls) ----------
-  // Neutral overlay approach: base = near-white with subtle speckles/streaks so the
-  // material's own `color` still shows through (Lambert multiplies map × color).
-  // One texture per PATTERN, not per color, so the MAT cache above still fully reuses.
-  const TEX = {};
-  function noiseTexture(key, base, spots, density, opts) {
-    if (TEX[key]) return TEX[key];
-    opts = opts || {};
-    const size = opts.size || 128;
-    const cv = document.createElement('canvas');
-    cv.width = cv.height = size;
-    const ctx = cv.getContext('2d');
-    ctx.fillStyle = base;
-    ctx.fillRect(0, 0, size, size);
-    for (let i = 0; i < density; i++) {
-      const x = Math.random() * size, y = Math.random() * size;
-      ctx.fillStyle = spots[i % spots.length];
-      ctx.globalAlpha = 0.15 + Math.random() * 0.35;
-      if (opts.angular) {
-        // sparse angular flecks (crystal facets)
-        const s = 1.5 + Math.random() * 3;
-        ctx.save();
-        ctx.translate(x, y);
-        ctx.rotate(Math.random() * Math.PI);
-        ctx.fillRect(-s / 2, -s / 4, s, s / 2);
-        ctx.restore();
-      } else {
-        const r = 1 + Math.random() * (opts.rmax || 2);
-        ctx.beginPath();
-        ctx.arc(x, y, r, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-    if (opts.streaks) {
-      const { color, count, len, random } = opts.streaks;
-      ctx.strokeStyle = color;
-      for (let i = 0; i < count; i++) {
-        const x = Math.random() * size, y = Math.random() * size;
-        const l = len * (0.5 + Math.random() * 0.9);
-        // default: mostly-vertical grain; `random: true` = short scattered cracks
-        const angle = random ? Math.random() * Math.PI * 2 : (Math.PI / 2 + (Math.random() - 0.5) * 0.3);
-        ctx.globalAlpha = 0.1 + Math.random() * 0.25;
-        ctx.lineWidth = 1 + Math.random() * 1.2;
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-        ctx.lineTo(x + Math.cos(angle) * l, y + Math.sin(angle) * l);
-        ctx.stroke();
-      }
-    }
-    ctx.globalAlpha = 1;
-    const tex = canvasTex(cv);
-    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-    tex.repeat.set(opts.repeat || 4, opts.repeat || 4);
-    TEX[key] = tex;
-    return tex;
-  }
-
-  // build every recipe once, eagerly, before any island/bridge mesh is made
-  function initTextures() {
-    noiseTexture('grassTex', '#ffffff', ['#c2ceac', '#a9ba92', '#e4ecd4'], 300, { rmax: 5 });
-    noiseTexture('rockTex', '#ffffff', ['#9c9c9c', '#7e7e7e', '#c6c6c6'], 220,
-      { streaks: { color: '#606060', count: 40, len: 10, random: true } });
-    noiseTexture('woodTex', '#ffffff', ['#c9beac', '#ddd2bd'], 50,
-      { streaks: { color: '#8a6f4e', count: 60, len: 110 } });
-    noiseTexture('sandTex', '#ffffff', ['#dcc9a4', '#ccb68c', '#f0e6cc'], 420, { rmax: 3 });
-    noiseTexture('snowTex', '#ffffff', ['#b9d6f6', '#dceafc', '#a2c6ec'], 200, { rmax: 3 });
-    noiseTexture('crystalTex', '#ffffff', ['#dcdcff', '#c8c8f0'], 46,
-      { streaks: { color: '#b0b0e8', count: 20, len: 14, random: true }, angular: true });
-  }
-
-  const ISLAND_STYLE = {
-    grass: { top: 0x62c95e, side: 0x7a5230, tex: 'grassTex' },
-    forest: { top: 0x3f8f4a, side: 0x6a4a2e, tex: 'grassTex' },
-    water: { top: 0x6fcf6f, side: 0x77572f, tex: 'grassTex' },
-    flower: { top: 0x7fd070, side: 0x7a5230, tex: 'grassTex' },
-    mushroom: { top: 0x9c7bb8, side: 0x5e4a3a, tex: 'grassTex' },
-    ruin: { top: 0xb8b09a, side: 0x8a8272, tex: 'rockTex' },
-    crystal: { top: 0x8fd8e8, side: 0x5a7a99, tex: 'crystalTex' },
-    cloud: { top: 0xf2f8ff, side: 0xd8e6f5, tex: null },
-    village: { top: 0x8fce62, side: 0x7a5230, tex: 'grassTex' },
-    ice: { top: 0xd8f0fa, side: 0x9ec3d8, tex: 'snowTex' },
-    lava: { top: 0x4a3a38, side: 0x35292a, tex: 'rockTex' },
-    pillars: { top: 0xc9c3ae, side: 0x99917c, tex: 'rockTex' },
-    bone: { top: 0xb8ad8f, side: 0x847a5e, tex: 'sandTex' },
-    storm: { top: 0x5a5a72, side: 0x3c3c50, tex: 'rockTex' },
-    // galaxy biomes
-    nebula: { top: 0x4a3a7a, side: 0x2a2050, tex: 'crystalTex' },
-    star: { top: 0x5a5aa0, side: 0x333366, tex: 'crystalTex' },
-    moon: { top: 0xb8b8c8, side: 0x8a8a9a, tex: 'rockTex' },
-    comet: { top: 0x3a4a6a, side: 0x24304a, tex: 'rockTex' },
-    aurora: { top: 0x2a5a4a, side: 0x1a3a35, tex: 'crystalTex' },
-    alien: { top: 0x6a4a8a, side: 0x44305a, tex: 'crystalTex' },
-    // hidden secret realms
-    cave: { top: 0x3a3a4a, side: 0x242430, tex: 'rockTex' },
-    lake: { top: 0x4aa8d8, side: 0x2a6a8a, tex: null },
-    mist: { top: 0x6a7a6a, side: 0x4a5a4a, tex: 'rockTex' },
-    temple: { top: 0x2a2438, side: 0x1a1626, tex: 'crystalTex' },
-    // mechanism-triggered hidden realms
-    garden: { top: 0xcfe8b8, side: 0x8a6a4a, tex: 'grassTex' },
-    vault: { top: 0x1a1414, side: 0x120e10, tex: 'rockTex' },
-    tree: { top: 0x8a6a3e, side: 0x5e4526, tex: 'woodTex' },
-    relic: { top: 0xe8dfc0, side: 0xb8ac86, tex: 'rockTex' },
-    // 地心世界 (underground region)
-    cavefloor: { top: 0x4a3f38, side: 0x2a221e, tex: 'rockTex' },
-    deepcrystal: { top: 0x3a2a52, side: 0x241a38, tex: 'crystalTex' },
-    magma: { top: 0x2a1410, side: 0x180c0a, tex: 'rockTex' },
-    bonecave: { top: 0x6a5a48, side: 0x3a2f26, tex: 'sandTex' },
-    coretemple: { top: 0x1a0f08, side: 0x100a06, tex: 'rockTex' },
-  };
+  function matOf(color, emissive, texKey) { return SkyArt.matOf(color, emissive, texKey); }
+  const TEX = SkyArt.TEX;
 
   function buildIsland(isle) {
-    const rng = mulberry32(SKY_CONFIG.worldSeed + isle.seed * 977);
-    const style = ISLAND_STYLE[isle.type] || ISLAND_STYLE.grass;
-    const g = new THREE.Group();
-    g.position.set(isle.pos[0], isle.pos[1], isle.pos[2]);
-
-    // top disc (walkable surface at local y = 0)
-    const discH = 2.2;
-    const disc = new THREE.Mesh(
-      new THREE.CylinderGeometry(isle.r, isle.r * 0.92, discH, 22),
-      matOf(style.top, 0, style.tex)
-    );
-    disc.position.y = -discH / 2;
-    disc.receiveShadow = true;
-    disc.matrixAutoUpdate = false;
-    disc.updateMatrix();
-    g.add(disc);
-
-    // inverted rock cone below — always rocky regardless of the top biome
-    const rockH = isle.r * (0.9 + rng() * 0.5);
-    const rock = new THREE.Mesh(
-      new THREE.ConeGeometry(isle.r * 0.9, rockH, 12),
-      matOf(style.side, 0, 'rockTex')
-    );
-    rock.rotation.x = Math.PI;
-    rock.position.y = -discH - rockH / 2 + 0.1;
-    rock.matrixAutoUpdate = false;
-    rock.updateMatrix();
-    g.add(rock);
-
-    // hanging rubble chunks
-    const nRubble = 2 + Math.floor(rng() * 3);
-    for (let i = 0; i < nRubble; i++) {
-      const a = rng() * Math.PI * 2;
-      const rr = isle.r * (0.55 + rng() * 0.5);
-      const chunk = new THREE.Mesh(new THREE.DodecahedronGeometry(0.8 + rng() * 1.6), matOf(style.side, 0, 'rockTex'));
-      chunk.position.set(Math.cos(a) * rr, -discH - rockH * (0.55 + rng() * 0.6), Math.sin(a) * rr);
-      chunk.matrixAutoUpdate = false;
-      chunk.updateMatrix();
-      g.add(chunk);
-    }
-
-    decorateIsland(g, isle, rng);
-
-    scene.add(g);
+    const g = SkyArt.buildIsland(isle);
     islandGroups[isle.id] = g;
     islandBob[isle.id] = 0;
-
     colliders.push({ kind: 'isle', x: isle.pos[0], z: isle.pos[2], r: isle.r - 0.4, top: isle.pos[1], isle: isle.id });
-  }
-
-  // scatter a mesh factory n times inside radius (keeps centre walkable-ish)
-  function scatter(g, isle, rng, n, minR, maxR, make) {
-    for (let i = 0; i < n; i++) {
-      const a = rng() * Math.PI * 2;
-      const rr = isle.r * (minR + rng() * (maxR - minR));
-      const obj = make(rng);
-      obj.position.x += Math.cos(a) * rr;
-      obj.position.z += Math.sin(a) * rr;
-      obj.traverse(o => { o.matrixAutoUpdate = false; o.updateMatrix(); });
-      obj.matrixAutoUpdate = false;
-      obj.updateMatrix();
-      g.add(obj);
-    }
-  }
-
-  function makeTree(rng, leafColor = 0x3e8a3e) {
-    const t = new THREE.Group();
-    const h = 1.8 + rng() * 1.4;
-    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.4, h, 6), matOf(0x7a5230));
-    trunk.position.y = h / 2;
-    trunk.castShadow = true;
-    t.add(trunk);
-    for (let i = 0; i < 3; i++) {
-      const leaf = new THREE.Mesh(new THREE.ConeGeometry(1.7 - i * 0.4, 1.9, 7), matOf(leafColor));
-      leaf.position.y = h + 0.6 + i * 1.0;
-      leaf.castShadow = true;
-      t.add(leaf);
-    }
-    return t;
-  }
-
-  function makeCrystal(rng, color = 0x7fe8ff) {
-    const c = new THREE.Mesh(
-      new THREE.OctahedronGeometry(0.7 + rng() * 1.3),
-      matOf(color, color)
-    );
-    c.position.y = 0.9;
-    c.scale.y = 1.7;
-    c.rotation.y = rng() * Math.PI;
-    c.castShadow = true;
-    return c;
-  }
-
-  function makeHouse(rng) {
-    const hgroup = new THREE.Group();
-    const bw = 2.6 + rng() * 1.2;
-    const body = new THREE.Mesh(geoBox(), matOf(0xe8d9b8));
-    body.scale.set(bw, 2.2, bw);
-    body.position.y = 1.1;
-    body.castShadow = true;
-    hgroup.add(body);
-    const roof = new THREE.Mesh(new THREE.ConeGeometry(bw * 0.85, 1.6, 4), matOf(0xb0523a));
-    roof.position.y = 2.2 + 0.8;
-    roof.rotation.y = Math.PI / 4;
-    roof.castShadow = true;
-    hgroup.add(roof);
-    return hgroup;
-  }
-
-  function decorateIsland(g, isle, rng) {
-    switch (isle.type) {
-      case 'grass':
-        scatter(g, isle, rng, 4, 0.4, 0.85, r => makeTree(r));
-        scatter(g, isle, rng, 8, 0.2, 0.9, r => {
-          const f = new THREE.Mesh(new THREE.SphereGeometry(0.22, 6, 5),
-            matOf([0xff6b81, 0xffd166, 0xc77dff, 0xffffff][Math.floor(r() * 4)]));
-          f.position.y = 0.25;
-          return f;
-        });
-        break;
-      case 'forest':
-        scatter(g, isle, rng, 11, 0.25, 0.9, r => makeTree(r, 0x2e6e38));
-        buildFireflies(g, isle);
-        break;
-      case 'water': {
-        const pond = new THREE.Mesh(new THREE.CylinderGeometry(isle.r * 0.4, isle.r * 0.4, 0.16, 18),
-          matOf(0x4aa8e8, 0x1a4a7a));
-        pond.position.set(isle.r * 0.2, 0.06, -isle.r * 0.1);
-        g.add(pond);
-        // waterfall pouring off the edge
-        const fall = new THREE.Mesh(geoBox(), matOf(0x6fc2f2, 0x2a6a9a));
-        fall.scale.set(3.2, 16, 0.8);
-        fall.position.set(isle.r * 0.2, -7.4, -isle.r * 0.62);
-        g.add(fall);
-        scatter(g, isle, rng, 4, 0.55, 0.9, () => {
-          const s = new THREE.Mesh(new THREE.DodecahedronGeometry(0.6), matOf(0xa8a49a));
-          s.position.y = 0.4;
-          return s;
-        });
-        buildWaterMist(g, isle, fall.position.x, fall.position.z);
-        break;
-      }
-      case 'flower':
-        scatter(g, isle, rng, 22, 0.1, 0.92, r => {
-          const f = new THREE.Group();
-          const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.6, 4), matOf(0x3e8a3e));
-          stem.position.y = 0.3;
-          f.add(stem);
-          const bloom = new THREE.Mesh(new THREE.SphereGeometry(0.3, 6, 5),
-            matOf([0xff6b81, 0xffd166, 0xc77dff, 0xff9f1c, 0xffffff][Math.floor(r() * 5)]));
-          bloom.position.y = 0.7;
-          f.add(bloom);
-          return f;
-        });
-        scatter(g, isle, rng, 2, 0.5, 0.8, r => makeTree(r, 0xd97fb8));
-        break;
-      case 'mushroom':
-        scatter(g, isle, rng, 7, 0.15, 0.85, r => {
-          const m = new THREE.Group();
-          const h = 0.8 + r() * 2.2;
-          const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.42, h, 8), matOf(0xe8dcc8));
-          stem.position.y = h / 2;
-          stem.castShadow = true;
-          m.add(stem);
-          const cap = new THREE.Mesh(new THREE.SphereGeometry(0.9 + r() * 0.7, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2),
-            matOf(r() < 0.5 ? 0xd84848 : 0xb86bd8));
-          cap.position.y = h;
-          cap.castShadow = true;
-          m.add(cap);
-          return m;
-        });
-        break;
-      case 'ruin':
-        scatter(g, isle, rng, 6, 0.3, 0.85, r => {
-          const h = 1.2 + r() * 3.4;
-          const col = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.58, h, 9), matOf(0xcfc7ac));
-          col.position.y = h / 2;
-          col.rotation.z = (r() - 0.5) * 0.14;
-          col.castShadow = true;
-          return col;
-        });
-        scatter(g, isle, rng, 4, 0.2, 0.7, r => {
-          const b = new THREE.Mesh(geoBox(), matOf(0xb8b09a));
-          b.scale.set(1 + r(), 0.7, 1 + r());
-          b.position.y = 0.35;
-          b.rotation.y = r() * Math.PI;
-          return b;
-        });
-        break;
-      case 'crystal':
-        scatter(g, isle, rng, 9, 0.15, 0.88, r => makeCrystal(r, r() < 0.4 ? 0xb08fff : 0x7fe8ff));
-        break;
-      case 'cloud':
-        scatter(g, isle, rng, 6, 0.2, 0.85, r => {
-          const puff = new THREE.Mesh(new THREE.SphereGeometry(0.9 + r() * 0.9, 8, 6), matOf(0xffffff));
-          puff.position.y = 0.5;
-          puff.scale.y = 0.6;
-          return puff;
-        });
-        scatter(g, isle, rng, 6, 0.4, 0.9, () => {
-          const post = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 1, 5), matOf(0xc9b48a));
-          post.position.y = 0.5;
-          return post;
-        });
-        break;
-      case 'village':
-        scatter(g, isle, rng, 4, 0.3, 0.75, r => makeHouse(r));
-        scatter(g, isle, rng, 3, 0.35, 0.8, r => {
-          const stall = new THREE.Group();
-          const table = new THREE.Mesh(geoBox(), matOf(0xa8763e));
-          table.scale.set(1.8, 0.9, 1.1);
-          table.position.y = 0.45;
-          stall.add(table);
-          const awning = new THREE.Mesh(geoBox(), matOf(r() < 0.5 ? 0xe85454 : 0x54a8e8));
-          awning.scale.set(2, 0.16, 1.4);
-          awning.position.y = 1.7;
-          stall.add(awning);
-          return stall;
-        });
-        scatter(g, isle, rng, 2, 0.6, 0.9, r => makeTree(r));
-        break;
-      case 'ice':
-        scatter(g, isle, rng, 8, 0.15, 0.88, r => {
-          const h = 1.4 + r() * 3;
-          const spike = new THREE.Mesh(new THREE.ConeGeometry(0.5 + r() * 0.4, h, 6), matOf(0xbfeaff, 0x2a5a7a));
-          spike.position.y = h / 2;
-          spike.castShadow = true;
-          return spike;
-        });
-        break;
-      case 'lava': {
-        const pool = new THREE.Mesh(new THREE.CylinderGeometry(isle.r * 0.35, isle.r * 0.35, 0.18, 16),
-          matOf(0xff7a20, 0xff4400));
-        pool.position.set(-isle.r * 0.15, 0.08, isle.r * 0.15);
-        g.add(pool);
-        scatter(g, isle, rng, 6, 0.4, 0.88, r => {
-          const h = 1 + r() * 2.6;
-          const spike = new THREE.Mesh(new THREE.ConeGeometry(0.45, h, 5), matOf(0x2a2026));
-          spike.position.y = h / 2;
-          spike.castShadow = true;
-          return spike;
-        });
-        break;
-      }
-      case 'pillars':
-        scatter(g, isle, rng, 8, 0.15, 0.85, r => {
-          const h = 2 + r() * 6;
-          const p = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.9, h, 8), matOf(0xd8d2bc));
-          p.position.y = h / 2;
-          p.castShadow = true;
-          return p;
-        });
-        break;
-      case 'bone':
-        scatter(g, isle, rng, 5, 0.25, 0.8, r => {
-          const rib = new THREE.Mesh(new THREE.TorusGeometry(1.6 + r() * 1.4, 0.22, 6, 10, Math.PI), matOf(0xe8e0c8));
-          rib.position.y = 0.1;
-          rib.rotation.y = r() * Math.PI;
-          rib.castShadow = true;
-          return rib;
-        });
-        scatter(g, isle, rng, 4, 0.3, 0.85, r => {
-          const b = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 1.6 + r(), 5), matOf(0xe8e0c8));
-          b.rotation.z = Math.PI / 2 + (r() - 0.5);
-          b.position.y = 0.2;
-          return b;
-        });
-        break;
-      case 'nebula':
-        scatter(g, isle, rng, 8, 0.15, 0.88, r => makeCrystal(r, r() < 0.5 ? 0xff9de2 : 0xb08fff));
-        scatter(g, isle, rng, 5, 0.3, 0.85, r => {
-          const orb = new THREE.Mesh(new THREE.SphereGeometry(0.35 + r() * 0.3, 8, 6),
-            matOf(0xd8b4ff, 0x6a3aaa));
-          orb.position.y = 1 + r() * 2.5;
-          return orb;
-        });
-        break;
-      case 'star':
-        scatter(g, isle, rng, 7, 0.2, 0.85, r => {
-          const p = new THREE.Group();
-          const h = 1.5 + r() * 3.5;
-          const col = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.45, h, 6), matOf(0x44446a));
-          col.position.y = h / 2;
-          col.castShadow = true;
-          p.add(col);
-          const tip = new THREE.Mesh(new THREE.OctahedronGeometry(0.4), matOf(0xffe066, 0xaa8800));
-          tip.position.y = h + 0.4;
-          p.add(tip);
-          return p;
-        });
-        break;
-      case 'moon':
-        scatter(g, isle, rng, 6, 0.2, 0.8, r => {
-          const crater = new THREE.Mesh(new THREE.CylinderGeometry(1 + r() * 1.4, 1.2 + r() * 1.4, 0.22, 12),
-            matOf(0x8a8a9a));
-          crater.position.y = 0.1;
-          return crater;
-        });
-        scatter(g, isle, rng, 6, 0.3, 0.88, r => {
-          const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.5 + r() * 0.8), matOf(0x9a9aac));
-          rock.position.y = 0.4;
-          rock.castShadow = true;
-          return rock;
-        });
-        break;
-      case 'comet':
-        scatter(g, isle, rng, 8, 0.15, 0.88, r => {
-          const h = 1.2 + r() * 2.6;
-          const shard = new THREE.Mesh(new THREE.ConeGeometry(0.4 + r() * 0.3, h, 5), matOf(0x9fd4ff, 0x2255aa));
-          shard.position.y = h / 2;
-          shard.rotation.z = (r() - 0.5) * 0.5;
-          shard.castShadow = true;
-          return shard;
-        });
-        break;
-      case 'aurora':
-        scatter(g, isle, rng, 7, 0.2, 0.85, r => {
-          const h = 2.5 + r() * 4;
-          const beam = new THREE.Mesh(new THREE.ConeGeometry(0.5, h, 6),
-            new THREE.MeshLambertMaterial({
-              color: r() < 0.5 ? 0x4ae8b0 : 0x66ccff,
-              emissive: r() < 0.5 ? 0x0a5a3a : 0x0a3a6a,
-              transparent: true, opacity: 0.75,
-            }));
-          beam.position.y = h / 2;
-          return beam;
-        });
-        scatter(g, isle, rng, 6, 0.25, 0.9, r => {
-          const tuft = new THREE.Mesh(new THREE.SphereGeometry(0.28, 6, 5), matOf(0x7fe8c8));
-          tuft.position.y = 0.25;
-          return tuft;
-        });
-        break;
-      case 'alien':
-        scatter(g, isle, rng, 5, 0.2, 0.8, r => {
-          const m = new THREE.Group();
-          const h = 1 + r() * 2;
-          const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.3, h, 6), matOf(0xb8e8d8));
-          stem.position.y = h / 2;
-          m.add(stem);
-          const cap = new THREE.Mesh(new THREE.SphereGeometry(0.7 + r() * 0.5, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2),
-            matOf(r() < 0.5 ? 0xb06ae8 : 0x4ae8b0, 0x2a1a4a));
-          cap.position.y = h;
-          cap.castShadow = true;
-          m.add(cap);
-          return m;
-        });
-        scatter(g, isle, rng, 4, 0.35, 0.8, r => {
-          const dome = new THREE.Mesh(new THREE.SphereGeometry(1.4 + r() * 0.6, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2),
-            matOf(0xcfd8e8, 0x223344));
-          dome.castShadow = true;
-          return dome;
-        });
-        break;
-      case 'storm': {
-        // off-centre — the boss altar and colossus take the middle
-        const obelisk = new THREE.Mesh(geoBox(), matOf(0x2c2c40, 0x16165a));
-        obelisk.scale.set(1.4, 6, 1.4);
-        obelisk.position.set(isle.r * 0.55, 3, isle.r * 0.35);
-        obelisk.castShadow = true;
-        g.add(obelisk);
-        scatter(g, isle, rng, 6, 0.45, 0.85, r => {
-          const h = 1.5 + r() * 3;
-          const shard = new THREE.Mesh(new THREE.ConeGeometry(0.5, h, 4), matOf(0x3c3c55, 0x2a2aaa));
-          shard.position.y = h / 2;
-          shard.rotation.y = r();
-          return shard;
-        });
-        break;
-      }
-      // ===== hidden secret realms =====
-      case 'cave':
-        // ring of tall dark rock walls around the rim (visual enclosure)
-        scatter(g, isle, rng, 14, 0.85, 0.95, r => {
-          const h = 5 + r() * 6;
-          const wall = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.2, h, 6), matOf(0x2a2a34));
-          wall.position.y = h / 2;
-          wall.castShadow = true;
-          return wall;
-        });
-        // stalactites hanging above (non-colliding decoration only)
-        scatter(g, isle, rng, 8, 0.1, 0.8, r => {
-          const h = 2 + r() * 2.5;
-          const stal = new THREE.Mesh(new THREE.ConeGeometry(0.4 + r() * 0.3, h, 6), matOf(0x333340));
-          stal.position.y = 8 + r() * 4;
-          stal.rotation.x = Math.PI;
-          return stal;
-        });
-        scatter(g, isle, rng, 7, 0.15, 0.8, r => makeCrystal(r, r() < 0.5 ? 0xb08fff : 0x66e8ff));
-        scatter(g, isle, rng, 5, 0.2, 0.75, r => {
-          const m = new THREE.Group();
-          const h = 0.5 + r() * 1;
-          const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.2, h, 6), matOf(0x6a5a7a));
-          stem.position.y = h / 2;
-          m.add(stem);
-          const cap = new THREE.Mesh(new THREE.SphereGeometry(0.4, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2),
-            new THREE.MeshLambertMaterial({ color: 0x8f6bb0, emissive: 0x2a1a3a }));
-          cap.position.y = h;
-          m.add(cap);
-          return m;
-        });
-        break;
-      case 'lake':
-        scatter(g, isle, rng, 12, 0.15, 0.8, r => {
-          const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.5 + r() * 0.3, 0.5 + r() * 0.3, 0.08, 10),
-            matOf(0x3e8a4a));
-          pad.position.y = 0.1;
-          return pad;
-        });
-        scatter(g, isle, rng, 10, 0.2, 0.85, r => {
-          const reed = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.08, 1.2 + r(), 5), matOf(0x5a8a4a));
-          reed.position.y = 0.6 + r() * 0.5;
-          return reed;
-        });
-        {
-          const pier = new THREE.Mesh(geoBox(), matOf(0x8a6a42));
-          pier.scale.set(1.6, 0.2, 6);
-          pier.position.set(isle.r * 0.3, 0.15, -isle.r * 0.3);
-          pier.castShadow = true;
-          g.add(pier);
-        }
-        scatter(g, isle, rng, 4, 0.3, 0.7, () => {
-          const mist = new THREE.Sprite(new THREE.SpriteMaterial({
-            color: 0xffffff, transparent: true, opacity: 0.35,
-          }));
-          mist.scale.set(3, 2, 1);
-          mist.position.y = 0.8;
-          return mist;
-        });
-        break;
-      case 'mist':
-        scatter(g, isle, rng, 8, 0.2, 0.88, r => {
-          const t = new THREE.Group();
-          const h = 2 + r() * 2;
-          const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.38, h, 6), matOf(0x3a332e));
-          trunk.position.y = h / 2;
-          trunk.rotation.z = (r() - 0.5) * 0.3;
-          t.add(trunk);
-          const canopy = new THREE.Mesh(new THREE.SphereGeometry(0.7 + r() * 0.4, 6, 5), matOf(0x4a5c48));
-          canopy.position.y = h + 0.3;
-          canopy.scale.y = 0.6;
-          t.add(canopy);
-          return t;
-        });
-        scatter(g, isle, rng, 5, 0.15, 0.85, () => {
-          const fog = new THREE.Sprite(new THREE.SpriteMaterial({
-            color: 0xd8e0d8, transparent: true, opacity: 0.3,
-          }));
-          fog.scale.set(4, 2.4, 1);
-          fog.position.y = 1;
-          return fog;
-        });
-        scatter(g, isle, rng, 10, 0.1, 0.9, r => {
-          const fly = new THREE.Mesh(new THREE.SphereGeometry(0.06, 5, 4),
-            new THREE.MeshLambertMaterial({ color: 0xd8ff8f, emissive: 0x8fbf3a }));
-          fly.position.y = 0.4 + r() * 1.2;
-          return fly;
-        });
-        buildFireflies(g, isle);
-        break;
-      case 'temple': {
-        const trim = new THREE.Mesh(new THREE.TorusGeometry(isle.r * 0.94, 0.35, 6, 28),
-          matOf(0xd8b34a, 0x6a4a10));
-        trim.rotation.x = Math.PI / 2;
-        trim.position.y = 0.1;
-        g.add(trim);
-        scatter(g, isle, rng, 10, 0.55, 0.85, r => {
-          const p = new THREE.Group();
-          const h = 3 + r() * 1.5;
-          const col = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.5, h, 8), matOf(0x211d2c));
-          col.position.y = h / 2;
-          col.castShadow = true;
-          p.add(col);
-          const cap = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.3, 1.1), matOf(0xd8b34a, 0x4a3308));
-          cap.position.y = h + 0.15;
-          p.add(cap);
-          return p;
-        });
-        const altar = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 2.2, 1.1, 8), matOf(0x1a1626, 0x0a0812));
-        altar.position.y = 0.55;
-        altar.castShadow = true;
-        g.add(altar);
-        scatter(g, isle, rng, 4, 0.25, 0.5, () => {
-          const b = new THREE.Group();
-          const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.3, 0.6, 8), matOf(0x33291a));
-          bowl.position.y = 0.3;
-          b.add(bowl);
-          const flame = new THREE.Mesh(new THREE.ConeGeometry(0.25, 0.6, 6),
-            new THREE.MeshLambertMaterial({ color: 0xff8a3a, emissive: 0xcc4400 }));
-          flame.position.y = 0.85;
-          b.add(flame);
-          return b;
-        });
-        break;
-      }
-      // ===== mechanism-triggered hidden realms =====
-      case 'garden':
-        scatter(g, isle, rng, 20, 0.1, 0.9, r => {
-          const f = new THREE.Group();
-          const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.5, 4), matOf(0x5a9a4a));
-          stem.position.y = 0.25;
-          f.add(stem);
-          const bloom = new THREE.Mesh(new THREE.SphereGeometry(0.28, 6, 5),
-            matOf([0xffb0d0, 0xfff0a0, 0xd0b0ff, 0xffffff][Math.floor(r() * 4)]));
-          bloom.position.y = 0.65;
-          f.add(bloom);
-          return f;
-        });
-        // vine arches (torus halves)
-        scatter(g, isle, rng, 3, 0.55, 0.85, r => {
-          const arch = new THREE.Mesh(new THREE.TorusGeometry(1.6, 0.16, 6, 16, Math.PI), matOf(0x4a8a3a));
-          arch.rotation.x = Math.PI / 2;
-          arch.rotation.z = r() * Math.PI;
-          arch.position.y = 1.6;
-          return arch;
-        });
-        // butterfly sprites (small emissive quads; drift with the island's own bob)
-        scatter(g, isle, rng, 8, 0.2, 0.85, r => {
-          const b = new THREE.Mesh(new THREE.PlaneGeometry(0.35, 0.28),
-            new THREE.MeshLambertMaterial({
-              color: [0xffb0d0, 0x9fd8ff, 0xffe066][Math.floor(r() * 3)],
-              emissive: 0x442244, side: THREE.DoubleSide,
-            }));
-          b.position.y = 0.6 + r() * 1.4;
-          b.rotation.y = r() * Math.PI;
-          return b;
-        });
-        break;
-      case 'vault': {
-        const glow = new THREE.Mesh(new THREE.CylinderGeometry(isle.r * 0.3, isle.r * 0.3, 0.14, 14),
-          matOf(0xff5a1a, 0xdd3300));
-        glow.position.set(isle.r * 0.1, 0.08, -isle.r * 0.1);
-        g.add(glow);
-        scatter(g, isle, rng, 7, 0.2, 0.85, r => {
-          const h = 2 + r() * 3.5;
-          const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.6, h, 8), matOf(0x0e0a0c));
-          pillar.position.y = h / 2;
-          pillar.castShadow = true;
-          return pillar;
-        });
-        // red-orange emissive crack lines
-        scatter(g, isle, rng, 10, 0.1, 0.9, r => {
-          const crack = new THREE.Mesh(new THREE.BoxGeometry(0.9 + r() * 0.6, 0.04, 0.12),
-            new THREE.MeshLambertMaterial({ color: 0xff6a2a, emissive: 0xdd3300 }));
-          crack.position.y = 0.02;
-          crack.rotation.y = r() * Math.PI;
-          return crack;
-        });
-        scatter(g, isle, rng, 5, 0.2, 0.7, r => {
-          const ember = new THREE.Mesh(new THREE.SphereGeometry(0.08, 5, 4),
-            new THREE.MeshLambertMaterial({ color: 0xffb060, emissive: 0xff5500 }));
-          ember.position.y = 0.5 + r() * 1.5;
-          return ember;
-        });
-        break;
-      }
-      case 'tree':
-        // ring-pattern of the stump's growth rings
-        for (let i = 0; i < 3; i++) {
-          const ring = new THREE.Mesh(new THREE.TorusGeometry(isle.r * (0.3 + i * 0.22), 0.1, 6, 24),
-            matOf(0x6a4a2a, 0, 'woodTex'));
-          ring.rotation.x = Math.PI / 2;
-          ring.position.y = 0.15;
-          g.add(ring);
-        }
-        // branch platforms (non-colliding decor)
-        scatter(g, isle, rng, 6, 0.5, 0.85, r => {
-          const h = 1 + r() * 1.5;
-          const branch = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.4, h, 6), matOf(0x5e4526, 0, 'woodTex'));
-          branch.rotation.z = Math.PI / 2.4;
-          branch.position.y = 2 + r() * 2;
-          return branch;
-        });
-        scatter(g, isle, rng, 12, 0.1, 0.85, r => {
-          const moss = new THREE.Mesh(new THREE.SphereGeometry(0.12, 5, 4),
-            new THREE.MeshLambertMaterial({ color: 0x8fd870, emissive: 0x2a6a1a }));
-          moss.position.y = 0.1;
-          return moss;
-        });
-        break;
-      case 'relic': {
-        scatter(g, isle, rng, 8, 0.3, 0.85, r => {
-          const h = 1.5 + r() * 3;
-          const col = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.58, h, 9), matOf(0xe8dfc0));
-          col.position.y = h / 2;
-          col.rotation.z = (r() - 0.5) * 0.3;
-          col.castShadow = true;
-          return col;
-        });
-        // cracked statue: stacked boxes
-        {
-          const statue = new THREE.Group();
-          const base = new THREE.Mesh(geoBox(), matOf(0xd8cba0));
-          base.scale.set(1.4, 1, 1.4);
-          base.position.y = 0.5;
-          statue.add(base);
-          const torso = new THREE.Mesh(geoBox(), matOf(0xe8dfc0));
-          torso.scale.set(1, 1.6, 1);
-          torso.position.y = 1.8;
-          statue.add(torso);
-          const head = new THREE.Mesh(geoBox(), matOf(0xf0e8d0));
-          head.scale.set(0.7, 0.7, 0.7);
-          head.position.y = 2.95;
-          statue.add(head);
-          statue.traverse(o => { o.castShadow = true; });
-          g.add(statue);
-        }
-        // floating rubble (slow-bob small rocks)
-        scatter(g, isle, rng, 6, 0.2, 0.8, r => {
-          const rubble = new THREE.Mesh(new THREE.DodecahedronGeometry(0.3 + r() * 0.3), matOf(0xd0c39a));
-          rubble.position.y = 0.5 + r() * 2;
-          return rubble;
-        });
-        break;
-      }
-      // ===== 地心世界 (underground region) =====
-      case 'cavefloor':
-        scatter(g, isle, rng, 8, 0.15, 0.85, r => {
-          const h = 1.2 + r() * 2.4;
-          const stal = new THREE.Mesh(new THREE.ConeGeometry(0.4 + r() * 0.3, h, 6), matOf(0x3a322c));
-          stal.position.y = h / 2;
-          stal.castShadow = true;
-          return stal;
-        });
-        scatter(g, isle, rng, 6, 0.2, 0.8, r => makeCrystal(r, 0x5a6a8a));
-        break;
-      case 'deepcrystal': {
-        scatter(g, isle, rng, 9, 0.15, 0.88, r => makeCrystal(r, r() < 0.5 ? 0x9a7bff : 0x6ae8ff));
-        const lake = new THREE.Mesh(new THREE.CylinderGeometry(isle.r * 0.35, isle.r * 0.35, 0.14, 18),
-          matOf(0x2a3a6a, 0x14204a));
-        lake.position.set(isle.r * 0.15, 0.07, -isle.r * 0.15);
-        g.add(lake);
-        scatter(g, isle, rng, 5, 0.3, 0.75, r => {
-          const orb = new THREE.Mesh(new THREE.SphereGeometry(0.3 + r() * 0.25, 8, 6),
-            matOf(0xb08fff, 0x5a2aaa));
-          orb.position.y = 0.8 + r() * 2;
-          return orb;
-        });
-        break;
-      }
-      case 'magma': {
-        const pool = new THREE.Mesh(new THREE.CylinderGeometry(isle.r * 0.4, isle.r * 0.4, 0.18, 18),
-          matOf(0xff5a1a, 0xdd2200));
-        pool.position.set(-isle.r * 0.1, 0.09, isle.r * 0.12);
-        g.add(pool);
-        scatter(g, isle, rng, 7, 0.4, 0.9, r => {
-          const h = 1.2 + r() * 3;
-          const spike = new THREE.Mesh(new THREE.ConeGeometry(0.5, h, 5), matOf(0x120a0c));
-          spike.position.y = h / 2;
-          spike.castShadow = true;
-          return spike;
-        });
-        scatter(g, isle, rng, 10, 0.1, 0.9, r => {
-          const crack = new THREE.Mesh(new THREE.BoxGeometry(0.9 + r() * 0.6, 0.04, 0.12),
-            new THREE.MeshLambertMaterial({ color: 0xff6a2a, emissive: 0xdd3300 }));
-          crack.position.y = 0.02;
-          crack.rotation.y = r() * Math.PI;
-          return crack;
-        });
-        scatter(g, isle, rng, 6, 0.2, 0.7, r => {
-          const ember = new THREE.Mesh(new THREE.SphereGeometry(0.08, 5, 4),
-            new THREE.MeshLambertMaterial({ color: 0xffb060, emissive: 0xff5500 }));
-          ember.position.y = 0.5 + r() * 1.6;
-          return ember;
-        });
-        break;
-      }
-      case 'bonecave':
-        scatter(g, isle, rng, 6, 0.25, 0.85, r => {
-          const rib = new THREE.Mesh(new THREE.TorusGeometry(1.8 + r() * 1.6, 0.24, 6, 10, Math.PI), matOf(0xe0d4b0));
-          rib.position.y = 0.15;
-          rib.rotation.y = r() * Math.PI;
-          rib.castShadow = true;
-          return rib;
-        });
-        scatter(g, isle, rng, 5, 0.3, 0.85, r => {
-          const bone = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 1.8 + r(), 5), matOf(0xe0d4b0));
-          bone.rotation.z = Math.PI / 2 + (r() - 0.5);
-          bone.position.y = 0.25;
-          return bone;
-        });
-        scatter(g, isle, rng, 4, 0.2, 0.7, r => {
-          const skull = new THREE.Mesh(new THREE.DodecahedronGeometry(0.4 + r() * 0.2), matOf(0xd8cba0));
-          skull.position.y = 0.3;
-          return skull;
-        });
-        break;
-      case 'coretemple': {
-        scatter(g, isle, rng, 8, 0.5, 0.88, r => {
-          const h = 3 + r() * 2;
-          const col = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.58, h, 8), matOf(0x14100c));
-          col.position.y = h / 2;
-          col.castShadow = true;
-          return col;
-        });
-        const trim = new THREE.Mesh(new THREE.TorusGeometry(isle.r * 0.9, 0.3, 6, 26), matOf(0xd8a83a, 0x6a4a10));
-        trim.rotation.x = Math.PI / 2;
-        trim.position.y = 0.1;
-        g.add(trim);
-        const core = new THREE.Mesh(new THREE.SphereGeometry(1.8, 14, 10),
-          new THREE.MeshLambertMaterial({ color: 0xff6a1a, emissive: 0xff3300 }));
-        core.position.y = 2.4;
-        core.castShadow = true;
-        g.add(core);
-        break;
-      }
-    }
-
-    // grass blades on green islands (InstancedMesh child → bobs with island)
-    if (['grass', 'forest', 'flower', 'village', 'garden'].includes(isle.type)) {
-      const rng2 = mulberry32(isle.seed * 31 + 7);
-      const N = 55;
-      const gm = new THREE.InstancedMesh(
-        GEO.grass || (GEO.grass = new THREE.ConeGeometry(0.1, 0.75, 4)),
-        MAT.grassBlade || (MAT.grassBlade = new THREE.MeshLambertMaterial({ color: 0x4faf45 })),
-        N
-      );
-      const m = new THREE.Matrix4();
-      const q = new THREE.Quaternion();
-      const e = new THREE.Euler();
-      const s = new THREE.Vector3(1, 1, 1);
-      const p = new THREE.Vector3();
-      for (let i = 0; i < N; i++) {
-        const a = rng2() * Math.PI * 2;
-        const rr = isle.r * Math.sqrt(rng2()) * 0.92;
-        e.set(0, rng2() * Math.PI, (rng2() - 0.5) * 0.25);
-        q.setFromEuler(e);
-        p.set(Math.cos(a) * rr, 0.36, Math.sin(a) * rr);
-        s.setScalar(0.7 + rng2() * 0.9);
-        m.compose(p, q, s);
-        gm.setMatrixAt(i, m);
-      }
-      g.add(gm);
-    }
   }
 
   function buildBridge(b) {
@@ -1665,6 +719,7 @@ const SkyGame = (() => {
     const ex = bx - ux * (B.r - 2), ez = bz - uz * (B.r - 2), ey = B.pos[1];
     const span = Math.hypot(ex - sx, ez - sz);
     const yaw = Math.atan2(ex - sx, ez - sz);
+    const pieces = [];
 
     if (b.style === 'stepstones') {
       // steep climbs get extra, overlapping stones (a stair ramp) so each
@@ -1677,86 +732,28 @@ const SkyGame = (() => {
         const px = sx + (ex - sx) * t;
         const pz = sz + (ez - sz) * t;
         const py = sy + (ey - sy) * t + Math.sin(i * 1.7) * wobble;
-        const stone = new THREE.Mesh(
-          GEO.step || (GEO.step = new THREE.CylinderGeometry(1.7, 1.4, 0.8, 9)),
-          matOf(0x9aa5a8, 0, 'rockTex')
-        );
-        stone.position.set(px, py - 0.4, pz);
-        stone.receiveShadow = true;
-        stone.matrixAutoUpdate = false;
-        stone.updateMatrix();
-        scene.add(stone);
+        pieces.push({ x: px, y: py, z: pz });
         colliders.push({ kind: 'seg', x: px, z: pz, r: 1.7, top: py });
       }
-      return;
-    }
-
-    const plank = b.style === 'plank';
-    const segLen = 3;
-    const n = Math.max(2, Math.round(span / segLen));
-    for (let i = 0; i < n; i++) {
-      const t0 = i / n, t1 = (i + 1) / n, tm = (t0 + t1) / 2;
-      const px = sx + (ex - sx) * tm;
-      const pz = sz + (ez - sz) * tm;
-      const py = sy + (ey - sy) * tm;
-      const seg = new THREE.Mesh(geoBox(),
-        plank
-          ? matOf(i % 2 ? 0xa8763e : 0x99672f, 0, 'woodTex')
-          : matOf(i % 2 ? 0xa8a49a : 0x94908a, 0, 'rockTex'));
-      seg.scale.set(plank ? 2.6 : 3.2, 0.4, span / n + 0.25);
-      seg.position.set(px, py - 0.2, pz);
-      seg.rotation.y = yaw;
-      seg.receiveShadow = true;
-      seg.castShadow = true;
-      seg.matrixAutoUpdate = false;
-      seg.updateMatrix();
-      scene.add(seg);
-      colliders.push({ kind: 'seg', x: px, z: pz, r: 1.9, top: py });
-
-      // plank bridge rope posts
-      if (plank && i % 2 === 0) {
-        [-1.2, 1.2].forEach(off => {
-          const post = new THREE.Mesh(
-            GEO.post || (GEO.post = new THREE.CylinderGeometry(0.09, 0.09, 1.1, 5)),
-            matOf(0x6a4a2e)
-          );
-          post.position.set(px + Math.cos(yaw) * off, py + 0.55, pz - Math.sin(yaw) * off);
-          post.matrixAutoUpdate = false;
-          post.updateMatrix();
-          scene.add(post);
-        });
+    } else {
+      const segLen = 3;
+      const n = Math.max(2, Math.round(span / segLen));
+      for (let i = 0; i < n; i++) {
+        const tm = (i + 0.5) / n;
+        const px = sx + (ex - sx) * tm;
+        const pz = sz + (ez - sz) * tm;
+        const py = sy + (ey - sy) * tm;
+        pieces.push({ x: px, y: py, z: pz, len: span / n + 0.25 });
+        colliders.push({ kind: 'seg', x: px, z: pz, r: 1.9, top: py });
       }
     }
+    SkyArt.buildBridge(b, pieces, yaw, b.style);
   }
 
   function buildPad(p) {
     const isle = isleById(p.island);
     if (!isle) return;
-    const g = islandGroups[isle.id];
-    const pad = new THREE.Group();
-    const disc = new THREE.Mesh(
-      GEO.pad || (GEO.pad = new THREE.CylinderGeometry(2, 2.3, 0.5, 14)),
-      matOf(0xffffff)
-    );
-    disc.position.y = 0.25;
-    pad.add(disc);
-    const glow = new THREE.Mesh(
-      GEO.padGlow || (GEO.padGlow = new THREE.CylinderGeometry(1.5, 1.5, 0.2, 12)),
-      matOf(0x8fe8ff, 0x2a9adf)
-    );
-    glow.position.y = 0.55;
-    pad.add(glow);
-    const arrow = new THREE.Mesh(
-      GEO.padArrow || (GEO.padArrow = new THREE.ConeGeometry(0.55, 1, 6)),
-      matOf(0xffe066, 0xaa8800)
-    );
-    arrow.position.y = 1.3;
-    pad.add(arrow);
-    pad.position.set(p.dx, 0, p.dz);
-    pad.traverse(o => { o.matrixAutoUpdate = false; o.updateMatrix(); });
-    pad.matrixAutoUpdate = false;
-    pad.updateMatrix();
-    g.add(pad);
+    SkyArt.buildPad(p, islandGroups[isle.id]);
     colliders.push({
       kind: 'pad',
       x: isle.pos[0] + p.dx, z: isle.pos[2] + p.dz, r: 2.1,
@@ -2179,7 +1176,6 @@ const SkyGame = (() => {
   let buffBarTimer = 0;
   let trackerTimer = 0;
   let journalEl = null;
-  let particles = null;
   let cullIdx = 0;
   let fpsFrames = 0, fpsTime = 0, lowPowerSuggested = false;
 
@@ -2454,93 +1450,6 @@ const SkyGame = (() => {
       els.wrap.appendChild(c);
       setTimeout(() => c.remove(), 3400);
     }
-  }
-
-  // ---- ambient sparkle particles ----
-  function buildParticles() {
-    if (lowPower()) return;
-    const N = 420;
-    const geo = new THREE.BufferGeometry();
-    const arr = new Float32Array(N * 3);
-    const rng = mulberry32(SKY_CONFIG.worldSeed + 5);
-    for (let i = 0; i < N; i++) {
-      arr[i * 3] = -320 + rng() * 640;
-      arr[i * 3 + 1] = rng() * 110 - 10;
-      arr[i * 3 + 2] = -320 + rng() * 640;
-    }
-    geo.setAttribute('position', new THREE.BufferAttribute(arr, 3));
-    particles = new THREE.Points(geo, new THREE.PointsMaterial({
-      color: 0xffffff, size: 1.1, transparent: true, opacity: 0.55, sizeAttenuation: true,
-    }));
-    scene.add(particles);
-  }
-
-  // ---- slow-rising ember motes over the 地心世界 cluster (cheap: one Points obj) ----
-  let emberParticles = null;
-  const EMBER_COUNT = 220;
-  const EMBER_Y_LO = -100, EMBER_Y_HI = -65;
-  function buildEmberParticles() {
-    if (lowPower()) return;
-    const geo = new THREE.BufferGeometry();
-    const arr = new Float32Array(EMBER_COUNT * 3);
-    const rng = mulberry32(SKY_CONFIG.worldSeed + 77);
-    for (let i = 0; i < EMBER_COUNT; i++) {
-      arr[i * 3] = -540 + rng() * 160;
-      arr[i * 3 + 1] = EMBER_Y_LO + rng() * (EMBER_Y_HI - EMBER_Y_LO);
-      arr[i * 3 + 2] = 280 + rng() * 200;
-    }
-    geo.setAttribute('position', new THREE.BufferAttribute(arr, 3));
-    emberParticles = new THREE.Points(geo, new THREE.PointsMaterial({
-      color: 0xff7a2a, size: 1.4, transparent: true, opacity: 0.75, sizeAttenuation: true,
-    }));
-    scene.add(emberParticles);
-  }
-
-  // ---- rising mist at a waterfall's base (☁️ Wave 4 polish; ≤80 verts, one per water isle) ----
-  function buildWaterMist(g, isle, x, z) {
-    if (lowPower()) return;
-    const N = 60;
-    const geo = new THREE.BufferGeometry();
-    const arr = new Float32Array(N * 3);
-    const rng = mulberry32(SKY_CONFIG.worldSeed + isle.seed * 13 + 41);
-    for (let i = 0; i < N; i++) {
-      arr[i * 3] = (rng() - 0.5) * 2.4;
-      arr[i * 3 + 1] = rng() * 2.5;
-      arr[i * 3 + 2] = (rng() - 0.5) * 1.4;
-    }
-    geo.setAttribute('position', new THREE.BufferAttribute(arr, 3));
-    const points = new THREE.Points(geo, new THREE.PointsMaterial({
-      color: 0xffffff, size: 0.5, transparent: true, opacity: 0.5, sizeAttenuation: true,
-    }));
-    // the waterfall box is centred at y -7.4 with height 16, so its base sits
-    // at roughly y -15.4 — that's where the mist should hover
-    points.position.set(x, -15.4, z);
-    g.add(points);
-    waterMistSystems.push(points);
-  }
-
-  // ---- gentle-drifting fireflies over forest/mist isles (☁️ Wave 4 polish; ≤40 verts) ----
-  function buildFireflies(g, isle, color = 0xd8ff8f) {
-    if (lowPower()) return;
-    const N = 24;
-    const geo = new THREE.BufferGeometry();
-    const arr = new Float32Array(N * 3);
-    const phase = new Float32Array(N);
-    const rng = mulberry32(SKY_CONFIG.worldSeed + isle.seed * 29 + 7);
-    for (let i = 0; i < N; i++) {
-      const a = rng() * Math.PI * 2;
-      const rr = isle.r * (0.15 + rng() * 0.7);
-      arr[i * 3] = Math.cos(a) * rr;
-      arr[i * 3 + 1] = 0.6 + rng() * 1.6;
-      arr[i * 3 + 2] = Math.sin(a) * rr;
-      phase[i] = rng() * Math.PI * 2;
-    }
-    geo.setAttribute('position', new THREE.BufferAttribute(arr, 3));
-    const points = new THREE.Points(geo, new THREE.PointsMaterial({
-      color, size: 0.4, transparent: true, opacity: 0.85, sizeAttenuation: true,
-    }));
-    g.add(points);
-    fireflySystems.push({ points, base: arr.slice(), phase });
   }
 
   // ---- distance culling + fps watchdog (called from updateWorld) ----
@@ -4782,34 +3691,10 @@ const SkyGame = (() => {
     if (trackerTimer > 0.15) { trackerTimer = 0; updateTracker(); }
     updateCulling();
     watchFps(dt);
-    if (particles) particles.rotation.y += dt * 0.004;
-    if (emberParticles) {
-      const arr = emberParticles.geometry.attributes.position.array;
-      for (let i = 1; i < arr.length; i += 3) {
-        arr[i] += dt * 1.4;
-        if (arr[i] > EMBER_Y_HI) arr[i] = EMBER_Y_LO;
-      }
-      emberParticles.geometry.attributes.position.needsUpdate = true;
-    }
-    // ambient decoration drift (☁️ Wave 4 polish; arrays stay empty under lowPower())
-    for (const mist of waterMistSystems) {
-      const arr = mist.geometry.attributes.position.array;
-      for (let i = 1; i < arr.length; i += 3) {
-        arr[i] += dt * 1.1;
-        if (arr[i] > 2.5) arr[i] = 0;
-      }
-      mist.geometry.attributes.position.needsUpdate = true;
-    }
-    for (const sys of fireflySystems) {
-      const arr = sys.points.geometry.attributes.position.array;
-      const base = sys.base, phase = sys.phase;
-      for (let i = 0; i < phase.length; i++) {
-        arr[i * 3] = base[i * 3] + Math.sin(simTime * 0.8 + phase[i]) * 0.4;
-        arr[i * 3 + 1] = base[i * 3 + 1] + Math.sin(simTime * 1.4 + phase[i] * 1.7) * 0.35;
-        arr[i * 3 + 2] = base[i * 3 + 2] + Math.cos(simTime * 0.8 + phase[i]) * 0.4;
-      }
-      sys.points.geometry.attributes.position.needsUpdate = true;
-    }
+    // clouds, particles, atmosphere and island LOD animate in SkyArt.frame();
+    // mirror its altitude blends here for the __skyTest.region() hook
+    undergroundBlend = SkyArt.state.ut > 0.001 ? SkyArt.state.ut : -1;
+    galaxyBlend = SkyArt.state.gt;
     // ⚡ active-use item timers: chain-lightning fade + shield/mount durations
     updateLightningLines(dt);
     if (shieldT > 0) {
@@ -4839,55 +3724,6 @@ const SkyGame = (() => {
         showWorldToast('☁️ 雲朵散開了！');
         updateItemTray();
       }
-    }
-    // altitude atmosphere — deep-space tint climbing toward the galaxy region,
-    // deep-red cave gloom descending toward 地心世界; the two bands never
-    // overlap (galaxy sits at y>70, underground at y<-20) so only one branch
-    // ever actively lerps at a time.
-    const ut = Math.min(1, Math.max(0, (-pos.y - 20) / 40));
-    if (ut > 0.001) {
-      if (Math.abs(ut - undergroundBlend) > 0.01) {
-        undergroundBlend = ut;
-        scene.fog.color.copy(fogBase).lerp(fogUnderground, ut);
-        hemiLight.color.copy(hemiBase).lerp(hemiUnderground, ut);
-        skyDome.material.color.setRGB(1 - ut * 0.75, 1 - ut * 0.88, 1 - ut * 0.92);
-        scene.fog.far = SKY_CONFIG.fogFar + (150 - SKY_CONFIG.fogFar) * ut;
-      }
-    } else {
-      if (undergroundBlend !== -1) {
-        // leaving the underground — restore surface fog-far and force the
-        // galaxy branch below to recompute so it writes the surface colors back
-        undergroundBlend = -1;
-        scene.fog.far = SKY_CONFIG.fogFar;
-        galaxyBlend = -1;
-      }
-      // deep-space tint as the player climbs toward the galaxy region
-      const gt = Math.min(1, Math.max(0, (pos.y - 70) / 50));
-      if (Math.abs(gt - galaxyBlend) > 0.01) {
-        galaxyBlend = gt;
-        scene.fog.color.copy(fogBase).lerp(fogGalaxy, gt);
-        hemiLight.color.copy(hemiBase).lerp(hemiGalaxy, gt);
-        // darken the sky dome itself (color multiplies its gradient texture)
-        skyDome.material.color.setRGB(1 - gt * 0.55, 1 - gt * 0.62, 1 - gt * 0.3);
-      }
-    }
-    // drifting clouds (cheap: advance a third of them per frame)
-    if (cloudMesh) {
-      const m = new THREE.Matrix4();
-      const q = new THREE.Quaternion();
-      const s = new THREE.Vector3();
-      const p = new THREE.Vector3();
-      const start = (Math.floor(simTime * 60) % 3);
-      for (let i = start; i < cloudData.length; i += 3) {
-        const d = cloudData[i];
-        d.x += d.speed * dt * 3;
-        if (d.x > 460) d.x = -460;
-        p.set(d.x, d.y, d.z);
-        s.set(d.sx, d.sy, d.sz);
-        m.compose(p, q, s);
-        cloudMesh.setMatrixAt(i, m);
-      }
-      cloudMesh.instanceMatrix.needsUpdate = true;
     }
   }
 
@@ -5604,7 +4440,7 @@ const SkyGame = (() => {
       updatePlayer(dt);
       updateCamera(dt);
     }
-    renderer.render(scene, camera);
+    SkyArt.frame(dt);   // world animation, atmosphere, sun/sky follow + render (js/sky-art.js)
   }
 
   return { init, onShow };
