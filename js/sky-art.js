@@ -97,6 +97,10 @@ const SkyArt = (() => {
           }`);
       sh.fragmentShader = 'varying float vGlow;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>',
         '#include <emissivemap_fragment>\n  totalEmissiveRadiance += diffuseColor.rgb * vGlow;');
+      // grass blades are double-sided cards with straight-up normals: keep the normal pointing
+      // up on the back face too, or every blade seen from behind is lit like an overhang (near-black)
+      if (key === 'grass') sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>',
+        '#include <normal_fragment_begin>\n  normal = normalize( vNormal );');
     };
     mat.customProgramCacheKey = () => 'skyart-' + key;
     return mat;
@@ -1254,9 +1258,12 @@ const SkyArt = (() => {
       B.part(geo('gem'), 0, 3.7, 0, 0.16, 0.24, 0.16, 0xffd166, { glow: 1 });
     },
     runeStone(B, rng, x, z, c, glowCol) {
+      // a chunky standing tablet with a glowing rune (rounded box, slight lean) — lumpy rocks here read as eggs
       B.at(x, 0, z, Math.atan2(-x, -z), 1);
-      B.part(geo('rock' + Math.floor(rng() * 4)), 0, 0.45, 0, 0.42, 0.75, 0.35, col(c, rng));
-      B.part(geo('rbox'), 0, 0.6, 0.27, 0.16, 0.42, 0.05, glowCol, { glow: 2.2 });
+      const h = 1.05 + rng() * 0.35;
+      B.part(geo('rboxS'), 0, h / 2, 0, 0.62, h, 0.3, col(c, rng, 0.05).lerp(_rsTint, 0.55), { rx: (rng() - 0.5) * 0.12, rz: (rng() - 0.5) * 0.12 });
+      B.part(geo('rbox'), 0, h * 0.55, 0.16, 0.14, h * 0.5, 0.04, glowCol, { glow: 2.2 });
+      B.part(geo('rbox'), 0, h * 0.55, 0.16, 0.36, 0.1, 0.04, glowCol, { glow: 2.2 });
     },
     stump(B, rng, x, z, s) {
       B.at(x, 0, z, rng() * 6.28, s);
@@ -2420,6 +2427,240 @@ const SkyArt = (() => {
     anims.push({ kind: 'pad', rings, chev, group: g, ph: p.dx * 0.37 });
   }
 
+  // ============================== quest props & markers (integration pass) ==============================
+  // The quest objects sky.js places (chests, gates, pillars, altars, portals, switches …) are built
+  // from the same rounded kit + vertex colours + per-vertex glow as the islands, and merged into ONE
+  // mesh per island (sky.js: buildQuestObjects). Runtime pieces (race rings, maze arches, order
+  // stones, rune orbs, meteor shards) and the floating quest markers use cached geometries from
+  // questGeo(), drawn with propMat so glow, fog and tone mapping match the world.
+  const _rsTint = new THREE.Color(0xd4d0e4);
+  const STONE = 0xd8d0bc, STONE_D = 0xb2a88f, WOOD = 0x9b5e2e, WOOD_D = 0x74431f, GOLD = 0xffc93a;
+  const QP = {
+    chest(B, x, z, ry) {
+      B.at(x, 0, z, ry, 1);
+      B.part(geo('rbox'), 0, 0.42, 0, 1.5, 0.8, 1.0, WOOD);
+      B.part(geo('cyl'), -0.76, 0.84, 0, 0.5, 1.52, 0.5, WOOD_D, { rz: -Math.PI / 2 });
+      [-0.47, 0.47].forEach(bx => {
+        B.part(geo('rbox'), bx, 0.42, 0, 0.17, 0.84, 1.05, GOLD, { glow: 0.35 });
+        B.part(geo('cyl'), bx - 0.09, 0.84, 0, 0.53, 0.18, 0.53, GOLD, { rz: -Math.PI / 2, glow: 0.35 });
+      });
+      B.part(geo('rbox'), 0, 0.8, 0.53, 0.34, 0.4, 0.1, GOLD, { glow: 1.1 });
+      B.part(geo('rbox'), 0, 0.76, 0.59, 0.07, 0.15, 0.04, 0x3a2410);
+      // a little spill of gold so it reads as treasure from across the island
+      [[0.95, 0.35], [1.15, -0.1], [-0.95, 0.45]].forEach(([cx, cz], i) => B.part(geo('disc'), cx, 0.02 + i * 0.01, cz, 0.2, 0.06, 0.2, GOLD, { glow: 0.9, rx: i * 0.2 }));
+    },
+    gate(B, x, z, ry) {
+      B.at(x, 0, z, ry, 1);
+      [-1.45, 1.45].forEach(px => {
+        B.part(geo('rbox'), px, 0.18, 0, 1.15, 0.36, 1.15, STONE_D);
+        B.part(geo('rbox'), px, 1.9, 0, 0.82, 3.2, 0.82, STONE);
+        B.part(geo('rbox'), px, 3.6, 0, 1.05, 0.3, 1.05, STONE_D);
+        B.part(geo('rbox'), px, 1.9, 0.42, 0.14, 1.9, 0.05, 0x6ff0ff, { glow: 1.6 });
+      });
+      B.part(geo('rbox'), 0, 4.0, 0, 4.3, 0.6, 1.1, STONE);
+      B.part(geo('gem'), 0, 4.0, 0.62, 0.32, 0.42, 0.18, 0x6ff0ff, { glow: 2.2 });
+    },
+    listen(B, x, z, ry) {
+      B.at(x, 0, z, ry, 1);
+      B.part(geo('rock1'), 0, 0.05, 0, 1.3, 0.45, 1.1, 0x8090b8);
+      [[0, 0, 2.4, 0.62], [0.65, 0.25, 1.6, 0.45], [-0.6, -0.2, 1.8, 0.48], [0.1, -0.6, 1.2, 0.38]].forEach(([cx, cz, h, w], i) =>
+        B.part(geo('crystal'), cx, 0.1, cz, w, h, w, i ? 0x8ff4ff : 0xb8fbff, { rx: cz * 0.4, rz: -cx * 0.4, glow: 1.5 }));
+    },
+    pillars(B, x, z, ry) {
+      B.at(x, 0, z, ry, 1);
+      [-1, 1].forEach(sd => {
+        B.part(geo('rbox'), sd, 0.18, 0, 0.95, 0.36, 0.95, STONE_D);
+        B.part(geo('cyl'), sd, 0.3, 0, 0.36, 1.45, 0.36, STONE);
+        B.part(geo('rbox'), sd, 1.8, 0, 0.85, 0.24, 0.85, STONE_D);
+        B.part(geo('sphere'), sd, 2.28, 0, 0.32, 0.32, 0.32, 0xffd166, { glow: 1.8 });
+      });
+    },
+    runes(B, x, z, ry) {
+      B.at(x, 0, z, ry, 1);
+      B.part(geo('rbox'), 0, 0.16, 0, 2.2, 0.32, 2.2, STONE_D);
+      B.part(geo('rbox'), 0, 0.34, 0, 1.0, 0.06, 1.0, 0xc49bff, { ry: Math.PI / 4, glow: 1.8 });
+      [[1, 1], [-1, 1], [1, -1], [-1, -1]].forEach(([a, b]) => {
+        B.part(geo('rbox'), a * 1.35, 0.55, b * 1.35, 0.42, 1.1, 0.3, STONE, { ry: Math.atan2(a, b) });
+        B.part(geo('rbox'), a * 1.35, 0.7, b * 1.35, 0.44, 0.1, 0.1, 0xc49bff, { ry: Math.atan2(a, b), glow: 1.6 });
+      });
+    },
+    arena(B, x, z, ry) {
+      B.at(x, 0, z, ry, 1); B.swayH = 3.6;
+      [-1.1, 1.1].forEach(px => {
+        B.part(geo('cyl6'), px, 0, 0, 0.09, 3.4, 0.09, 0x6e4a2e);
+        B.part(geo('rbox'), px, 2.55, 0.1, 0.85, 1.5, 0.07, 0xe8504f, { sway: 0.6 });
+        B.part(geo('rbox'), px, 2.55, 0.15, 0.4, 0.4, 0.04, GOLD, { ry: Math.PI / 4, glow: 0.8, sway: 0.6 });
+        B.part(geo('gem'), px, 3.5, 0, 0.16, 0.26, 0.16, GOLD, { glow: 1.4 });
+      });
+      B.part(geo('torus'), 0, 0.05, 0, 2.1, 2.1, 0.9, 0xb9ad94, { rx: Math.PI / 2 });
+    },
+    race(B, x, z, ry) {
+      B.at(x, 0, z, ry, 1);
+      [-1.7, 1.7].forEach(px => {
+        for (let k = 0; k < 4; k++) B.part(geo('cyl'), px, k * 0.85, 0, 0.16, 0.85, 0.16, k % 2 ? 0xffffff : 0xff5a5a);
+        B.part(geo('sphere'), px, 3.45, 0, 0.22, 0.22, 0.22, GOLD, { glow: 1.5 });
+      });
+      for (let k = 0; k < 8; k++) B.part(geo('rbox'), -1.4 + k * 0.4, 3.05, 0, 0.4, 0.4, 0.08, k % 2 ? 0x22242c : 0xffffff);
+      B.part(geo('torus'), 0, 1.6, 0, 1.15, 1.15, 1.6, GOLD, { glow: 1.4 });
+    },
+    bridge(B, x, z, ry) {
+      B.at(x, 0, z, ry, 1);
+      B.part(geo('cyl6'), 0, 0, 0, 0.11, 2.0, 0.11, 0x7a5232);
+      B.part(geo('rbox'), 0, 1.65, 0.06, 1.4, 0.62, 0.12, 0xe0b070);
+      B.part(geo('rbox'), 0, 1.65, 0.13, 1.05, 0.12, 0.03, 0x6fd3ff, { glow: 1.2 });
+      for (let k = 0; k < 3; k++) B.part(geo('rbox'), 1.2, 0.1 + k * 0.17, 0.3 - k * 0.05, 1.6, 0.15, 0.45, k % 2 ? 0xc8945a : 0xd8a868, { ry: 0.2 + k * 0.15 });
+      B.part(geo('torus'), -1.0, 0.12, 0.4, 0.38, 0.38, 1.6, 0xc9a26a, { rx: Math.PI / 2 });
+    },
+    boss(B, x, z, ry) {
+      B.at(x, 0, z, ry, 1);
+      B.part(geo('disc'), 0, 0, 0, 2.4, 0.4, 2.4, 0x3d3858);
+      B.part(geo('disc'), 0, 0.38, 0, 1.8, 0.38, 1.8, 0x4a4470);
+      B.part(geo('torus'), 0, 0.42, 0, 2.1, 2.1, 0.6, 0xb48cff, { rx: Math.PI / 2, glow: 1.8 });
+      B.part(geo('gem'), 0, 1.35, 0, 0.42, 0.62, 0.42, 0xff6ad5, { glow: 2.0 });
+      for (let i = 0; i < 4; i++) {
+        const a = i / 4 * 6.28 + 0.78;
+        B.part(geo('rbox'), Math.cos(a) * 2.7, 0.8, Math.sin(a) * 2.7, 0.5, 1.6, 0.5, 0x4a4470, { ry: -a });
+        B.part(geo('gem'), Math.cos(a) * 2.7, 1.85, Math.sin(a) * 2.7, 0.18, 0.28, 0.18, 0xb48cff, { glow: 2 });
+      }
+    },
+    order(B, x, z, ry) {
+      B.at(x, 0, z, ry, 1);
+      for (let i = 0; i < 3; i++) {
+        const a = i / 3 * 6.28;
+        B.part(geo('puck'), Math.cos(a) * 1.3, 0.3, Math.sin(a) * 1.3, 0.5, 0.6, 0.5, STONE);
+        B.part(geo('disc'), Math.cos(a) * 1.3, 0.3, Math.sin(a) * 1.3, 0.3, 0.03, 0.3, 0xc49bff, { glow: 1.6 });
+      }
+      B.part(geo('cyl6'), 0, 0, 0, 0.08, 1.5, 0.08, 0x7a5232);
+      B.part(geo('rbox'), 0, 1.35, 0, 0.9, 0.42, 0.1, 0xe0b070);
+    },
+    maze(B, x, z, ry) {
+      B.at(x, 0, z, ry, 1);
+      [-0.95, 0.95].forEach(px => {
+        B.part(geo('rbox'), px, 0.15, 0, 0.7, 0.3, 0.7, 0x3a2c58);
+        B.part(geo('rbox'), px, 1.15, 0, 0.42, 2.0, 0.42, 0x4e3c78);
+      });
+      B.part(geo('torusHalf'), 0, 2.1, 0, 0.95, 0.95, 1.4, 0xc58bff, { glow: 1.7 });
+    },
+    // portal frame (the swirl itself is portalSwirl(), animated); crater = 地心 portals
+    portal(B, x, z, ry, crater) {
+      B.at(x, 0, z, ry, 1);
+      const st = crater ? 0x4a3830 : 0xe2dcf4, st2 = crater ? 0x2e221e : 0xbfb4e0, glowC = crater ? 0xff7a2a : 0xb48cff;
+      [-2.1, 2.1].forEach(px => {
+        B.part(geo('rbox'), px, 0.25, 0, 1.2, 0.5, 1.2, st2);
+        B.part(geo('rbox'), px, 2.2, 0, 0.78, 3.6, 0.78, st);
+        B.part(geo('rbox'), px, 2.2, 0.4, 0.14, 2.4, 0.05, glowC, { glow: 1.8 });
+        B.part(geo('gem'), px, 4.45, 0, 0.3, 0.45, 0.3, glowC, { glow: 2 });
+      });
+      B.part(geo('torus'), 0, 2.35, 0, 1.85, 1.85, 2.4, glowC, { glow: 1.5 });
+      B.part(geo('torus'), 0, 2.35, 0, 2.05, 2.05, 1.4, st, {});
+    },
+    switch(B, x, z, ry) {
+      B.at(x, 0, z, ry, 1);
+      B.part(geo('rbox'), 0, 0.45, 0, 0.75, 0.9, 0.6, 0x3c3c52);
+      B.part(geo('rbox'), 0, 0.6, 0.31, 0.12, 0.5, 0.04, 0x7fe8ff, { glow: 2 });
+      B.part(geo('crystal'), 0, 1.15, 0, 0.36, 1.1, 0.36, 0x9ff4ff, { glow: 1.8 });
+    },
+  };
+  function questProp(B, type, x, z, ry, opt) { if (QP[type]) QP[type](B, x, z, ry || 0, opt); }
+
+  // ---- cached runtime geometries (markers, race rings, maze arches, order stones, orbs, shards) ----
+  const QG = {};
+  function questGeo(name) {
+    if (QG[name]) return QG[name];
+    const B = new Batch();
+    B.at(0, 0, 0, 0, 1);
+    switch (name) {
+      case 'mk_quest':   // Roblox-style floating "!" (bar + dot), gold with a warm rim
+        B.part(geo('rboxS'), 0, 0.42, 0, 0.36, 1.0, 0.36, 0xffc21a, { glow: 0.8 });
+        B.part(geo('sphere'), 0, -0.36, 0, 0.21, 0.21, 0.21, 0xffc21a, { glow: 0.8 });
+        break;
+      case 'mk_done':
+        B.part(geo('rboxS'), -0.17, -0.05, 0, 0.2, 0.46, 0.2, 0x4ade80, { rz: 0.8, glow: 0.9 });
+        B.part(geo('rboxS'), 0.17, 0.12, 0, 0.2, 0.86, 0.2, 0x4ade80, { rz: -0.62, glow: 0.9 });
+        break;
+      case 'mk_lock':
+        B.part(geo('rboxS'), 0, -0.15, 0, 0.72, 0.6, 0.34, 0xd9dee8, { glow: 0.12 });
+        B.part(geo('torusHalf'), 0, 0.15, 0, 0.25, 0.3, 0.9, 0xa4adbd);
+        B.part(geo('rbox'), 0, -0.17, 0.17, 0.1, 0.22, 0.04, 0x4a5262);
+        break;
+      case 'mk_portal':
+        B.part(geo('gem'), 0, 0, 0, 0.36, 0.56, 0.36, 0xc58bff, { glow: 1.8 });
+        break;
+      case 'mk_switch':
+        B.part(geo('gem'), 0, 0, 0, 0.3, 0.5, 0.3, 0x7fe8ff, { glow: 1.8 });
+        break;
+      case 'ring_idle': case 'ring_next': case 'ring_done': {
+        const c = name === 'ring_next' ? GOLD : name === 'ring_done' ? 0x4ade80 : 0xdfe6f2;
+        B.part(geo('torus'), 0, 0, 0, 1.8, 1.8, 1.6, c, { glow: name === 'ring_idle' ? 0.15 : 1.5 });
+        for (let i = 0; i < 6; i++) { const a = i / 6 * 6.28; B.part(geo('sphereLo'), Math.cos(a) * 1.8, Math.sin(a) * 1.8, 0, 0.17, 0.17, 0.17, name === 'ring_idle' ? 0xaab4c8 : 0xffffff, { glow: name === 'ring_idle' ? 0 : 1.6 }); }
+        break;
+      }
+      case 'maze_arch':
+        [-0.72, 0.72].forEach(px => {
+          B.part(geo('rbox'), px, 0.12, 0, 0.5, 0.24, 0.5, 0x3a2c58);
+          B.part(geo('rbox'), px, 0.9, 0, 0.3, 1.5, 0.3, 0x4e3c78);
+        });
+        B.part(geo('torusHalf'), 0, 1.65, 0, 0.72, 0.72, 1.1, 0xc58bff, { glow: 1.7 });
+        break;
+      case 'order_stone':
+        B.part(geo('puck'), 0, 0.15, 0, 0.92, 0.6, 0.92, STONE);
+        B.part(geo('torus'), 0, 0.16, 0, 0.78, 0.78, 0.6, 0xc49bff, { rx: Math.PI / 2, glow: 1.4 });
+        break;
+      case 'order_done':
+        B.part(geo('puck'), 0, 0.15, 0, 0.92, 0.6, 0.92, 0xbfe8c4);
+        B.part(geo('torus'), 0, 0.16, 0, 0.78, 0.78, 0.6, 0x4ade80, { rx: Math.PI / 2, glow: 1.6 });
+        break;
+      case 'orb':       // rune letter orb (the letter itself stays a sprite so it is always readable)
+        B.part(geo('sphere'), 0, 0, 0, 0.42, 0.42, 0.42, 0xb48cff, { glow: 1.3 });
+        B.part(geo('torus'), 0, 0, 0, 0.62, 0.62, 0.8, 0xe2ccff, { rx: Math.PI / 2, glow: 1.2 });
+        break;
+      case 'shard':
+        B.part(geo('crystal'), 0, -0.45, 0, 0.42, 1.0, 0.42, 0xffe066, { glow: 1.8 });
+        B.part(geo('crystal'), 0, 0.45, 0, 0.42, 0.9, 0.42, 0xffe066, { rx: Math.PI, glow: 1.8 });
+        break;
+      default: throw new Error('questGeo ' + name);
+    }
+    const m = B.mesh(propMat, false);
+    QG[name] = m.geometry;
+    return QG[name];
+  }
+  function questMesh(name) {
+    const m = new THREE.Mesh(questGeo(name), propMat);
+    m.castShadow = !low && !/^(mk_|orb|shard)/.test(name);
+    return m;
+  }
+
+  // animated portal swirl: a bright spiral disc (crosses bloom) that turns; skipped with its island
+  let swirlTex = null;
+  function portalSwirl(g, x, z, crater) {
+    if (!swirlTex) {
+      const cv = document.createElement('canvas'); cv.width = cv.height = 256;
+      const c = cv.getContext('2d');
+      const gr = c.createRadialGradient(128, 128, 0, 128, 128, 128);
+      gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.35, 'rgba(255,255,255,0.75)'); gr.addColorStop(1, 'rgba(255,255,255,0.35)');
+      c.fillStyle = gr; c.beginPath(); c.arc(128, 128, 128, 0, 6.28); c.fill();
+      c.strokeStyle = 'rgba(255,255,255,0.95)'; c.lineCap = 'round';
+      for (let arm = 0; arm < 4; arm++) {
+        c.lineWidth = 9; c.beginPath();
+        for (let t = 0; t <= 1; t += 0.02) {
+          const a = arm * Math.PI / 2 + t * 5.2, r = 10 + t * 112;
+          const px = 128 + Math.cos(a) * r, py = 128 + Math.sin(a) * r;
+          if (t === 0) c.moveTo(px, py); else c.lineTo(px, py);
+        }
+        c.stroke();
+      }
+      swirlTex = canvasTex(cv);
+    }
+    const mat = new THREE.MeshBasicMaterial({ map: swirlTex, color: crater ? 0xff8a3a : 0xa77bff, transparent: true, opacity: 0.88, side: THREE.DoubleSide, depthWrite: false });
+    const m = new THREE.Mesh(new THREE.CircleGeometry(1.75, 32), mat);
+    m.position.set(x, 2.35, z);
+    m.renderOrder = 1;
+    m.userData.camIgnore = true;
+    g.add(m);
+    anims.push({ kind: 'swirl', mesh: m, group: g, ph: x });
+    return m;
+  }
+
   function updateAnims() {
     for (let i = 0; i < anims.length; i++) {
       const a = anims[i];
@@ -2435,6 +2676,11 @@ const SkyArt = (() => {
         a.chev.position.y = 2.1 + Math.sin(time * 3 + a.ph) * 0.25;
         a.chev.rotation.y = time * 1.5;
       }
+      else if (a.kind === 'swirl') {
+        a.mesh.rotation.z = -time * 1.6 - a.ph;
+        const k = 1 + Math.sin(time * 2.2 + a.ph) * 0.04;
+        a.mesh.scale.set(k, k, 1);
+      }
     }
   }
 
@@ -2445,6 +2691,7 @@ const SkyArt = (() => {
     // prop kit for sibling modules: const B = new SkyArt.Batch(); SkyArt.K.oak(B, rng, x, z, 1, 0x5cb34c);
     // group.add(B.mesh()) — one merged, swaying, glow-capable draw call (shares propMat)
     Batch, K, geo, get propMat() { return propMat; },
+    questProp, questGeo, questMesh, portalSwirl,
     get hemi() { return hemi; }, get sun() { return sun; }, get dome() { return dome; },
     get composer() { return composer; },
   };

@@ -208,11 +208,19 @@ const SkyPlay = (() => {
       if (i === 0) s.moveTo(x, y); else s.lineTo(x, y);
     }
     s.closePath();
+    // puffy, rounded-edge star (3 bevel rings) so it reads as a polished toy coin, not a prism
     const g = new THREE.ExtrudeGeometry(s, {
-      depth: 0.12, bevelEnabled: true, bevelThickness: 0.08, bevelSize: 0.07, bevelSegments: 1, curveSegments: 1,
+      depth: 0.06, bevelEnabled: true, bevelThickness: 0.11, bevelSize: 0.075, bevelSegments: 3, curveSegments: 1,
     });
     g.center();
+    g.computeVertexNormals();
     return g;
+  }
+  // coins: warm gold that crosses the bloom threshold on the lit face + a little metal so the
+  // sky environment glints off the bevels as they spin (lowPower: the same colours, Lambert)
+  function coinMaterial() {
+    if (ctx.lowPower()) return new THREE.MeshLambertMaterial({ color: 0xffd23f, emissive: 0xffa000, emissiveIntensity: 0.55 });
+    return new THREE.MeshStandardMaterial({ color: 0xffcf33, emissive: 0xffa600, emissiveIntensity: 0.85, metalness: 0.45, roughness: 0.25 });
   }
 
   function addCoin(gid, x, y, z, isle, course) {
@@ -300,7 +308,7 @@ const SkyPlay = (() => {
   }
 
   function buildCoinMesh() {
-    coinMesh = new THREE.InstancedMesh(starGeometry(), mat(0xffd23f, 0x8a5600), COIN_CAP);
+    coinMesh = new THREE.InstancedMesh(starGeometry(), coinMaterial(), COIN_CAP);
     coinMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     coinMesh.frustumCulled = false;
     coinMesh.count = 0;

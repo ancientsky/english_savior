@@ -709,6 +709,7 @@ const SkyGame = (() => {
     buildQuestObjects();
     buildPortals();
     buildSwitches();
+    flushQuestProps();
     AMBIENT_MOBS.forEach(a => spawnMob(a.mob, a.island, a.dx, a.dz));
     buildPlayer();
     setupPointerControls();
@@ -798,7 +799,6 @@ const SkyGame = (() => {
     'runes', 'arena', 'bridge', 'race', 'boss', 'portal', 'order', 'maze']);
 
   const interactables = [];    // { q, x, z, isle, marker }
-  const markerList = [];       // bobbing quest markers
   let quizOpen = false;
   let currentTarget = null;
   let quiz = null;             // quiz overlay DOM refs
@@ -813,20 +813,6 @@ const SkyGame = (() => {
   function isLocked(q) {
     if (q.lockSecret) return secretCleared() < q.lockSecret;
     return q.lock && totalCleared() < q.lock;
-  }
-
-  function markerTexture(symbol, color) {
-    const cv = document.createElement('canvas');
-    cv.width = cv.height = 96;
-    const ctx = cv.getContext('2d');
-    ctx.font = 'bold 72px "Noto Sans TC", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.shadowColor = 'rgba(0,0,0,0.5)';
-    ctx.shadowBlur = 8;
-    ctx.fillStyle = color;
-    ctx.fillText(symbol, 48, 52);
-    return canvasTex(cv);
   }
 
   function markerState(q) {
@@ -845,141 +831,85 @@ const SkyGame = (() => {
   function updateQuestMarkers() {
     for (const it of interactables) {
       const st = markerState(it.q);
-      if (it.markerSym !== st.s) {
-        it.markerSym = st.s;
-        it.marker.material.map = markerTexture(st.s, st.c);
-        it.marker.material.needsUpdate = true;
-      }
+      it.markerSym = st.s;
+      it.mkKind = MK_OF[st.s] || 'lock';
     }
   }
+
+  // ---- floating quest markers: ONE instanced mesh per marker kind for the whole world ----
+  // (they used to be one emoji sprite per quest = ~110 draw calls). 3D "!" / ✓ / 🔒 / gems from
+  // SkyArt.questGeo, glowing through the bloom pass; `it.marker` stays a { visible } handle.
+  const MK_OF = { '!': 'quest', '✓': 'done', '✅': 'done', '🔒': 'lock', '⏳': 'lock', '🌀': 'portal', '⚙️': 'switch' };
+  const MK_KINDS = ['quest', 'done', 'lock', 'portal', 'switch'];
+  const MK_SCALE = { quest: 1.1, done: 0.75, lock: 0.85, portal: 1, switch: 1 };
+  const mkMesh = {};
+  const _mkObj = new THREE.Object3D();
+  function buildMarkerMeshes() {
+    const cap = interactables.length + 4;
+    for (const k of MK_KINDS) {
+      const m = new THREE.InstancedMesh(SkyArt.questGeo('mk_' + k), SkyArt.propMat, cap);
+      m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      m.frustumCulled = false;
+      m.count = 0;
+      scene.add(m);
+      mkMesh[k] = m;
+    }
+  }
+  function updateMarkers() {
+    const n = {};
+    for (const k of MK_KINDS) n[k] = 0;
+    for (let i = 0; i < interactables.length; i++) {
+      const it = interactables[i];
+      if (!it.marker.visible) continue;
+      // the quest being played right now loses its marker (a boss stands on its altar)
+      if ((bossActive && bossActive.q.id === it.q.id) || (arenaActive && arenaActive.q.id === it.q.id)) continue;
+      const g = islandGroups[it.isle.id];
+      if (!g.visible) continue;
+      const dx = it.x - pos.x, dz = it.z - pos.z;
+      if (dx * dx + dz * dz > 170 * 170) continue;
+      const m = mkMesh[it.mkKind];
+      if (!m) continue;
+      const sc = MK_SCALE[it.mkKind] * (it.mkKind === 'quest' ? 1 + Math.max(0, Math.sin(simTime * 4 + i)) * 0.08 : 1);
+      _mkObj.position.set(it.x, g.position.y + it.mkY + Math.sin(simTime * 2 + i) * 0.25, it.z);
+      _mkObj.rotation.set(0, simTime * 1.6 + i, 0);
+      _mkObj.scale.set(sc, sc, sc);
+      _mkObj.updateMatrix();
+      m.setMatrixAt(n[it.mkKind]++, _mkObj.matrix);
+    }
+    for (const k of MK_KINDS) {
+      const m = mkMesh[k];
+      if (!m) continue;
+      m.count = n[k];
+      m.instanceMatrix.needsUpdate = true;
+    }
+    // quest props: one merged mesh per island, hidden beyond prop distance (like SkyArt's props)
+    if ((questLodT -= 1) <= 0) {
+      questLodT = 20;
+      for (const qm of questMeshes) qm.mesh.visible = Math.hypot(qm.x - camera.position.x, qm.y - camera.position.y, qm.z - camera.position.z) - qm.r < (lowPower() ? 140 : 190);
+    }
+  }
+  let questLodT = 0;
+  const questMeshes = [];   // { mesh, x, y, z, r }
+  const questBatches = {};  // isleId -> SkyArt.Batch (filled by buildQuestObjects / buildPortals / buildSwitches)
+  function questBatch(isleId) { return questBatches[isleId] || (questBatches[isleId] = new SkyArt.Batch()); }
+  function flushQuestProps() {
+    for (const id in questBatches) {
+      const mesh = questBatches[id].mesh(SkyArt.propMat, !lowPower());
+      if (!mesh) continue;
+      const isle = isleById(id);
+      islandGroups[id].add(mesh);
+      questMeshes.push({ mesh, x: isle.pos[0], y: isle.pos[1], z: isle.pos[2], r: isle.r });
+    }
+    buildMarkerMeshes();
+    updateQuestMarkers();
+    if (window.__skyTest) window.__skyTest.markers = () => MK_KINDS.map(k => k + ':' + mkMesh[k].count).join(' ');
+  }
+  // face the island centre (props are authored with their "front" on local +z)
+  function faceCentre(dx, dz) { return Math.hypot(dx, dz) < 0.5 ? 0 : Math.atan2(-dx, -dz); }
 
   // little NPC characters (built + idle-animated by js/sky-avatar.js)
   function makeNpcFigure(emoji, tint) {
     return SkyAvatar.makeNpc(emoji, tint);
-  }
-
-  function makeQuestVisual(q) {
-    const g = new THREE.Group();
-    switch (q.type) {
-      case 'chest': {
-        const base = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.9, 1.05), matOf(0x8a5a2a));
-        base.position.y = 0.45;
-        base.castShadow = true;
-        g.add(base);
-        const lid = new THREE.Mesh(new THREE.BoxGeometry(1.56, 0.4, 1.12), matOf(0x6e4620));
-        lid.position.y = 1.05;
-        g.add(lid);
-        const lock = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.34, 0.14), matOf(0xf5c518, 0x7a5200));
-        lock.position.set(0, 0.8, 0.56);
-        g.add(lock);
-        break;
-      }
-      case 'gate': {
-        [-1.25, 1.25].forEach(x => {
-          const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.7, 3.4, 0.7), matOf(0x9a927e));
-          pillar.position.set(x, 1.7, 0);
-          pillar.castShadow = true;
-          g.add(pillar);
-        });
-        const lintel = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.6, 0.9), matOf(0x8a8270));
-        lintel.position.y = 3.6;
-        lintel.castShadow = true;
-        g.add(lintel);
-        const rune = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.1), matOf(0x66e0ff, 0x1a5a7a));
-        rune.position.set(0, 3.6, 0.5);
-        g.add(rune);
-        break;
-      }
-      case 'npc':
-        g.add(makeNpcFigure(q.npc || '🙂', 0xc47ab8));
-        break;
-      case 'listen':
-        [[-0.8, 0, 0.85], [0.7, 0.2, 1.1], [0, -0.6, 0.7]].forEach(([x, z, s]) => {
-          const c = new THREE.Mesh(new THREE.OctahedronGeometry(0.55 * s), matOf(0x9fefff, 0x2a7a9a));
-          c.position.set(x, 0.6 * s, z);
-          c.scale.y = 1.8;
-          c.castShadow = true;
-          g.add(c);
-        });
-        break;
-      case 'pillars':
-        [-0.9, 0.9].forEach(x => {
-          const p = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.48, 1.6, 8), matOf(0xd8d2bc));
-          p.position.set(x, 0.8, 0);
-          p.castShadow = true;
-          g.add(p);
-          const orb = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 6), matOf(0xffd166, 0x7a5200));
-          orb.position.set(x, 1.9, 0);
-          g.add(orb);
-        });
-        break;
-      case 'runes': {
-        const slab = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.3, 1.6), matOf(0x8a8270));
-        slab.position.y = 0.15;
-        g.add(slab);
-        const glyph = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.06, 0.8), matOf(0xb08fff, 0x4a2a8a));
-        glyph.position.y = 0.34;
-        g.add(glyph);
-        break;
-      }
-      case 'arena': {
-        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 3.2, 6), matOf(0x6a4a2e));
-        pole.position.y = 1.6;
-        g.add(pole);
-        const flag = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.7, 0.06), matOf(0xe85454));
-        flag.position.set(0.6, 2.7, 0);
-        g.add(flag);
-        break;
-      }
-      case 'race': {
-        const ring = new THREE.Mesh(new THREE.TorusGeometry(1.3, 0.14, 8, 20), matOf(0xffd166, 0x7a5200));
-        ring.position.y = 1.8;
-        g.add(ring);
-        break;
-      }
-      case 'bridge': {
-        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 1.4, 6), matOf(0x6a4a2e));
-        post.position.y = 0.7;
-        g.add(post);
-        const sign = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.8, 0.1), matOf(0xa8763e));
-        sign.position.y = 1.5;
-        g.add(sign);
-        break;
-      }
-      case 'boss': {
-        const altar = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 2, 1, 8), matOf(0x2c2c40, 0x1a1a4a));
-        altar.position.y = 0.5;
-        altar.castShadow = true;
-        g.add(altar);
-        break;
-      }
-      case 'order': {
-        const ring = new THREE.Mesh(new THREE.TorusGeometry(1.3, 0.14, 8, 16), matOf(0x8a8270));
-        ring.rotation.x = Math.PI / 2;
-        ring.position.y = 0.2;
-        g.add(ring);
-        [0, 1, 2].forEach(i => {
-          const a = (i / 3) * Math.PI * 2;
-          const stone = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.34, 0.28, 6), matOf(0xb08fff, 0x3a1a7a));
-          stone.position.set(Math.cos(a) * 1.3, 0.24, Math.sin(a) * 1.3);
-          g.add(stone);
-        });
-        break;
-      }
-      case 'maze': {
-        [-0.8, 0.8].forEach(x => {
-          const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, 2, 6), matOf(0x44305a));
-          pillar.position.set(x, 1, 0);
-          pillar.castShadow = true;
-          g.add(pillar);
-        });
-        const arch = new THREE.Mesh(new THREE.TorusGeometry(0.95, 0.16, 8, 16, Math.PI), matOf(0xb06ae8, 0x5a2a9a));
-        arch.position.set(0, 2, 0);
-        g.add(arch);
-        break;
-      }
-    }
-    return g;
   }
 
   function buildQuestObjects() {
@@ -987,24 +917,17 @@ const SkyGame = (() => {
       const isle = isleById(q.island);
       const g = islandGroups[q.island];
       if (!isle || !g) continue;
-      const visual = makeQuestVisual(q);
-      visual.position.set(q.dx, 0, q.dz);
-      visual.traverse(o => { o.matrixAutoUpdate = false; o.updateMatrix(); });
-      visual.matrixAutoUpdate = false;
-      visual.updateMatrix();
-      g.add(visual);
-
+      if (q.type === 'npc') {
+        const npc = makeNpcFigure(q.npc || '🙂', 0xc47ab8);
+        npc.position.set(q.dx, 0, q.dz);
+        npc.rotation.y = faceCentre(q.dx, q.dz);
+        g.add(npc);
+      } else {
+        SkyArt.questProp(questBatch(q.island), q.type, q.dx, q.dz, faceCentre(q.dx, q.dz));
+      }
       const st = markerState(q);
-      const marker = new THREE.Sprite(new THREE.SpriteMaterial({
-        map: markerTexture(st.s, st.c), transparent: true,
-      }));
-      marker.scale.set(1.6, 1.6, 1);
-      marker.position.set(q.dx, 4.3, q.dz);
-      g.add(marker);
-      markerList.push(marker);
-
       interactables.push({
-        q, marker, markerSym: st.s,
+        q, marker: { visible: true }, markerSym: st.s, mkKind: MK_OF[st.s], mkY: q.type === 'gate' ? 5.6 : q.type === 'race' ? 4.6 : 3.9,
         x: isle.pos[0] + q.dx, z: isle.pos[2] + q.dz, isle,
       });
     }
@@ -1016,48 +939,15 @@ const SkyGame = (() => {
       const isle = isleById(p.island);
       const g = islandGroups[p.island];
       if (!isle || !g) continue;
-      // crater portals (火山口深洞 ↔ 地心世界) get a rocky rim + orange glow
-      // instead of the purple swirl — cheap recolor, visually distinct
+      // crater portals (火山口深洞 ↔ 地心世界) get a basalt frame + lava-orange swirl
       const isCraterPortal = p.id.startsWith('portal_crater') || p.id.startsWith('portal_und');
-      const visual = new THREE.Group();
-      const ring = new THREE.Mesh(
-        new THREE.TorusGeometry(1.7, 0.22, 8, 24),
-        isCraterPortal ? matOf(0x2a1410, 0x1a0a06) : matOf(0xb06ae8, 0x5a2a9a)
-      );
-      ring.position.y = 2.2;
-      ring.castShadow = true;
-      visual.add(ring);
-      const swirl = new THREE.Mesh(
-        new THREE.CircleGeometry(1.45, 20),
-        new THREE.MeshLambertMaterial(isCraterPortal
-          ? { color: 0xff6a20, emissive: 0xdd3300, transparent: true, opacity: 0.75, side: THREE.DoubleSide }
-          : { color: 0x8f6bff, emissive: 0x3a1a7a, transparent: true, opacity: 0.7, side: THREE.DoubleSide })
-      );
-      swirl.position.y = 2.2;
-      visual.add(swirl);
-      [-1.9, 1.9].forEach(x => {
-        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.3, 4.2, 6),
-          isCraterPortal ? matOf(0x241a16) : matOf(0x44305a));
-        post.position.set(x, 2.1, 0);
-        post.castShadow = true;
-        visual.add(post);
-      });
-      visual.position.set(p.dx, 0, p.dz);
-      g.add(visual);
-      visual.userData.spin = ring;
+      SkyArt.questProp(questBatch(p.island), 'portal', p.dx, p.dz, 0, isCraterPortal);
+      SkyArt.portalSwirl(g, p.dx, p.dz, isCraterPortal);
 
       const q = { id: p.id, type: 'portal', name: p.name, lock: p.lock, to: p.to };
       const st = markerState(q);
-      const marker = new THREE.Sprite(new THREE.SpriteMaterial({
-        map: markerTexture(st.s, st.c), transparent: true,
-      }));
-      marker.scale.set(1.6, 1.6, 1);
-      marker.position.set(p.dx, 5.2, p.dz);
-      if (p.secret && !save.secretsFound[p.id]) marker.visible = false;
-      g.add(marker);
-      markerList.push(marker);
       interactables.push({
-        q, marker, markerSym: st.s, secret: !!p.secret,
+        q, marker: { visible: !(p.secret && !save.secretsFound[p.id]) }, markerSym: st.s, mkKind: MK_OF[st.s], mkY: 5.9, secret: !!p.secret,
         x: isle.pos[0] + p.dx, z: isle.pos[2] + p.dz, isle,
       });
     }
@@ -1069,31 +959,11 @@ const SkyGame = (() => {
       const isle = isleById(sw.island);
       const g = islandGroups[sw.island];
       if (!isle || !g) continue;
-      const visual = new THREE.Group();
-      const stone = new THREE.Mesh(new THREE.DodecahedronGeometry(0.55), matOf(0x2a2a34));
-      stone.position.y = 0.4;
-      stone.castShadow = true;
-      visual.add(stone);
-      const shard = new THREE.Mesh(new THREE.OctahedronGeometry(0.32),
-        new THREE.MeshLambertMaterial({ color: 0x7fe8ff, emissive: 0x2a7a9a, map: TEX.crystalTex }));
-      shard.position.y = 1.05;
-      shard.scale.y = 1.5;
-      visual.add(shard);
-      visual.position.set(sw.dx, 0, sw.dz);
-      g.add(visual);
-
+      SkyArt.questProp(questBatch(sw.island), 'switch', sw.dx, sw.dz, faceCentre(sw.dx, sw.dz));
       const q = { id: sw.id, type: 'switch', name: sw.name, to: sw.to };
       const st = markerState(q);
-      const marker = new THREE.Sprite(new THREE.SpriteMaterial({
-        map: markerTexture(st.s, st.c), transparent: true,
-      }));
-      marker.scale.set(1.4, 1.4, 1);
-      marker.position.set(sw.dx, 3.2, sw.dz);
-      if (!save.secretsFound[sw.id]) marker.visible = false;
-      g.add(marker);
-      markerList.push(marker);
       interactables.push({
-        q, marker, markerSym: st.s, secret: true,
+        q, marker: { visible: !!save.secretsFound[sw.id] }, markerSym: st.s, mkKind: MK_OF[st.s], mkY: 3.0, secret: true,
         x: isle.pos[0] + sw.dx, z: isle.pos[2] + sw.dz, isle,
       });
     }
@@ -2251,8 +2121,12 @@ const SkyGame = (() => {
       const a = Math.random() * Math.PI * 2;
       const rr = isle.r * (0.25 + Math.random() * 0.6);
       const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: letterTexture(word[i]), transparent: true }));
-      sprite.scale.set(1.3, 1.3, 1);
+      sprite.scale.set(1.1, 1.1, 1);
       sprite.position.set(Math.cos(a) * rr, 1.3, Math.sin(a) * rr);
+      const orb = SkyArt.questMesh('orb');
+      orb.position.set(0, -0.95, 0);
+      orb.scale.setScalar(0.8);
+      sprite.add(orb);   // removed together with the letter
       g.add(sprite);
       runeActive.orbs.push({ sprite, letter: word[i], got: false });
     }
@@ -2407,7 +2281,6 @@ const SkyGame = (() => {
     const topY = isle.pos[1] + 0.15;
     const n = oa.words.length;
     const order = shuffled(oa.words.map((_, i) => i));
-    const stoneGeo = GEO.orderStone || (GEO.orderStone = new THREE.CylinderGeometry(0.85, 0.95, 0.3, 10));
     const stones = [];
     const rr = 2 + n * 0.28;
     for (let i = 0; i < n; i++) {
@@ -2415,8 +2288,8 @@ const SkyGame = (() => {
       const x = baseX + Math.cos(a) * rr;
       const z = baseZ + Math.sin(a) * rr;
       const word = oa.words[order[i]];
-      const mesh = new THREE.Mesh(stoneGeo, new THREE.MeshLambertMaterial({ color: 0x8a8270 }));
-      mesh.position.set(x, topY, z);
+      const mesh = SkyArt.questMesh('order_stone');
+      mesh.position.set(x, topY - 0.15, z);
       scene.add(mesh);
       const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: wordTexture(word), transparent: true }));
       sprite.scale.set(Math.max(1.5, word.length * 0.3 + 0.5), 0.85, 1);
@@ -2528,20 +2401,7 @@ const SkyGame = (() => {
   }
 
   // ---- maze (傳送迷宮: answer a clue at each of 4 portal-gate nodes to advance) ----
-  function makeMazeArch() {
-    const g = new THREE.Group();
-    [-0.7, 0.7].forEach(x => {
-      const p = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 1.7, 6),
-        new THREE.MeshLambertMaterial({ color: 0x44305a }));
-      p.position.set(x, 0.85, 0);
-      g.add(p);
-    });
-    const arch = new THREE.Mesh(new THREE.TorusGeometry(0.8, 0.13, 8, 16, Math.PI),
-      new THREE.MeshLambertMaterial({ color: 0xb06ae8, emissive: 0x5a2a9a }));
-    arch.position.set(0, 1.7, 0);
-    g.add(arch);
-    return g;
-  }
+  function makeMazeArch() { return SkyArt.questMesh('maze_arch'); }
 
   function buildMazeNodes(q) {
     const isle = isleById(q.island);
@@ -2623,7 +2483,10 @@ const SkyGame = (() => {
 
   function mazeSpawnChest() {
     const last = mazeActive.nodes[mazeActive.nodes.length - 1];
-    const chest = makeQuestVisual({ type: 'chest' });
+    const cb = new SkyArt.Batch();
+    SkyArt.questProp(cb, 'chest', 0, 0, faceCentre(last.x - mazeActive.startX, last.z - mazeActive.startZ) + Math.PI);
+    const chest = cb.mesh(SkyArt.propMat, !lowPower());
+    chest.matrixAutoUpdate = true;
     chest.position.set(last.x, mazeActive.isleY, last.z);
     scene.add(chest);
     mazeActive.chest = chest;
@@ -2701,14 +2564,13 @@ const SkyGame = (() => {
     ensureCombatHud();
     const isle = isleById(q.island);
     const rings = [];
-    const ringGeo = GEO.ring || (GEO.ring = new THREE.TorusGeometry(1.8, 0.16, 8, 22));
     for (let i = 0; i < q.n; i++) {
       const a = (i / q.n) * Math.PI * 2 * 1.4 + 0.6;
       const rr = isle.r * (0.3 + 0.35 * ((i % 3) / 2));
       const x = isle.pos[0] + Math.cos(a) * rr;
       const z = isle.pos[2] + Math.sin(a) * rr;
       const y = isle.pos[1] + 1.5 + (i % 2) * 0.9;
-      const mesh = new THREE.Mesh(ringGeo, new THREE.MeshLambertMaterial({ color: 0x8a8a8a }));
+      const mesh = SkyArt.questMesh('ring_idle');
       mesh.position.set(x, y, z);
       mesh.rotation.y = a + Math.PI / 2;
       scene.add(mesh);
@@ -2723,14 +2585,7 @@ const SkyGame = (() => {
 
   function highlightRing() {
     raceActive.rings.forEach((r, i) => {
-      if (r.passed) r.mesh.material.color.setHex(0x4ade80);
-      else if (i === raceActive.idx) {
-        r.mesh.material.color.setHex(0xffd166);
-        r.mesh.material.emissive = new THREE.Color(0x7a5200);
-      } else {
-        r.mesh.material.color.setHex(0x8a8a8a);
-        r.mesh.material.emissive = new THREE.Color(0x000000);
-      }
+      r.mesh.geometry = SkyArt.questGeo(r.passed ? 'ring_done' : i === raceActive.idx ? 'ring_next' : 'ring_idle');
     });
   }
 
@@ -3117,33 +2972,12 @@ const SkyGame = (() => {
   }
 
   // ---- meteor shower ----
-  let _shardGlowTex = null;
-  function shardGlowTex() {
-    if (_shardGlowTex) return _shardGlowTex;
-    const cv = document.createElement('canvas');
-    cv.width = cv.height = 64;
-    const ctx = cv.getContext('2d');
-    const grad = ctx.createRadialGradient(32, 32, 2, 32, 32, 32);
-    grad.addColorStop(0, 'rgba(255,230,102,0.9)');
-    grad.addColorStop(1, 'rgba(255,230,102,0)');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, 64, 64);
-    _shardGlowTex = canvasTex(cv);
-    return _shardGlowTex;
-  }
-
   function makeShardMesh() {
     const g = new THREE.Group();
-    const core = new THREE.Mesh(new THREE.OctahedronGeometry(0.4, 0),
-      new THREE.MeshLambertMaterial({ color: 0xffe066, emissive: 0xcc9900 }));
+    // a glowing double-ended crystal (bloom does the halo — no sprite glow)
+    const core = SkyArt.questMesh('shard');
+    core.scale.setScalar(0.75);
     g.add(core);
-    if (!lowPower()) {
-      const glow = new THREE.Sprite(new THREE.SpriteMaterial({
-        map: shardGlowTex(), transparent: true, depthWrite: false, fog: false, opacity: 0.85,
-      }));
-      glow.scale.set(2.2, 2.2, 1);
-      g.add(glow);
-    }
     return g;
   }
 
@@ -3823,10 +3657,7 @@ const SkyGame = (() => {
       islandBob[isle.id] = bob;
       islandGroups[isle.id].position.y = isle.pos[1] + bob;
     }
-    // bobbing quest markers
-    for (let i = 0; i < markerList.length; i++) {
-      markerList[i].position.y = 4.3 + Math.sin(simTime * 2 + i) * 0.25;
-    }
+    updateMarkers();   // bobbing / spinning 3D quest markers (instanced)
     // combat & advanced quests
     updateMobs(dt);
     updateBolt(dt);
