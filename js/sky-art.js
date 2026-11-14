@@ -2241,8 +2241,10 @@ const SkyArt = (() => {
     },
     coretemple(B, rng, isle, st, place, info, g) {
       place(8, 0.6, 0.9, 1.2, 2.6, (x, z) => K.column(B, rng, x, z, 3 + rng() * 2, 0x14100c, 0xd8a83a));
-      B.at(0, 6.5, 0, 0, 1);
-      B.part(geo('sphere'), 0, 0, 0, 1.8, 1.8, 1.8, 0xff6a1a, { glow: 2.6 });
+      // the molten core hangs BEHIND the boss altar (the 熔岩核心巨獸 spawns at z -7 and used to
+      // stand inside it); glow kept under the white-out point so it stays orange, not pink-white
+      B.at(0, 10.5, -15, 0, 1);
+      B.part(geo('sphere'), 0, 0, 0, 1.8, 1.8, 1.8, 0xff5a10, { glow: 1.3 });
       B.part(geo('torus'), 0, 0, 0, 2.6, 2.6, 1.4, 0xd8a83a, { rx: 1.2, glow: 1 });
       B.part(geo('torus'), 0, 0, 0, 3.1, 3.1, 1.4, 0xd8a83a, { rx: 0.3, ry: 0.8, glow: 1 });
       place(4, 0.35, 0.55, 1, 3, (x, z) => K.brazier(B, rng, x, z));
