@@ -29,8 +29,9 @@
   padding: 4px 14px 4px 8px;
   border-radius: 999px;
   background: linear-gradient(180deg, #fff6c8, #ffd84a 55%, #f5a800);
-  border: 2px solid #fff;
-  box-shadow: 0 3px 0 #b87400, 0 6px 14px rgba(0, 0, 0, 0.3);
+  /* same chunky ink outline + white rim as UI's hearts / buttons (css/sky.css) */
+  border: 3px solid var(--aw-ink, #14224f);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85), 0 4px 0 2px var(--aw-ink2, #0b1438), inset 0 2px 0 rgba(255, 255, 255, 0.6);
   color: #6a3a00;
   font-weight: 900;
   font-size: 1.05rem;
@@ -61,14 +62,14 @@
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  border: 2px solid #fff;
-  background: linear-gradient(180deg, #ffd0e6, #ff8fb8);
-  box-shadow: 0 3px 0 #c2507e, 0 5px 12px rgba(0, 0, 0, 0.3);
+  border: 3px solid var(--aw-ink, #14224f);
+  background: linear-gradient(180deg, #ffd0e6, #ff8fb8 60%, #e0558f);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85), 0 4px 0 2px var(--aw-ink2, #0b1438), inset 0 2px 0 rgba(255, 255, 255, 0.5);
   font-size: 1.05rem;
   cursor: pointer;
   pointer-events: auto;
 }
-.aw-pet-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #c2507e; }
+.aw-pet-btn:active { transform: translateY(3px); box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85), 0 1px 0 2px var(--aw-ink2, #0b1438); }
 
 /* ---------- obby run HUD (bottom-centre) + word-gate banner ---------- */
 .aw-run-hud {
@@ -363,6 +364,11 @@
   .aw-play-card { padding: 14px; border-radius: 18px; }
   .aw-reveal-en { font-size: 2rem; }
 }
+/* phone portrait: the top row is full (hearts left, camera buttons right) — the coin pill and
+   🐾 go into the right column under the minimap instead of over both */
+@media (max-width: 640px) and (min-height: 481px) {
+  .aw-play-hud { top: 158px; left: auto; right: 12px; transform: none; }
+}
 /* phone landscape: keep the run HUD clear of the joystick and the touch buttons */
 @media (max-height: 460px) {
   .aw-canvas-wrap.touch-mode .aw-run-hud { bottom: auto; top: 50px; }
@@ -373,4 +379,10 @@
   .aw-play-panel.bottom .aw-hatch-opts { grid-template-columns: 1fr 1fr; }
   .aw-play-panel.bottom .aw-reveal-en { font-size: 1.8rem; }
   .aw-hatch-prompt { margin: 4px 0; font-size: 1.05rem; }
+}
+/* very narrow phones (portrait ≤ 420px): five hearts + four camera buttons don't fit one row
+   at full size — shrink both a notch so the 5th heart isn't under 📜 */
+@media (max-width: 420px) {
+  .aw-heart { width: 19px; height: 18px; }
+  .aw-cam-btn { width: 34px; height: 34px; font-size: 0.95rem; }
 }

@@ -1826,11 +1826,13 @@ const SkyPlay = (() => {
     gate.id = 'sky-gate-banner';
     wrap.appendChild(gate);
     const dash = document.createElement('button');
-    dash.className = 'aw-dash-btn';
     dash.id = 'sky-btn-dash';
     dash.title = '衝刺（C）';
     dash.textContent = '💨';
-    wrap.appendChild(dash);
+    // sits in UI's touch-button row (same chunky style as ⚡ / 🦘); falls back to its own spot
+    const touchRow = wrap.querySelector('.aw-touch-btns');
+    if (touchRow) { dash.className = 'aw-touch-btn is-dash'; touchRow.insertBefore(dash, touchRow.firstChild); }
+    else { dash.className = 'aw-dash-btn'; wrap.appendChild(dash); }
     const panel = document.createElement('div');
     panel.className = 'aw-play-panel';
     panel.id = 'sky-play-panel';
