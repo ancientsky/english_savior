@@ -271,6 +271,7 @@ const SkyGame = (() => {
       start: startAdventure,
       player: () => ({ x: pos.x, y: pos.y, z: pos.z, grounded, island: currentIsland, hearts, simTime }),
       teleport: (x, y, z) => { pos.x = x; pos.y = y; pos.z = z; vy = 0; },
+      warp: id => usePortal({ to: id }),   // like a portal: sets the region (underground void depth) too
       stats: () => ({ islands: SKY_ISLANDS.length, ready: threeReady, playing, colliders: colliders.length }),
       keys: k => Object.assign(keys, k),
       jump: () => { jumpBufferedAt = simTime; },
@@ -1534,6 +1535,7 @@ const SkyGame = (() => {
       despawnQuestMobs(arenaActive.q.id);
       arenaActive = null;
     }
+    if (bossActive) resetBoss();   // the boss waits on its altar (full HP) — same as a KO
     const dawn = SKY_ISLANDS[0];
     pos.x = dawn.pos[0];
     pos.z = dawn.pos[2];
@@ -3845,8 +3847,12 @@ const SkyGame = (() => {
       case 'order': startOrder(q); return;
       case 'maze': startMaze(q); return;
       case 'boss':
-        if (bossActive) engageBoss();
-        else startBoss(q);
+        if (bossActive && bossActive.q.id === q.id) engageBoss();
+        else {
+          // another boss is still awake far away (left by portal / bridge): it goes back to sleep
+          if (bossActive) resetBoss();
+          startBoss(q);
+        }
         return;
       default: openQuest(q);
     }

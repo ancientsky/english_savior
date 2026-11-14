@@ -1989,6 +1989,11 @@ const SkyAvatar = (() => {
       const robe = v2([[0.0001, 0.2], [2.3, 0.2], [2.2, 1.2], [1.9, 3.2], [1.8, 5.6], [1.2, 6.2], [0.0001, 6.3]]);
       k.add(lathe('robe', robe, 22), B, 0, 0, 0);
       k.add(torus(1.85, 0.16, 8, 26), 0xffd34a, 0, 3.2, 0, Math.PI / 2);
+    } else if (dragon) {
+      // pear-shaped scaly body leaning forward, banded pale belly, a neck up to the head
+      k.add(sph(2.0, 20, 16), B, 0, 3.6, -0.2, 0.25, 0, 0, 1, 1.25, 0.95);
+      for (let i = 0; i < 5; i++) k.add(rbox(2.1 - Math.abs(i - 2) * 0.32, 0.42, 0.5, 0.2), BL.belly, 0, 2.3 + i * 0.62, 1.55 - Math.abs(i - 2) * 0.12, -0.2);
+      for (let i = 0; i < 3; i++) k.add(sph(0.85 - i * 0.08, 14, 10), B, 0, 5.4 + i * 0.6, 0.5 + i * 0.35);
     } else {
       k.add(rbox(3.6, 3.8, 2.7, 0.9), B, 0, 3.9, 0);
       k.add(rbox(2.4, 2.4, 0.4, 0.5), BL.belly || shade(B, 1.5), 0, 3.6, 1.25);
@@ -1997,16 +2002,23 @@ const SkyAvatar = (() => {
     [-1, 1].forEach(s => k.add(sph(1.05, 16, 12), dragon ? shade(B, 1.2) : A, s * 2.1, 5.3, 0, 0, 0, 0, 1, 0.85, 1));
     // head
     const head = new THREE.Group();
-    head.position.set(0, 7.0, 0.2);
+    head.position.set(0, 7.0, dragon ? 1.5 : 0.2);
     body.add(head);
     const kh = new Kit(), khg = new Kit();
     if (dragon) {
-      kh.add(rbox(2.0, 1.6, 2.2, 0.6), H, 0, 0, 0);
-      kh.add(rbox(1.6, 0.9, 1.6, 0.4), H, 0, -0.3, 1.4);
+      // long snout, open jaw with fangs, swept-back horns, frills and glowing nostrils
+      kh.add(rbox(2.0, 1.5, 2.0, 0.6), H, 0, 0, 0);
+      kh.add(rbox(1.5, 0.8, 2.0, 0.38), H, 0, -0.05, 1.6);
+      kh.add(rbox(1.3, 0.38, 1.7, 0.18), shade(H, 0.8), 0, -0.72, 1.35, 0.22);
+      kh.add(rbox(1.2, 0.2, 1.4, 0.1), 0xd04a8a, 0, -0.5, 1.4, 0.12);
+      kh.add(rbox(1.7, 0.3, 0.5, 0.14), shade(H, 0.7), 0, 0.55, 0.85, 0.12);
       [-1, 1].forEach(s => {
-        for (let i = 0; i < 4; i++) kh.add(sph(0.3 - i * 0.06, 10, 8), 0xe8dcc0, s * (0.6 + i * 0.2), 0.8 + i * 0.3, -0.4 - i * i * 0.12);
-        kh.add(sph(0.1, 8, 6), 0x1a0a2a, s * 0.4, -0.05, 2.2);
-        kh.add(lathe('bfang', v2([[0.1, 0], [0.0001, -0.3]]), 8), 0xffffff, s * 0.45, -0.75, 1.9);
+        kh.add(lathe('bhorn', v2([[0.3, 0], [0.22, 0.5], [0.0001, 1.1]]), 10), 0xf0e4c8, s * 0.6, 0.65, -0.5, -1.0, 0, -s * 0.35, 1.2, 1.9, 1.2);
+        kh.add(lathe('bhorn', v2([[0.3, 0], [0.22, 0.5], [0.0001, 1.1]]), 10), 0xe0d2b4, s * 1.0, 0.2, -0.6, -1.3, 0, -s * 0.9, 0.7, 1.1, 0.7);
+        for (let i = 0; i < 3; i++) kh.add(lathe('bspike', v2([[0.3, 0], [0.18, 0.3], [0.0001, 0.6]]), 8), 0x8a5ad8, s * 1.0, -0.3 - i * 0.35, -0.3 - i * 0.2, 0, 0, -s * 1.5, 0.7);
+        kh.add(lathe('bfang', v2([[0.1, 0], [0.0001, -0.3]]), 8), 0xffffff, s * 0.5, -0.6, 2.35, 0, 0, 0, 1.4);
+        kh.add(lathe('bfang', v2([[0.1, 0], [0.0001, -0.3]]), 8), 0xffffff, s * 0.3, -0.62, 2.45, 0, 0, 0, 1.1);
+        khg.add(sph(0.12, 8, 6), 0xff6ad5, s * 0.33, 0.12, 2.62);   // glowing nostrils
       });
     } else if (temple) {
       kh.add(capGeo('bhood', 1.25, 2.4, -1.1, 0.9, TAU - 1.8), H, 0, 0.1, 0);
@@ -2046,8 +2058,17 @@ const SkyAvatar = (() => {
       kg.add(shapeGeo('bolt', [[0, 0.8], [0.35, 0.8], [0.1, 0.3], [0.4, 0.3], [-0.2, -0.6], [0.0, -0.05], [-0.3, -0.05]], 0.1), 0x9fe0ff, 0, 3.7, 1.5, 0, 0, 0, 1.4);
     }
     if (dragon) {
-      for (let i = 0; i < 4; i++) k.add(lathe('bspike', v2([[0.3, 0], [0.18, 0.3], [0.0001, 0.6]]), 8), 0x6a3aa8, 0, 5.4 - i * 1.1, -1.25, -1.2);
-      for (let i = 0; i < 6; i++) k.add(sph(0.7 - i * 0.1, 12, 10), B, 0, 1.4 - i * 0.12, -1.6 - i * 0.7);
+      for (let i = 0; i < 5; i++) k.add(lathe('bspike', v2([[0.3, 0], [0.18, 0.3], [0.0001, 0.6]]), 8), 0x8a5ad8, 0, 6.2 - i * 1.0, -1.7 + i * 0.12, -1.0, 0, 0, 1.5 - i * 0.12);
+      // a long tail that sweeps round to the side, so it reads from the front, ending in a glowing spade
+      let tx = 0, tz = -1.6, ta = Math.PI;
+      for (let i = 0; i < 10; i++) {
+        const r = 0.85 - i * 0.07;
+        k.add(sph(r, 12, 10), B, tx, 1.0 - i * 0.03, tz);
+        if (i % 2 === 0) k.add(lathe('bspike', v2([[0.3, 0], [0.18, 0.3], [0.0001, 0.6]]), 8), 0x8a5ad8, tx, 1.0 + r * 0.8, tz, 0, 0, 0, r * 0.9);
+        ta -= 0.24;
+        tx += Math.sin(ta) * 0.8; tz += Math.cos(ta) * 0.8;
+      }
+      kg.add(sph(0.5, 10, 8), 0xff6ad5, tx, 0.95, tz, 0, 0, 0, 1.3, 0.35, 1);
     }
     body.add(k.mesh(mats.body));
     if (kg.list.length) body.add(kg.mesh(mats.glow, false));
@@ -2061,6 +2082,7 @@ const SkyAvatar = (() => {
       else {
         fk.add(rbox(1.3, 1.3, 1.3, 0.45), A, 0, 0, 0);
         fk.add(rbox(1.1, 0.4, 0.4, 0.18), shade(A, 1.3), 0, 0.3, 0.55);
+        if (dragon) for (let i = 0; i < 3; i++) fk.add(lathe('bfang', v2([[0.1, 0], [0.0001, -0.3]]), 8), 0xf4ecda, (i - 1) * 0.4, -0.55, 0.55, -0.5, 0, 0, 1.7);   // talons
       }
       fg.add(fk.mesh(mats.body));
       if (temple) { const fkg = new Kit(); fkg.add(sph(0.25, 10, 8), d.eye, 0, 0, 0.45); fg.add(fkg.mesh(mats.glow, false)); }
@@ -2073,7 +2095,7 @@ const SkyAvatar = (() => {
       const wp = [[0, 0], [1.2, 1.4], [2.6, 2.4], [3.8, 2.0], [3.4, 0.9], [3.6, -0.2], [2.6, 0.2], [2.2, -0.9], [1.3, -0.2], [0.6, -1.0]];
       [-1, 1].forEach(s => {
         const wk = new Kit();
-        wk.add(shapeGeo('bwing', wp, 0.12), 0x7a52c8, 0, 0, 0, 0, s < 0 ? Math.PI : 0, 0);
+        wk.add(shapeGeo('bwing', wp, 0.12), 0x7a52c8, 0, 0, 0, 0, s < 0 ? Math.PI : 0, 0, 1.45, 1.45, 1);
         const wg = new THREE.Group();
         wg.position.set(s * 1.2, 5.5, -1.2);
         const wm = wk.mesh(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, side: THREE.DoubleSide, emissive: 0x1a0a3a }));
