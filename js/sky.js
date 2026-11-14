@@ -3426,7 +3426,8 @@ const SkyGame = (() => {
         celebrate: n => spawnConfetti(n || 36),
         motion: () => ({ ...motion }),
         cam: () => ({ ...cam }),
-        setCam: o => Object.assign(cam, o),
+        // (PLAY's setCam(theta, phi, radius) and AVATAR's setCam({theta, phi, radius}) both work)
+        setCam: (o, phi, radius) => { if (typeof o === 'object') Object.assign(cam, o); else { cam.theta = o; if (phi !== undefined) cam.phi = phi; if (radius !== undefined) cam.radius = radius; } },
         spawnMobHere: (id, dx, dz) => { const isle = isleById(currentIsland) || SKY_ISLANDS[0]; return mobs.indexOf(spawnMob(id, isle.id, pos.x - isle.pos[0] + dx, pos.z - isle.pos[2] + dz)); },
         hitMob: i => hitMob(mobs[i]),
       });
