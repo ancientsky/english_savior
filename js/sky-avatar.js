@@ -177,9 +177,23 @@ const SkyAvatar = (() => {
     this.list.length = 0;
     geo.computeBoundingSphere();
     const m = new THREE.Mesh(geo, mat);
-    m.castShadow = shadow;
+    m.castShadow = shadow && castsAvatar();
     return m;
   };
+  // the 🧪 probe may exclude the avatar class from shadows on a device (SkyArt.casts)
+  const castsAvatar = () => typeof SkyArt === 'undefined' || !SkyArt.casts || SkyArt.casts('avatar');
+  // rigs cast but never receive (no receiveShadow anywhere here): compile their lit materials
+  // without the shadow-map variant — same pixels, fewer shadow-sampling programs
+  function noRecv(root) {
+    if (typeof SkyArt === 'undefined' || !SkyArt.noShadowRecv) return root;
+    root.traverse(o => {
+      if (!o.isMesh || o.receiveShadow) return;
+      (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => {
+        if (m && (m.isMeshStandardMaterial || m.isMeshLambertMaterial) && !m.userData.noShRecv) { SkyArt.noShadowRecv(m); m.userData.noShRecv = true; }
+      });
+    });
+    return root;
+  }
 
   function bodyMat(rough = 0.5, metal = 0) {
     return new THREE.MeshStandardMaterial({ vertexColors: true, roughness: rough, metalness: metal });
@@ -731,7 +745,8 @@ const SkyAvatar = (() => {
       }
     }
     if (opts.npc) {
-      r.root.traverse(o => { if (o.isMesh) o.castShadow = !low(); });
+      // the whole NPC casts — but not its see-through face decal or unlit glow trim (as on the hero)
+      r.root.traverse(o => { if (o.isMesh) o.castShadow = !low() && castsAvatar() && !o.material.transparent && !o.material.isMeshBasicMaterial; });
     }
     r.look = L;
     return r;
@@ -794,7 +809,7 @@ const SkyAvatar = (() => {
     if (P.rig) disposeRig(P.rig);
     P.look = lookFor(skinId, tint);
     P.rig = buildRig(P.look);
-    P.group.add(P.rig.root);
+    P.group.add(noRecv(P.rig.root));
     const r = P.rig;
     // keep the legacy playerParts shape for any code that pokes at it
     Object.assign(P.parts, {
@@ -1334,6 +1349,7 @@ const SkyAvatar = (() => {
     hits: [], solids: new Map(), list: [],
   };
   const BASE_FOV = 55;
+  const PORTRAIT_FOV = 15, PORTRAIT_R = 0.25;   // extra vertical FOV / orbit distance at aspect ≤ 0.45
   // Only TERRAIN blocks the camera (meshes flagged userData.camSolid — SkyArt marks each
   // island's cliff body and painted top). Props, foliage, quest objects, coins, arches and
   // NPCs never do: a camera that zooms into the hero's back or jerks top-down every time a
@@ -1408,10 +1424,16 @@ const SkyAvatar = (() => {
     const camera = C.camera, cam = C.cam, pos = C.pos, M = C.motion;
     if (!CAM.ray) CAM.ray = new THREE.Raycaster();
     const tx = pos.x, ty = pos.y + 1.55, tz = pos.z;
+    // portrait framing: a tall phone sees a thin vertical slice at the landscape FOV, so the hero
+    // fills the screen — below aspect 1 widen the vertical FOV (≤ +15°) and pull the orbit back
+    // (≤ ×1.25). Landscape / desktop (aspect ≥ 1) unchanged; zoom, collision and shots keep working
+    // on top of it (the player's own cam.radius is never written).
+    const pt = clamp((1 - (camera.aspect || 1)) / 0.55, 0, 1);
+    const R0 = cam.radius * (1 + PORTRAIT_R * pt);
     // follow lag on the focus point (snap after teleports / respawns)
     if (!CAM.init || CAM.snap || Math.abs(tx - CAM.fx) + Math.abs(ty - CAM.fy) + Math.abs(tz - CAM.fz) > 10) {
       CAM.fx = tx; CAM.fy = ty; CAM.fz = tz; CAM.init = true; CAM.snap = false;
-      CAM.curR = cam.radius;
+      CAM.curR = R0;
     } else {
       const kh = damp(dt, 14), kv = damp(dt, M.grounded ? 10 : 5);
       CAM.fx += (tx - CAM.fx) * kh;
@@ -1421,7 +1443,7 @@ const SkyAvatar = (() => {
       const ly = CAM.fy - ty;
       if (ly > 1.2) CAM.fy = ty + 1.2; else if (ly < -1.6) CAM.fy = ty - 1.6;
     }
-    let theta = cam.theta, phi = cam.phi, radius = cam.radius;
+    let theta = cam.theta, phi = cam.phi, radius = R0;
     let revealing = false;
     if (CAM.reveal >= 0) {
       CAM.reveal += dt / 2.6;
@@ -1431,7 +1453,7 @@ const SkyAvatar = (() => {
         const e = easeIO(CAM.reveal);
         theta = lerp(cam.theta + 2.4, cam.theta, e);
         phi = lerp(1.05, cam.phi, e);
-        radius = lerp(cam.radius * 2.8 + 6, cam.radius, e);
+        radius = lerp(R0 * 2.8 + 6, R0, e);
       }
     }
     // ---- cinematic hand-off (cameraShot): blend focus + orbit to a framed shot and back ----
@@ -1496,7 +1518,7 @@ const SkyAvatar = (() => {
     camera.lookAt(CAM.look);
     // ---- FOV kick (sprint / dash / cloud ride) ----
     CAM.fovKick = Math.max(0, CAM.fovKick - dt * 2.5);
-    const targetFov = BASE_FOV + (M.sprint ? 7 : 0) + (M.dashing ? 9 : 0) + CAM.fovKick * 6 + (M.riding ? 4 : 0) + (P.padT > 0 ? 5 : 0);
+    const targetFov = BASE_FOV + PORTRAIT_FOV * pt + (M.sprint ? 7 : 0) + (M.dashing ? 9 : 0) + CAM.fovKick * 6 + (M.riding ? 4 : 0) + (P.padT > 0 ? 5 : 0);
     CAM.fov = lerp(CAM.fov, targetFov, damp(dt, M.dashing ? 12 : 5));
     if (Math.abs(camera.fov - CAM.fov) > 0.02) { camera.fov = CAM.fov; camera.updateProjectionMatrix(); }
     if (shotOn) { CAM.fx = hfx; CAM.fy = hfy; CAM.fz = hfz; }
@@ -1598,7 +1620,7 @@ const SkyAvatar = (() => {
   }
   function makeNpc(emoji, tint) {
     DETAIL = 0;
-    try { return makeNpcInner(emoji, tint); } finally { DETAIL = 1; }
+    try { return noRecv(makeNpcInner(emoji, tint)); } finally { DETAIL = 1; }
   }
   function makeNpcInner(emoji, tint) {
     const base = NPC_LOOKS[emoji];
@@ -1709,7 +1731,7 @@ const SkyAvatar = (() => {
   }
   function makeMob(def) {
     DETAIL = 0;
-    try { return makeMobInner(def); } finally { DETAIL = 1; }
+    try { return noRecv(makeMobInner(def)); } finally { DETAIL = 1; }
   }
   function makeMobInner(def) {
     const shape = def.shape || def.id;
@@ -2108,6 +2130,7 @@ const SkyAvatar = (() => {
     }
     g.userData.boss = { body, head, fists, wings, mats, eyes, ph: 0, id };
     g.userData.body = body;
+    noRecv(g);
     return { group: g, eyeMat, torso: body };
   }
   function animateBoss(g, dt, phase) {

@@ -1,20 +1,23 @@
 /* ===== SkyProbe — 🧪 on-device graphics compatibility probe for 天空之城 (owner diagnostics) =====
-   Loaded after js/sky-art.js, before js/sky.js. Kid-invisible: it only runs from the Sky debug panel
-   (?skydebug=1 or a long press on the island-name pill).
+   Loaded after js/sky-art.js / js/sky-avatar.js, before js/sky.js. Kid-invisible: it only runs from the
+   Sky debug panel (?skydebug=1 or a long press on the island-name pill).
 
-   v3 is statistical and shadow-focused. The PowerVR phone's three earlier runs lost the GPU in about
-   one of four steps that rendered a shadow map and in none of ~80 steps without one, and the same
-   step passed in one run and died in the next — so one try per step proves nothing, and v2's
-   "switch off the ingredient that died" verdict was noise. v3 repeats each configuration and only
-   calls it safe when every repeat passed; a single crash marks it unsafe.
-   1. safe part (should never crash): a context-churn control (fresh contexts, a plain draw), the
-      whole world without shadows (fresh contexts, then several in one context), the composer +
-      bloom without shadows at no MSAA / 2× / 4× (fresh), then several in one context;
-   → the verdict (post on/off, MSAA, shadows OFF) is handed to SkyArt.applyProbe() right here;
-   2. shadow part (each variant up to N tries on fresh contexts, stopping at its first crash, the
-      whole part stopping after CAP crashes): PCF (shipped), VSM, Basic, receive-only minimum,
-      PCF 512, shadow map warmed one frame before any receiver, receivers compiled first;
-   → the final verdict turns shadows back on only with a variant that passed every try.
+   v4 bisects shadows by object class. On the PowerVR phone v3 found every configuration without
+   shadows safe (38/38) and the whole world with shadows unsafe in every shadow type, while the
+   minimal scene (ground receives, one box casts) passed 15/15 — so the shadow mechanism works and
+   something in "the whole world" kills the GPU. Each step is repeated; a configuration is safe only
+   when every repeat passed, one crash marks it unsafe.
+   1. safe part (should never crash): context-churn control, the world without shadows, the composer
+      + bloom without shadows (0 / 2 / 4× MSAA). SKIPPED when an earlier v3/v4 verdict on the same GPU
+      string already proved it (then only a 2-try control runs) → applied at once (shadows off);
+   2. shadow classes: the v3-proven minimal scene plus ONE class at a time (island top material,
+      avatars, merged props, matOf objects, PMREM env, the composer, grass, water, unlit effects, the
+      real shadow frustum at game scale), ≤5 tries each on fresh contexts, a class stops at its first
+      crash, the whole part after CAP crashes;
+   3. the combination of everything that passed, in the configuration the game would ship, 8 tries
+      (VSM once survived 7); if it crashes, the same with a small shadow frustum around the hero;
+   → the final verdict turns shadows on only with a combination that passed every try, with the
+     failed classes switched off (`sw.shOff`, `sw.env`, nopost, `sw.shNear`), else shadows stay off.
    Every step runs in the probe's own canvas, and never next to a live world (SkyArt reloads the
    page without one first): a GPU-process crash kills every context on the page. Before each step it
    writes "running X" to localStorage `english_savior_sky_probe` (device-local, never exported); a
@@ -25,9 +28,9 @@ const SkyProbe = (() => {
   'use strict';
   const CPU2D = { willReadFrequently: true };   // texture canvases survive a GPU crash (see js/sky-art.js)
   const KEY = 'english_savior_sky_probe', GO_KEY = 'english_savior_sky_probe_go';
-  const VER = 3;
+  const VER = 4;
   const CLEAR = '255,0,255';
-  const CAP = 5;            // crashes the shadow part may cost before it stops
+  const CAP = 5;            // crashes the shadow part may cost before it stops (expect 1–3)
   // safe groups: { g, n, same (one context for all tries), avail(st) }
   const SAFE = [
     { g: 'churn', n: 6, label: '對照組：新 context + 一般繪圖' },
@@ -38,17 +41,26 @@ const SkyProbe = (() => {
     { g: 'cmp4', n: 6, avail: s => (s.f16 || []).some(n => n >= 4), label: 'bloom composer、沒陰影、4× MSAA' },
     { g: 'cmp_same', n: 4, same: true, label: 'bloom composer、沒陰影（同一個 context，最佳 MSAA）' },
   ];
-  // shadow groups, in test order; `ship` = a shadow map type the game can use
+  // shadow classes, in test order (most valuable / most likely safe first). Each = the minimal scene
+  // + one ingredient. `cls`: a SkyArt shadow class the game can exclude; `need`: without it the game
+  // gets no useful shadows at all (a crash there ends the shadow part: shadows stay off).
   const SHADOW = [
-    { g: 's_pcf', n: 8, ship: 'pcf', label: 'PCF（目前用的）' },
-    { g: 's_vsm', n: 8, ship: 'vsm', label: 'VSM（不用 compare sampler）' },
-    { g: 's_basic', n: 8, ship: 'basic', label: 'Basic（最簡單）' },
-    { g: 's_recv1', n: 5, label: '最小：地面只接收、一個方塊投影' },
-    { g: 's_pcf512', n: 8, ship: 'pcf512', label: 'PCF 512²' },
-    { g: 's_warm', n: 5, label: 'PCF，先畫一幀陰影圖、再畫接收者' },
-    { g: 's_late', n: 5, label: 'PCF，接收者先編譯（沒陰影）、再開陰影' },
+    { g: 'b_base', n: 3, need: true, label: '對照：最小陰影（地面接收、一個方塊投影；v3 15/15）' },
+    { g: 'c_top', n: 5, need: true, label: '島嶼地面材質（貼圖 + 細節 + 發光，接收陰影）' },
+    { g: 'c_avatar', n: 5, cls: 'avatar', label: '角色 NPC（真的 SkyAvatar 模型）投影' },
+    { g: 'c_prop', n: 5, cls: 'prop', label: '合併道具（樹 + 發光；搖動 / 透視材質）投影 + 接收' },
+    { g: 'c_occ', n: 5, cls: 'occ', label: 'matOf 材質（跑酷平台、蛋舖）投影 + 接收' },
+    { g: 'c_env', n: 5, sw: 'env', label: '環境光貼圖（PMREM）' },
+    { g: 'c_post', n: 5, sw: 'post', avail: () => verdictSafe().post, label: 'bloom composer（最佳 MSAA）' },
+    { g: 'c_grass', n: 5, cls: 'grass', label: '草（instanced，接收）' },
+    { g: 'c_water', n: 5, cls: 'water', label: '水面（半透明，接收）' },
+    { g: 'c_fx', n: 5, need: true, label: '不打光的東西（天空、雲海、瀑布、極光、岩漿、粒子、看板、雲）' },
+    { g: 'c_scale', n: 5, sw: 'scale', label: '實際規模：陰影範圍 ±38、2048/1024 貼圖、40 棵樹 + 40 個方塊' },
   ];
-  const SHIP_PREF = ['s_pcf', 's_pcf512', 's_vsm', 's_basic'];   // which safe type the game uses first
+  const COMBO = [
+    { g: 'combo', n: 8, label: '全部通過的類別一起（遊戲實際的設定）' },
+    { g: 'near', n: 8, avail: () => !!grp('combo').bad && isSafe('c_scale'), label: '同上，但陰影只在主角附近（±14）' },
+  ];
   const CRASHES = new Set(['LOST', 'CRASH']);
   let st = null, busy = false, R = null, host = null, onUpdate = null, shaderLog = [], endedAt = 0;
   let retryT = 0, retryN = 0;
@@ -95,7 +107,7 @@ const SkyProbe = (() => {
     const i = xs.findIndex(x => x.r !== 'ok');
     return { tried: xs.length, ok: xs.filter(x => x.r === 'ok').length, bad: i < 0 ? null : { j: i + 1, r: xs[i].r } };
   }
-  const groupDef = g => SAFE.concat(SHADOW).find(d => d.g === g);
+  const groupDef = g => SAFE.concat(SHADOW, COMBO).find(d => d.g === g);
   const isSafe = g => { const d = groupDef(g), r = grp(g); return !!d && !r.bad && r.tried >= d.n; };
 
   // ---------- the probe's own renderer (same settings as the world's) ----------
@@ -180,7 +192,10 @@ const SkyProbe = (() => {
       sun.castShadow = true;
       const ms = o.sh === 'pcf512' ? 512 : k.isTouch ? 1024 : 2048;
       sun.shadow.mapSize.set(ms, ms);
-      Object.assign(sun.shadow.camera, { left: -8, right: 8, top: 8, bottom: -8, near: 1, far: 60 });
+      // opt.frustum: the game's own shadow camera (half-size 38, or 14 with shNear) — else the small test one
+      const S = opt.frustum || 8;
+      if (opt.frustum) sun.position.copy(k.SUN_DIR).multiplyScalar(90);
+      Object.assign(sun.shadow.camera, { left: -S, right: S, top: S, bottom: -S, near: opt.frustum ? 5 : 1, far: opt.frustum ? 220 : 60 });
       sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.04; sun.shadow.radius = 3;
     }
     sc.add(sun, sun.target);
@@ -244,7 +259,7 @@ const SkyProbe = (() => {
       const k = o.kit, rng = k.mulberry(11), im = new THREE.InstancedMesh(k.cloudGeometry(rng), k.MK.cloud(true), 6);
       const m4 = new THREE.Matrix4();
       for (let i = 0; i < 6; i++) { m4.makeScale(0.9, 0.7, 0.9).setPosition(-3 + i * 1.2, 2.6 + (i % 2) * 0.4, -2); im.setMatrixAt(i, m4); }
-      im.castShadow = true;
+      im.castShadow = false;   // as in the game: clouds neither cast nor receive (v3 had them casting)
       sc.add(im);
     },
     sky(o, sc) {
@@ -292,6 +307,55 @@ const SkyProbe = (() => {
     occLive(o);
     return sc;
   }
+  // v4: the v3-proven minimal scene (ground receives, one box casts) + the named ingredients.
+  // `S` = the game's shadow frustum half-size (38, or 14 = shNear); omitted = the small test one.
+  function clsScene(o, parts, S) {
+    const k = o.kit, has = n => parts.indexOf(n) >= 0;
+    const sc = rig(o, { env: has('env'), frustum: S });
+    const box = mesh(new THREE.BoxGeometry(1.2, 1.2, 1.2), new THREE.MeshStandardMaterial({ color: 0xc9a070 }), 0, 1.2, 0);
+    box.castShadow = true; box.receiveShadow = false; sc.add(box);
+    const big = has('scale');
+    if (has('top')) {
+      const t = canvasTex('#5cbf54', 512);
+      const mat = k.newTopMat({ map: t, emissiveMap: canvasTex('#000000'), emissive: new THREE.Color(0xffffff), emissiveIntensity: 1.6, roughness: 0.92 }, 4, true);
+      const g = ground(sc, mat);
+      if (big) g.scale.setScalar(6);
+    } else {
+      const g = ground(sc, new THREE.MeshStandardMaterial({ color: 0x5cbf54, roughness: 0.9 }));
+      if (big) g.scale.setScalar(6);
+    }
+    if (has('avatar')) {
+      // the game's real rigs (same materials, decals and cast flags as on an island)
+      if (typeof SkyAvatar !== 'undefined' && SkyAvatar.makeNpc) {
+        [['🧝', -1.6, 1.4], ['👻', 1.7, 1.2]].forEach(([e, x, z]) => { const n = SkyAvatar.makeNpc(e); n.position.set(x, 0, z); sc.add(n); });
+      } else WORLD.avatar(o, sc);
+    }
+    if (has('prop')) WORLD.prop(o, sc);
+    if (has('occ')) {
+      WORLD.occ(o, sc);
+      const pl = mesh(k.geo('rbox'), k.MK.occ({ color: 0x7fe0c8 }, true, 'on'), 1.8, 0.45, -0.6);
+      pl.scale.set(2.2, 0.9, 1.6); pl.castShadow = true; pl.receiveShadow = true; sc.add(pl);
+    }
+    if (has('grass')) WORLD.grass(o, sc);
+    if (has('water')) WORLD.water(o, sc);
+    if (has('fx')) ['cloud', 'sky', 'sea', 'fall', 'aurora', 'lava', 'points', 'swirl'].forEach(n => WORLD[n](o, sc));
+    if (big) {
+      // the real scale: 40 trees in one merged mesh + 40 separate boxes over the game's frustum
+      const B = new k.Batch(), rng = k.mulberry(17);
+      for (let i = 0; i < 40; i++) k.K.oak(B, rng, (rng() - 0.5) * 70, (rng() - 0.5) * 70, 0.9 + rng() * 0.4, 0x5cb34c);
+      const m = B.mesh(k.MK.prop(true, { vc: true, sway: true, glow: true, occ: 'on' }), true);
+      m.castShadow = true; m.receiveShadow = true; sc.add(m);
+      const bm = new THREE.MeshStandardMaterial({ color: 0xd8c8a8, roughness: 0.7 });
+      for (let i = 0; i < 40; i++) {
+        const b = mesh(k.geo('rbox'), bm, (rng() - 0.5) * 70, 0.6, (rng() - 0.5) * 70);
+        b.castShadow = true; b.receiveShadow = true; sc.add(b);
+      }
+    }
+    if (has('prop') || has('occ')) occLive(o);
+    // a game-like view for the big scenes; the small test view otherwise
+    if (S) { o.cam.position.set(0, 5.5, 12); o.cam.lookAt(0, 1, 0); } else { o.cam.position.set(0, 2.2, 6); o.cam.lookAt(0, 0.8, 0); }
+    return sc;
+  }
   // 3 frames, direct to the default framebuffer
   function drawN(o, sc, n) { o.r.setRenderTarget(null); for (let i = 0; i < (n || 3); i++) o.r.render(sc, o.cam); return readPx(o); }
   function composer(o, samples) {
@@ -315,18 +379,20 @@ const SkyProbe = (() => {
   const f16Two = s => (s.f16 || []).filter(n => n >= 2 && n < 4)[0] || 2;
   // the MSAA the composer proved with (the same rule the verdict applies)
   function msaaBest() {
+    if (st.reuse) return st.reuse.msaa;
     const d2 = groupDef('cmp2'), d4 = groupDef('cmp4');
     if (d4.avail(st) && isSafe('cmp4') && (!d2.avail(st) || isSafe('cmp2'))) return f16Best(st, 4);
     if (d2.avail(st) && isSafe('cmp2')) return f16Two(st);
     return 0;
   }
-  // the shadow tries render the configuration they would ship in: through the composer when the
-  // safe part proved post, else straight to the screen
-  function shipDraw(o, sc, n) { return verdictSafe().post ? drawPost(o, sc, msaaBest(), n) : drawN(o, sc, n); }
 
   // ---------- what each group does (one try) ----------
   const RUN = {
-    context: o => { st.gpu = o.caps.gpu; st.f16 = o.caps.f16Samples || []; return { note: 'WebGL' + (o.caps.webgl2 ? '2' : '1') + ' f16 samples [' + st.f16.join(',') + ']' }; },
+    context: o => {
+      st.gpu = o.caps.gpu; st.f16 = o.caps.f16Samples || [];
+      st.reuse = reuseFrom(o.kit.stored(), st.gpu);
+      return { note: 'WebGL' + (o.caps.webgl2 ? '2' : '1') + ' f16 samples [' + st.f16.join(',') + ']' + (st.reuse ? ' · 沿用 ' + st.reuse.from : '') };
+    },
     churn: o => { const sc = rig(o, { env: false }); sc.add(mesh(new THREE.BoxGeometry(1.6, 1.6, 1.6), new THREE.MeshBasicMaterial({ color: 0x33cc66 }), -1.8)); sc.add(mesh(new THREE.SphereGeometry(1, 24, 16), new THREE.MeshStandardMaterial({ color: 0x5cb34c, roughness: 0.6 }), 0.3)); return { px: drawN(o, sc, 2), expect: 'drawn' }; },
     world_ns: o => ({ px: drawN(o, worldScene(o)), expect: 'drawn' }),
     ns_same: o => ({ px: drawN(o, worldScene(o)), expect: 'drawn' }),
@@ -334,83 +400,124 @@ const SkyProbe = (() => {
     cmp2: o => ({ px: drawPost(o, worldScene(o), f16Two(st)), expect: 'drawn', note: f16Two(st) + '× MSAA' }),
     cmp4: o => ({ px: drawPost(o, worldScene(o), f16Best(st, 4)), expect: 'drawn', note: f16Best(st, 4) + '× MSAA' }),
     cmp_same: o => { const n = msaaBest(); return { px: drawPost(o, worldScene(o), n), expect: 'drawn', note: (n ? n + '× MSAA' : 'no MSAA') }; },
-    s_pcf: o => ({ px: shipDraw(o, worldScene(o)), expect: 'drawn' }),
-    s_vsm: o => ({ px: shipDraw(o, worldScene(o)), expect: 'drawn' }),
-    s_basic: o => ({ px: shipDraw(o, worldScene(o)), expect: 'drawn' }),
-    s_pcf512: o => ({ px: shipDraw(o, worldScene(o)), expect: 'drawn' }),
-    s_recv1: o => {
-      const sc = rig(o, { env: false });
-      const box = mesh(new THREE.BoxGeometry(1.2, 1.2, 1.2), new THREE.MeshStandardMaterial({ color: 0xc9a070 }), 0, 1.2, 0);
-      box.castShadow = true; box.receiveShadow = false; sc.add(box);
-      ground(sc, new THREE.MeshStandardMaterial({ color: 0x5cbf54, roughness: 0.9 }));
-      return { px: drawN(o, sc), expect: 'drawn', note: 'direct' };
-    },
-    s_warm: o => {
-      // frame 1: the shadow pass runs, but every visible material is unlit (no shadow sampler yet)
-      const sc = worldScene(o);
-      sc.overrideMaterial = new THREE.MeshBasicMaterial({ color: 0x88aa66 });
-      o.junk.push(sc.overrideMaterial);
-      drawN(o, sc, 1);
-      sc.overrideMaterial = null;
-      return { px: shipDraw(o, sc, 2), expect: 'drawn' };
-    },
-    s_late: o => {
-      // receivers compile without a casting light, then the light starts casting
-      const sc = worldScene(o), sun = sc.userData.sun;
-      sun.castShadow = false;
-      drawN(o, sc, 1);
-      sun.castShadow = true;
-      sc.traverse(c => (Array.isArray(c.material) ? c.material : c.material ? [c.material] : []).forEach(m => { m.needsUpdate = true; }));
-      return { px: shipDraw(o, sc, 2), expect: 'drawn' };
-    },
+    // v4 shadow classes: the minimal scene + one ingredient; combo / near: everything that passed
+    b_base: o => ({ px: drawN(o, clsScene(o, [])), expect: 'drawn', note: 'direct' }),
+    c_top: o => ({ px: drawN(o, clsScene(o, ['top'])), expect: 'drawn' }),
+    c_avatar: o => ({ px: drawN(o, clsScene(o, ['avatar'])), expect: 'drawn' }),
+    c_prop: o => ({ px: drawN(o, clsScene(o, ['prop'])), expect: 'drawn' }),
+    c_occ: o => ({ px: drawN(o, clsScene(o, ['occ'])), expect: 'drawn' }),
+    c_env: o => ({ px: drawN(o, clsScene(o, ['env'])), expect: 'drawn' }),
+    c_post: o => { const n = msaaBest(); return { px: drawPost(o, clsScene(o, []), n), expect: 'drawn', note: n ? n + '× MSAA' : 'no MSAA' }; },
+    c_grass: o => ({ px: drawN(o, clsScene(o, ['grass'])), expect: 'drawn' }),
+    c_water: o => ({ px: drawN(o, clsScene(o, ['water'])), expect: 'drawn' }),
+    c_fx: o => ({ px: drawN(o, clsScene(o, ['fx'])), expect: 'drawn' }),
+    c_scale: o => ({ px: drawN(o, clsScene(o, ['scale'], 38)), expect: 'drawn', note: 'frustum ±38' }),
+    combo: o => comboDraw(o, isSafe('c_scale') ? 38 : 14),
+    near: o => comboDraw(o, 14),
   };
-  const SH_TYPE = { s_pcf: 'pcf', s_vsm: 'vsm', s_basic: 'basic', s_pcf512: 'pcf512', s_recv1: 'pcf', s_warm: 'pcf', s_late: 'pcf' };
+  // the ingredients the combination ships with (decided once every class step is over)
+  function comboParts() {
+    return ['top', 'avatar', 'prop', 'occ', 'env', 'grass', 'water', 'fx'].filter(n => isSafe('c_' + n));
+  }
+  const comboPost = () => verdictSafe().post && isSafe('c_post');
+  function comboDraw(o, S) {
+    const parts = comboParts().concat('scale');   // the game's world is at scale either way: with
+    // the small frustum (near) the far casters are simply culled from the depth pass
+    const sc = clsScene(o, parts, S);
+    const n = msaaBest();
+    return { px: comboPost() ? drawPost(o, sc, n) : drawN(o, sc), expect: 'drawn', note: 'frustum ±' + S + ' ' + (comboPost() ? 'post ' + n + '×' : 'direct') + ' [' + parts.join(',') + ']' };
+  }
+  const SH_TYPE = {};
+  [...SHADOW, ...COMBO].forEach(d => { SH_TYPE[d.g] = 'pcf'; });
+  // which tries need the PMREM environment baked into their context
+  const needsEnv = g => g === 'c_env' || ((g === 'combo' || g === 'near') && isSafe('c_env')) || (SAFE.some(d => d.g === g) && g !== 'churn');
 
+  // an earlier v3/v4 verdict for this very GPU string already proved the safe part: reuse it
+  function reuseFrom(stored, gpu) {
+    const p = stored && stored.probe;
+    if (!p || !(p.v >= 3) || !gpu) return null;
+    const at = 'v' + p.v + ' ' + (p.at || '?');
+    if (p.safe) return p.safe.ns && p.safe.gpu === gpu ? { post: !!p.safe.post, msaa: p.safe.msaa | 0, from: at } : null;
+    if (stored.gpu !== gpu || typeof p.rec !== 'number' || p.rec > 2) return null;
+    const msaa = p.sw && typeof p.sw.msaa === 'number' ? p.sw.msaa : f16Best(st, 4);
+    return { post: p.rec === 0, msaa, from: at };
+  }
   // ---------- the plan (rebuilt from the results after every step) ----------
   function tries(d) {
     const r = grp(d.g), out = [];
     if (r.bad) return out;
-    for (let j = r.tried + 1; j <= d.n; j++) out.push({ id: d.g + '#' + j, g: d.g, j, fresh: !d.same || j === 1, sh: SH_TYPE[d.g] || null });
+    const n = st.reuse && d.g === 'churn' ? 2 : d.n;
+    for (let j = r.tried + 1; j <= n; j++) out.push({ id: d.g + '#' + j, g: d.g, j, fresh: !d.same || j === 1, sh: SH_TYPE[d.g] || null });
     return out;
   }
+  const groupN = d => (st && st.reuse && d.g === 'churn' ? 2 : d.n);
+  // a shadow class that crashed where the game cannot do without it ends the shadow part
+  const needBroken = () => SHADOW.some(d => d.need && grp(d.g).bad);
   function plan() {
     const out = [{ id: 'context#1', g: 'context', j: 1, fresh: true, sh: null }];
     if (!res('context#1')) return out.concat({ id: '…', placeholder: true });
-    SAFE.forEach(d => { if (!d.avail || d.avail(st)) out.push(...tries(d)); });
+    SAFE.forEach(d => { if (st.reuse ? d.g === 'churn' : !d.avail || d.avail(st)) out.push(...tries(d)); });
     out.push({ id: '=apply1', apply: 1 });
-    const left = CAP - crashCount();
-    if (left > 0) SHADOW.forEach(d => out.push(...tries(d)));
+    const v = verdictSafe();
+    if (v.churn && v.ns) {
+      for (const d of SHADOW) {
+        if (crashCount() >= CAP || needBroken()) break;
+        if (!d.avail || d.avail(st)) out.push(...tries(d));
+      }
+      // the combination only once every class step is over (it is built from their results)
+      const classesDone = SHADOW.every(d => (d.avail && !d.avail(st)) || grp(d.g).bad || grp(d.g).tried >= d.n);
+      if (classesDone && !needBroken()) {
+        for (const d of COMBO) {
+          if (crashCount() >= CAP) break;
+          if (!d.avail || d.avail(st)) out.push(...tries(d));
+          if (d.g === 'combo' && !grp('combo').bad && grp('combo').tried < d.n) break;   // near is decided by combo
+        }
+      }
+    }
     out.push({ id: '=apply2', apply: 2 });
     return out;
   }
   // the safe part's reading: post (composer + bloom without shadows) and the world without shadows
   function verdictSafe() {
-    const churn = isSafe('churn');
+    const churn = isSafeN('churn');
+    if (st && st.reuse) return { churn, ns: true, post: st.reuse.post, msaa: st.reuse.msaa, reused: st.reuse.from };
     const ns = isSafe('world_ns') && isSafe('ns_same');
     const post = isSafe('cmp0') && isSafe('cmp_same') && ns;
     return { churn, ns, post, msaa: msaaBest() };
   }
+  function isSafeN(g) { const d = groupDef(g), r = grp(g); return !!d && !r.bad && r.tried >= groupN(d); }
+  const failedCls = () => SHADOW.filter(d => d.cls && grp(d.g).bad).map(d => d.cls);
   function verdict(final) {
     const v = verdictSafe();
-    let shadow = null;
-    if (final && v.churn) shadow = SHIP_PREF.find(g => isSafe(g)) || null;
-    const type = shadow ? SH_TYPE[shadow] : null;
-    let rec = v.post ? 0 : v.ns ? (type ? 1 : 2) : 3;
+    const comboOk = isSafe('combo'), nearOk = isSafe('near');
+    const shadow = !!(final && v.churn && v.ns && (comboOk || nearOk));
+    const postWithSh = comboPost();
+    let rec = v.post ? 0 : v.ns ? 2 : 3;
+    if (shadow && rec === 0 && !postWithSh) rec = 1;   // shadows proven only without the composer: nopost
+    if (shadow && rec === 2) rec = 1;                   // nopost with shadows
     if (!v.churn) rec = Math.max(rec, 2);
-    const sw = { shadow: !!type };
-    if (type && type !== 'pcf') sw.shadowType = type;
+    const sw = { shadow };
+    if (shadow) {
+      const off = failedCls();
+      if (off.length) sw.shOff = off.join(',');
+      if (!comboOk || !isSafe('c_scale')) sw.shNear = true;   // combo itself ran at ±14 when scale crashed
+      if (!isSafe('c_env')) sw.env = false;
+    }
     const offered = f16Best(st, 4);
     if (rec === 0 && v.msaa < offered) sw.msaa = v.msaa >= 2 ? 2 : 0;
-    const shTxt = !final ? '陰影先關（還沒測）' : type ? '陰影 ' + typeName(type) + ' 每次都通過' : SHADOW.some(d => grp(d.g).tried) ? '陰影全部不穩' : '陰影沒測到';
+    const bad = SHADOW.concat(COMBO).filter(d => grp(d.g).bad).map(d => d.g.replace(/^c_/, ''));
+    const shTxt = !final ? '陰影先關（還沒測）' :
+      shadow ? '陰影開' + (sw.shOff ? '（不含 ' + sw.shOff + '）' : '') + (sw.shNear ? '（只有主角附近）' : '') + (sw.env === false ? '（不用環境光貼圖）' : '') + (rec === 1 && v.post ? '，但要關掉 bloom' : '') :
+      needBroken() ? '基本陰影就會當（' + bad.join(' ') + '）→ 陰影關' :
+      SHADOW.some(d => grp(d.g).tried) ? '組合不穩（' + (bad.join(' ') || '-') + '）→ 陰影關' : '陰影沒測到';
     const cb = grp('churn').bad;
     const why = !v.churn ? '對照組（一般繪圖）' + (cb && CRASHES.has(cb.r) ? '也當機' : '失敗（' + (cb ? cb.r : '?') + '）') + '：結果不可靠，先用 nopost、不開陰影' :
       !v.ns ? '連沒陰影的世界都會當 → 省電畫質 low' :
-      v.post ? '泛光（bloom）穩定、' + shTxt + ' → ' + (type ? '完整畫質（' + typeName(type) + ' 陰影）' : '用「有泛光、沒陰影」') :
-      'bloom 不穩、沒陰影的世界穩定、' + shTxt + ' → nopost' + (type ? '（' + typeName(type) + ' 陰影）' : '、不開陰影');
+      (v.reused ? '（沿用 ' + v.reused + ' 的無陰影結果）' : '') + (v.post ? '泛光（bloom）穩定、' : 'bloom 不穩、') + shTxt + ' → ' + TIERS_TXT[rec];
     const fail = st.results.filter(x => x.r !== 'ok').map(x => x.id + ':' + x.r).join(' ') || null;
-    return { at: st.at, rec, sw, why, fail, final: !!final };
+    return { v: VER, at: st.at, rec, sw, why, fail, final: !!final, safe: { post: v.post, ns: v.ns, msaa: v.msaa, gpu: st.gpu } };
   }
-  const typeName = t => ({ pcf: 'PCF', pcf512: 'PCF 512', vsm: 'VSM', basic: 'Basic' }[t] || t);
+  const TIERS_TXT = ['full（post）', 'nopost', 'noshadow', 'low'];
 
   // ---------- running ----------
   async function runOne(s) {
@@ -427,7 +534,7 @@ const SkyProbe = (() => {
         return 'noctx';
       }
       st.noctx = null;
-      if (s.g !== 'context' && s.g !== 'churn' && s.g !== 's_recv1') { try { R.envRT = R.kit.bakeEnv(R.r); } catch (e) { R.envRT = null; } }
+      if (needsEnv(s.g)) { try { R.envRT = R.kit.bakeEnv(R.r); } catch (e) { R.envRT = null; } }
     }
     const o = R;
     shaderLog = [];
@@ -514,30 +621,37 @@ const SkyProbe = (() => {
     const p = plan().filter(s => !s.apply);
     const real = p.filter(s => !s.placeholder);
     const done = st.results.length;
-    return { done, total: done + real.filter(s => !res(s.id)).length + (real.length < p.length ? 70 : 0) };
+    // steps not planned yet (the safe part before `context`, the combination before the classes end)
+    const later = real.length < p.length ? 70 : (st.done ? 0 : COMBO[0].n * (grp('combo').tried || needBroken() || crashCount() >= CAP ? 0 : 1));
+    return { done, total: done + real.filter(s => !res(s.id)).length + later };
   }
   function groupLine(d) {
     const r = grp(d.g);
-    if (d.avail && st.f16 && !d.avail(st)) return '  ' + d.g.padEnd(9) + ' n/a（這顆 GPU 沒有）  ' + d.label;
-    const state = !r.tried ? (crashCount() >= CAP && d.g[0] === 's' ? 'not tried (crash cap)' : '-') :
+    const isSh = SHADOW.concat(COMBO).indexOf(d) >= 0;
+    if (st.reuse && !isSh && d.g !== 'churn') return '  ' + d.g.padEnd(9) + ' 沿用 ' + st.reuse.from + '  ' + d.label;
+    if (d.avail && (isSh ? st.results.length > 1 : st.f16) && !d.avail(st)) return '  ' + d.g.padEnd(9) + (isSh ? ' 不需要  ' : ' n/a（這顆 GPU 沒有）  ') + d.label;
+    const n = groupN(d);
+    const state = !r.tried ? (isSh && crashCount() >= CAP ? 'not tried (crash cap)' : isSh && needBroken() ? 'not tried' : '-') :
       r.bad ? (CRASHES.has(r.bad.r) ? '✗ crashed at try ' + r.bad.j : '✗ ' + r.bad.r + ' at try ' + r.bad.j) :
-      r.tried >= d.n ? '✓ safe' : '…';
-    return '  ' + d.g.padEnd(9) + ' ' + (r.ok + '/' + r.tried).padStart(5) + ' ok of ' + d.n + '  ' + state.padEnd(20) + ' ' + d.label;
+      r.tried >= n ? '✓ safe' : '…';
+    return '  ' + d.g.padEnd(9) + ' ' + (r.ok + '/' + r.tried).padStart(5) + ' ok of ' + n + '  ' + state.padEnd(20) + ' ' + d.label;
   }
   function text() {
     load();
     if (!st) return '';
     const lines = [];
     const hist = (st.hist || []).map(h => '  （之前 ' + h + '）');
-    if (!st.results.length && st.idle) return ['🧪 相容性測試 probe v' + VER + ' — not run yet（按 🧪 開始；陰影測試可能讓 GPU 當機最多 ' + CAP + ' 次）'].concat(hist).join('\n');
+    if (!st.results.length && st.idle) return ['🧪 相容性測試 probe v' + VER + ' — not run yet（按 🧪 開始；陰影逐類測試，GPU 大概會當機 1–3 次、最多 ' + CAP + ' 次）'].concat(hist).join('\n');
     const pr = progress();
     lines.push('🧪 相容性測試 probe v' + VER + ' (' + st.at + ')  ' + (st.gpu || '') + '  ' + pr.done + '/' + pr.total +
       (busy ? '  running: ' + (st.running || '…') : st.done ? '  done' : st.noctx ? '  waiting for WebGL' : '  paused — tap ▶️ to continue'));
-    if (!st.done) lines.push('  先測不會當機的部分（約 1 分鐘），結論馬上套用；最後測陰影：GPU 可能當機最多 ' + CAP + ' 次（已 ' + crashCount() + ' 次），Chrome 擋 3D 時要重開 Chrome（大概 0–2 次）。');
+    if (!st.done) lines.push('  ' + (st.reuse ? '沒陰影的部分沿用上次（同一顆 GPU）' : '先測不會當機的部分（約 1 分鐘）') + '；陰影逐類測試：每當機一次就重開 Chrome 再按 ▶️。預計 1–3 次、最多 ' + CAP + ' 次（已 ' + crashCount() + ' 次）。');
     lines.push('  安全部分（沒陰影）:');
     SAFE.forEach(d => lines.push(groupLine(d)));
-    lines.push('  陰影（每種最多 N 次，第一次當機就停）:');
+    lines.push('  陰影類別（最小場景 + 一類，每類最多 N 次，第一次當機就停）:');
     SHADOW.forEach(d => lines.push(groupLine(d)));
+    lines.push('  組合（全部通過的類別一起，要 8 次都過才開陰影）:');
+    COMBO.forEach(d => lines.push(groupLine(d)));
     const bad = st.results.filter(x => x.r !== 'ok');
     if (bad.length) lines.push('  not ok: ' + bad.map(x => x.id + ' ' + x.r + (x.ms !== undefined ? ' ' + x.ms + 'ms' : '') + (x.gl ? ' gl ' + x.gl : '') + (x.log ? ' log ' + x.log : '') + (x.note ? ' (' + x.note + ')' : '')).join(' · '));
     if (st.noctx && !busy) lines.push('  ⛔ NOCTX ×' + st.noctx.n + ' at ' + st.noctx.step + ' (' + st.noctx.msg + ') — 請把 Chrome 完全關閉再開，然後按 ▶️（不算一步，會自動再試）');
@@ -546,6 +660,7 @@ const SkyProbe = (() => {
       const v = st.summary, T = SkyArt.probeKit().TIERS;
       lines.push('  結論：' + v.why);
       lines.push('    = start tier ' + (v.rec === 0 && !v.sw.shadow ? 'full（post，沒陰影）' : T[v.rec]) + '  switches ' + JSON.stringify(v.sw) + (v.final ? '' : '（暫定：陰影還沒測）') + '  → 已套用，重新載入後生效');
+      if (v.final && v.sw.shadow) lines.push('    ⚠️ 開陰影後如果遊戲又當掉，畫質階梯會自己把陰影關掉（不用再測）');
     }
     return lines.concat(hist).join('\n');
   }

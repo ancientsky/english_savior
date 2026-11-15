@@ -930,13 +930,15 @@ const SkyGame = (() => {
   let questLodT = 0;
   const questMeshes = [];   // { mesh, x, y, z, r }
   const questBatches = {};  // isleId -> SkyArt.Batch (filled by buildQuestObjects / buildPortals / buildSwitches)
-  function questBatch(isleId) { return questBatches[isleId] || (questBatches[isleId] = new SkyArt.Batch()); }
+  // footprints are tracked so a run without a shadow map can paint contact shadows under the props
+  function questBatch(isleId) { return questBatches[isleId] || (questBatches[isleId] = new SkyArt.Batch().track()); }
   function flushQuestProps() {
     for (const id in questBatches) {
       const mesh = questBatches[id].mesh(SkyArt.propMat, !lowPower());
       if (!mesh) continue;
       const isle = isleById(id);
       islandGroups[id].add(mesh);
+      SkyArt.groundShadows(id, questBatches[id].fp);
       questMeshes.push({ mesh, x: isle.pos[0], y: isle.pos[1], z: isle.pos[2], r: isle.r });
     }
     buildMarkerMeshes();
