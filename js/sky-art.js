@@ -71,7 +71,15 @@ const SkyArt = (() => {
   // flavour when shadows are on (the 🧪 probe may find PCF unstable but another one stable).
   // `shadow` may be stored as true (the probe vouched for it) — that overrides the PowerVR default.
   const SHADOW_TYPES = ['pcf', 'pcf512', 'vsm', 'basic'];
-  const FEAT_DEF = { occ: 'on', sway: true, glow: true, propRecv: true, propCast: true, env: true, msaa: 4, shadow: true, shadowType: 'pcf' };
+  // shadow classes the 🧪 probe v4 bisects and `shOff` can exclude (as caster AND as receiver):
+  //   avatar — hero / NPC / mob / boss rigs (js/sky-avatar.js Kit.mesh, NPC traverse)
+  //   prop   — merged Batch props on propMat: island decor, quest props (questMesh / flushQuestProps)
+  //   occ    — matOf materials: SkyPlay egg stand, obby platforms / arches (js/sky-play.js)
+  //   grass  — instanced grass (receiver only)   water — ponds (receiver only)
+  // The island top is not a class: it is what every shadow lands on (no top → no shadows at all).
+  // `shNear`: a small shadow frustum around the hero (fewer casters, smaller depth pass).
+  const SH_CLASSES = ['avatar', 'prop', 'occ', 'grass', 'water'];
+  const FEAT_DEF = { occ: 'on', sway: true, glow: true, propRecv: true, propCast: true, env: true, msaa: 4, shadow: true, shadowType: 'pcf', shOff: '', shNear: false };
   const FEAT = Object.assign({}, FEAT_DEF);
   function cleanSw(sw) {
     const out = {};
@@ -81,12 +89,31 @@ const SkyArt = (() => {
     if ([0, 2].includes(sw.msaa)) out.msaa = sw.msaa;
     if (typeof sw.shadow === 'boolean') out.shadow = sw.shadow;
     if (SHADOW_TYPES.includes(sw.shadowType) && sw.shadowType !== 'pcf') out.shadowType = sw.shadowType;
+    // shOff: a comma list of SH_CLASSES (a string, so featSw() / the panel compare it as one value)
+    const off = (Array.isArray(sw.shOff) ? sw.shOff : typeof sw.shOff === 'string' ? sw.shOff.split(',') : []).filter(c => SH_CLASSES.includes(c));
+    if (off.length) out.shOff = SH_CLASSES.filter(c => off.includes(c)).join(',');
+    if (sw.shNear === true) out.shNear = true;
     return out;
   }
   function loadFeat() {
     Object.assign(FEAT, FEAT_DEF, cleanSw(gfxRead().sw));
     return FEAT;
   }
+  // may this class take part in shadows on this device? (both directions; see SH_CLASSES)
+  const shClassOn = cls => !FEAT.shOff || FEAT.shOff.split(',').indexOf(cls) < 0;
+  // does an object of this class cast? (sibling modules: SkyArt.casts('avatar'))
+  function casts(cls) { return !low && shClassOn(cls); }
+  // compile a lit material WITHOUT the shadow-map variant (no sampler, no shadow math): for materials
+  // whose objects never receive (clouds) and for receiver classes this device excludes. The program
+  // cache key gets its own suffix so it never shares a program with a shadowed twin.
+  function noShadowRecv(mat) {
+    const ob = mat.onBeforeCompile, own = mat.customProgramCacheKey !== THREE.Material.prototype.customProgramCacheKey;
+    const key = own ? mat.customProgramCacheKey.bind(mat) : () => String(ob);
+    mat.onBeforeCompile = (sh, r) => { if (ob) ob.call(mat, sh, r); sh.shadowMapEnabled = false; };
+    mat.customProgramCacheKey = () => key() + '-noshrecv';
+    return mat;
+  }
+  const rc = (mat, cls, std) => (std || shClassOn(cls) ? mat : noShadowRecv(mat));
   // PowerVR (Pixel 10 Pro XL, D-Series DXT): three probe runs lost the GPU in ~1 of 4 steps that
   // rendered a shadow map and in none of ~80 steps without one → shadows default off there
   const isPowerVR = gpu => /PowerVR/i.test(gpu || '');
@@ -780,10 +807,11 @@ const SkyArt = (() => {
     const live = renderer ? shadowsOn() : null;
     const typeTxt = (ty === 'pcf512' ? 'PCF 512' : ty === 'vsm' ? 'VSM' : ty === 'basic' ? 'Basic' : 'PCF') +
       (ty === 'pcf512' ? '' : ' ' + (isTouch ? 1024 : 2048));
-    const who = sw.shadow === false ? (g.probe && g.probe.v === 3 ? '🧪 v3 判定關閉' : '畫質階梯關閉') :
-      sw.shadow === true ? '🧪 v3 判定 ' + typeTxt + ' 穩定' : isPowerVR(diag.caps.gpu || g.gpu) ? 'PowerVR 預設關閉' : '預設';
+    const pv = g.probe && g.probe.v >= 3 ? '🧪 v' + g.probe.v : null;
+    const who = sw.shadow === false ? (pv ? pv + ' 判定關閉' : '畫質階梯關閉') :
+      sw.shadow === true ? (pv || '🧪') + ' 判定 ' + typeTxt + ' 穩定' : isPowerVR(diag.caps.gpu || g.gpu) ? 'PowerVR 預設關閉' : '預設';
     return (live === null ? '-' : live ? '開（' + typeTxt + '）' : '關') + '  開關 ' + (sw.shadow === undefined ? '-' : sw.shadow ? 'on' : 'off') +
-      (sw.shadowType ? ' type=' + sw.shadowType : '') + '  由：' + who + (renderer && !live && !low && diag.tier < 2 ? '（有泛光、沒陰影）' : '');
+      (sw.shadowType ? ' type=' + sw.shadowType : '') + (sw.shOff ? '  不含 ' + sw.shOff : '') + (sw.shNear ? '  只有主角附近' : '') + '  由：' + who + (renderer && !live && !low && diag.tier < 2 ? '（有泛光、沒陰影）' : '');
   }
   function renderDiag() {
     if (!diagEl) return;
@@ -835,21 +863,26 @@ const SkyArt = (() => {
     if (!TEX.noise) initTextures();
     return { MK, skyMat, skyUniforms, seaMat, seaUniforms, newFallMat, newAuroraMat, newLavaMat, newTopMat, bakeEnv, cloudGeometry,
       Batch, K, geo, getTuftGeo, mulberry, TEX, OCC, SUN_DIR, fogBase, probeCaps, pixelRatio, isTouch, TIERS, caps: diag.caps,
-      FEAT, FEAT_DEF, withOcclusion, isPowerVR, SHADOW_MAP_TYPE, worldAlive: () => !!renderer,
+      FEAT, FEAT_DEF, withOcclusion, isPowerVR, SHADOW_MAP_TYPE, worldAlive: () => !!renderer, SH_CLASSES, noShadowRecv,
+      // what an earlier probe already proved on this device (v4 skips the safe part for the same GPU)
+      stored: () => { const g = gfxRead(); return { gpu: g.gpu || null, probe: g.probe || null }; },
       asLow: fn => { const p = low; low = true; try { return fn(); } finally { low = p; } } };
   }
-  // the 🧪 probe v3 verdict: { rec: start tier, sw: { shadow, shadowType?, msaa? }, why }. Every
+  // the 🧪 probe v3/v4 verdict: { v, rec: start tier, sw: { shadow, shadowType?, msaa?, shOff?, shNear? }, why, safe? }. Every
   // configuration it names was rendered several times on this device without a crash, so it
   // REPLACES the stored tier and switches (up or down — this is what lifts a crash-ladder `low`
   // that the probe itself caused). A crash inside the probe window never reaches the ladder.
   function applyProbe(sum) {
     const g = gfxRead();
     const sw = cleanSw(sum.sw);
-    g.probe = { v: 3, at: sum.at, fail: sum.fail || null, rec: typeof sum.rec === 'number' ? sum.rec : null, sw };
+    const v = sum.v || 3;
+    g.probe = { v, at: sum.at, fail: sum.fail || null, rec: typeof sum.rec === 'number' ? sum.rec : null, sw };
+    // v4: what the safe part proved without shadows (a later v4 run on the same GPU skips it)
+    if (sum.safe) g.probe.safe = { post: !!sum.safe.post, ns: !!sum.safe.ns, msaa: sum.safe.msaa | 0, gpu: String(sum.safe.gpu || '').slice(0, 120) };
     if (Object.keys(sw).length) g.sw = sw; else delete g.sw;
     if (typeof sum.rec === 'number') {
       const rec = Math.max(0, Math.min(3, sum.rec | 0));
-      if (rec !== g.tier || sum.why) g.why = '🧪 相容性測試 v3：' + (sum.why || TIERS[rec]);
+      if (rec !== g.tier || sum.why) g.why = '🧪 相容性測試 v' + v + '：' + (sum.why || TIERS[rec]);
       g.tier = rec;
       if (rec === 0) g.probeOk = true; else delete g.probeOk;
     }
@@ -903,20 +936,22 @@ const SkyArt = (() => {
   // factories (also used by the 🧪 probe, so it compiles exactly what the world compiles)
   const MK = {
     // f (probe only): { vc, sway, glow, occ } — omitted keys follow the device switches
-    prop: (std, f) => swayGlow(litMat({ vertexColors: !(f && f.vc === false), roughness: 0.7 }, std), 'prop', f),
-    grass: std => swayGlow(litMat({ vertexColors: true, roughness: 0.95, side: THREE.DoubleSide }, std), 'grass'),
-    cloud: std => Object.assign(litMat({ color: 0xffffff, roughness: 1, emissive: 0xaec4e6, emissiveIntensity: 0.16 }, std), { name: 'cloud' }),
-    water: std => Object.assign(litMat({
+    // `std` (the probe) always gets the raw material; the game's get the device's receiver classes
+    prop: (std, f) => rc(swayGlow(litMat({ vertexColors: !(f && f.vc === false), roughness: 0.7 }, std), 'prop', f), 'prop', std),
+    grass: std => rc(swayGlow(litMat({ vertexColors: true, roughness: 0.95, side: THREE.DoubleSide }, std), 'grass'), 'grass', std),
+    // clouds never receive (receiveShadow false): no shadow sampler in their program on any device
+    cloud: std => noShadowRecv(Object.assign(litMat({ color: 0xffffff, roughness: 1, emissive: 0xaec4e6, emissiveIntensity: 0.16 }, std), { name: 'cloud' })),
+    water: std => rc(Object.assign(litMat({
       color: 0x3fb8ec, roughness: 0.12, emissive: 0x0c4a6e, emissiveIntensity: 0.6,
       map: TEX.ripple, transparent: true, opacity: 0.92,
-    }, std), { name: 'water' }),
+    }, std), { name: 'water' }), 'water', std),
     occ: (opts, std, mode) => {
       const m = litMat(opts, std);
       mode = mode || FEAT.occ;
       m.onBeforeCompile = sh => withOcclusion(sh, mode);
       m.customProgramCacheKey = () => 'skyart-occ' + (mode === 'on' ? '' : '-' + mode);
       m.name = 'occ';
-      return m;
+      return rc(m, 'occ', std);
     },
   };
   function initMaterials() {
@@ -1141,7 +1176,7 @@ const SkyArt = (() => {
     sun.castShadow = shadowsOn();
     const ms = FEAT.shadowType === 'pcf512' ? 512 : isTouch ? 1024 : 2048;
     sun.shadow.mapSize.set(ms, ms);
-    const S = 38;
+    const S = FEAT.shNear ? 14 : 38;   // shNear (🧪 v4): only casters near the hero
     sun.shadow.camera.left = -S; sun.shadow.camera.right = S;
     sun.shadow.camera.top = S; sun.shadow.camera.bottom = -S;
     sun.shadow.camera.near = 5; sun.shadow.camera.far = 220;
@@ -1495,6 +1530,21 @@ const SkyArt = (() => {
               shadowSampler: /uniform\s+sampler2DShadow\s+directionalShadowMap/.test(fs) && /#define USE_SHADOWMAP/.test(fs), key: String(p.cacheKey).length };
           });
         },
+        // everything in the shadow pass / compiled as a receiver, grouped (owner + test diagnostics)
+        shadowInv: () => {
+          const out = {};
+          scene.traverse(o => {
+            if (!(o.isMesh || o.isPoints || o.isSprite || o.isLine)) return;
+            const ms = Array.isArray(o.material) ? o.material : [o.material];
+            ms.forEach(m => {
+              if (!m) return;
+              const k = [o.userData.shCls || '?', o.isInstancedMesh ? 'inst' : o.isSkinnedMesh ? 'skin' : o.isSprite ? 'sprite' : o.isPoints ? 'points' : 'mesh',
+                m.type, m.name || '-', m.transparent ? 'T' : '', m.depthWrite === false ? 'nodw' : '', o.castShadow ? 'CAST' : '', o.receiveShadow ? 'RECV' : ''].join('|');
+              out[k] = (out[k] || 0) + 1;
+            });
+          });
+          return out;
+        },
         shadowState: () => ({ enabled: renderer.shadowMap.enabled, type: renderer.shadowMap.type, sunCast: sun.castShadow, sunMap: !!sun.shadow.map, on: shadowsOn(), feat: FEAT.shadow, fp: islands.reduce((a, it) => a + (it.fp || 0), 0) }),
         perIsland: () => islands.map(it => {
           const t = m => (m ? Math.round(m.geometry.index.count / 3) : 0);
@@ -1754,7 +1804,7 @@ const SkyArt = (() => {
       const m = new THREE.Mesh(g, mat || propMat);
       // device switches: merged props may be told not to cast / receive shadows on this GPU
       const prop = m.material && m.material.name === 'prop';
-      m.castShadow = !!shadow && !(prop && !FEAT.propCast); m.receiveShadow = !(prop && !FEAT.propRecv);
+      m.castShadow = !!shadow && !(prop && !(FEAT.propCast && shClassOn('prop'))); m.receiveShadow = !(prop && !FEAT.propRecv);
       m.matrixAutoUpdate = false; m.updateMatrix();
       return m;
     }
@@ -2532,6 +2582,18 @@ const SkyArt = (() => {
     return { map, emap };
   }
 
+  // contact shadows for things placed on an island after it was built (quest props, SkyPlay stands):
+  // fp = [{ x, z, r, h }] in island-local units. Only when this class casts no real shadow here.
+  function groundShadows(isleId, fp, cls) {
+    if (!renderer || (shadowsOn() && shClassOn(cls || 'prop')) || !fp || !fp.length) return;
+    const it = islands.find(i => i.isle.id === isleId);
+    const cv = it && it.topMap && it.topMap.image;
+    if (!cv || it.water || !cv.getContext) return;
+    const size = cv.width, k = size / (2 * it.Rm);
+    paintContactShadows(cv.getContext('2d', CPU2D), fp, x => (x / (2 * it.Rm) + 0.5) * size, k);
+    it.topMap.needsUpdate = true;
+    it.fp += fp.length;
+  }
   function paintContactShadows(c, fp, X, k) {
     const ox = -SUN_DIR.x / SUN_DIR.y, oz = -SUN_DIR.z / SUN_DIR.y;   // ground offset per unit of height
     const blob = (x, z, r, a) => {
@@ -3197,7 +3259,7 @@ const SkyArt = (() => {
 
     // props
     const B = new Batch();
-    if (!shadowsOn()) B.track();
+    if (!shadowsOn() || !shClassOn('prop')) B.track();   // painted contact shadows instead of real ones
     const place = makePlacer(isle, rng, info.ex);
     if (DECOR[isle.type]) DECOR[isle.type](B, rng, isle, st, place, info, g, R);
     gateFor(B, rng, st, info);
@@ -3221,7 +3283,8 @@ const SkyArt = (() => {
     if (grass) g.add(grass);
 
     scene.add(g);
-    islands.push({ isle, group: g, props, grass, depth, x: isle.pos[0], y: isle.pos[1], z: isle.pos[2], fp: info.fp ? info.fp.length : 0 });
+    islands.push({ isle, group: g, props, grass, depth, x: isle.pos[0], y: isle.pos[1], z: isle.pos[2], fp: info.fp ? info.fp.length : 0,
+      topMap: paint.map, Rm, water: !!st.water });
     return g;
   }
 
@@ -3537,7 +3600,7 @@ const SkyArt = (() => {
   }
   function questMesh(name) {
     const m = new THREE.Mesh(questGeo(name), propMat);
-    m.castShadow = !low && FEAT.propCast && !/^(mk_|orb|shard)/.test(name);
+    m.castShadow = !low && FEAT.propCast && shClassOn('prop') && !/^(mk_|orb|shard)/.test(name);
     return m;
   }
 
@@ -3607,6 +3670,7 @@ const SkyArt = (() => {
     get composer() { return composer; },
     // quality tiers + owner diagnostics (see "renderer & post")
     gfxLow, gfxReset, showDiag, idle, diag, get tier() { return TIERS[diag.tier]; },
+    casts, noShadowRecv, get shadows() { return !!renderer && shadowsOn(); }, groundShadows,
     get warming() { return !!(warm || warmNeeded); }, takeResume, probeKit, applyProbe,
   };
 })();

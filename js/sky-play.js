@@ -575,7 +575,9 @@ const SkyPlay = (() => {
       geos.forEach(x => x.dispose());
       if (!merged) continue;
       const me = new THREE.Mesh(merged, m);
-      me.castShadow = !noShadow;
+      // see-through / unlit parts (the START decal lying on its platform, signs) never cast; the
+      // 🧪 probe may exclude this whole class (SkyArt.casts('occ')) on a device
+      me.castShadow = !noShadow && !m.transparent && !m.isMeshBasicMaterial && SkyArt.casts('occ');
       me.receiveShadow = true;
       g.add(me);
     }
@@ -818,6 +820,8 @@ const SkyPlay = (() => {
     g.add(sign);
     mergeStatic(g);
     ig.add(g);
+    // no shadow map on this run: a painted contact shadow under the stand (as under island props)
+    SkyArt.groundShadows(SKY_EGG_STAND.isle, [{ x: SKY_EGG_STAND.dx, z: SKY_EGG_STAND.dz, r: 2.6, h: 4.4 }], 'occ');
     const wx = isle.pos[0] + SKY_EGG_STAND.dx, wz = isle.pos[2] + SKY_EGG_STAND.dz;
     stand = {
       group: g, eggs, isle, x: wx, z: wz, yaw,
@@ -1385,6 +1389,7 @@ const SkyPlay = (() => {
     g.add(board);
     mergeStatic(g);
     ig.add(g);
+    SkyArt.groundShadows(def.isle, [-2.7, 2.7].map(sx => ({ x: lx + sx * Math.cos(C.a), z: lz - sx * Math.sin(C.a), r: 0.75, h: 4.6 })), 'occ');
     const wx = I.pos[0] + lx, wz = I.pos[2] + lz;
     C.arch = { group: g, board, neon, x: wx, z: wz };
     C.target = { play: true, id: 'arch:' + def.id, label: '', use: () => teleportToStart(C) };
