@@ -1837,15 +1837,15 @@ body.game-max #zone-sky.active .aw-canvas-wrap {
 .aw-ld-hero { position: absolute; left: 8.3333%; bottom: 0; width: 28px; height: 46px; margin-left: -14px; }
 .aw-ld-hop { position: absolute; inset: 0; animation: awLdHop 0.56s cubic-bezier(.3, 0, .55, 1) infinite alternate; transform-origin: 50% 100%; }
 .aw-ld-hop i { position: absolute; display: block; border: 2.5px solid var(--aw-ink); }
-.aw-ld-hop .hd { left: 3px; top: 0; width: 22px; height: 20px; border-radius: 5px; background: #ffd23f; z-index: 2; }
+.aw-ld-hop .hd { left: 3px; top: 0; width: 22px; height: 20px; border-radius: 6px; background: linear-gradient(#f08a2e 0 34%, #f1c9a0 34%); z-index: 2; }
 .aw-ld-hop .hd i { border: 0; background: var(--aw-ink); }
-.aw-ld-hop .ey { left: 4px; top: 5px; width: 3px; height: 5px; border-radius: 2px; }
+.aw-ld-hop .ey { left: 4px; top: 8px; width: 3px; height: 5px; border-radius: 2px; }
 .aw-ld-hop .ey.r { left: auto; right: 4px; }
-.aw-ld-hop .mo { left: 5px; top: 11px; width: 7px; height: 3px; border-radius: 0 0 4px 4px; }
-.aw-ld-hop .tr { left: 3px; top: 18px; width: 22px; height: 16px; border-radius: 3px; background: var(--aw-blue); z-index: 1; }
-.aw-ld-hop .ar { left: -3px; top: 19px; width: 7px; height: 14px; border-radius: 3px; background: #ffd23f; transform: rotate(14deg); }
+.aw-ld-hop .mo { left: 5px; top: 13px; width: 7px; height: 3px; border-radius: 0 0 4px 4px; }
+.aw-ld-hop .tr { left: 3px; top: 18px; width: 22px; height: 16px; border-radius: 3px; background: #1f9aa0; z-index: 1; }
+.aw-ld-hop .ar { left: -3px; top: 19px; width: 7px; height: 14px; border-radius: 3px; background: linear-gradient(#1f9aa0 0 55%, #f1c9a0 55%); transform: rotate(14deg); }
 .aw-ld-hop .ar.r { left: auto; right: -3px; transform: rotate(-14deg); }
-.aw-ld-hop .lg { left: 5px; top: 32px; width: 9px; height: 13px; border-radius: 2px; background: var(--aw-green); }
+.aw-ld-hop .lg { left: 5px; top: 32px; width: 9px; height: 13px; border-radius: 2px; background: #1d2f6f; }
 .aw-ld-hop .lg.r { left: 14px; }
 .aw-ld-shadow {
   position: absolute; left: 2px; bottom: -6px;
