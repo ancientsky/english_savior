@@ -274,7 +274,7 @@ const SkyGame = (() => {
       ['pointercancel', 'pointerleave'].forEach(t => els.location.addEventListener(t, cancel));
       els.location.addEventListener('contextmenu', e => e.preventDefault());
     }
-    els.startBtn.addEventListener('click', startAdventure);
+    els.startBtn.addEventListener('click', () => startAdventure());
     // owner diagnostics before any world exists (?skydebug=1, or a 🧪 probe interrupted by a crash)
     if (/[?&]skydebug=1\b/.test(location.search) || (typeof SkyProbe !== 'undefined' && SkyProbe.interrupted())) SkyArt.showDiag();
     // SkyArt reloaded the page after a GPU crash to rebuild the world at a safer quality tier:
@@ -284,7 +284,7 @@ const SkyGame = (() => {
       setTimeout(() => {
         const tab = document.querySelector('.nav-tab[data-zone="sky"]');
         if (tab && !zoneActive()) tab.click();
-        startAdventure();
+        startAdventure({ resume: true });
         // CSS maximize only — a script can't re-enter browser fullscreen without a tap
         if (resume.max && !document.body.classList.contains('game-max') && typeof setGameMax === 'function') setGameMax(true);
         showWorldToast('🔧 已自動調整畫質，繼續冒險！');
@@ -302,7 +302,7 @@ const SkyGame = (() => {
 
     // test hooks — localhost only (they teleport, add coins, open any quest)
     if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__skyTest = {
-      start: startAdventure,
+      start: () => startAdventure(),   // a promise: resolves once the world is built (warm-up may follow)
       player: () => ({ x: pos.x, y: pos.y, z: pos.z, grounded, island: currentIsland, hearts, simTime }),
       teleport: (x, y, z) => { pos.x = x; pos.y = y; pos.z = z; vy = 0; },
       warp: id => usePortal({ to: id }),   // like a portal: sets the region (underground void depth) too
@@ -655,16 +655,31 @@ const SkyGame = (() => {
   }
 
 
-  function startAdventure() {
+  // async: the first start builds the whole world (seconds on a phone). The loading screen
+  // (js/sky-loader.js) goes up BEFORE any of that work, initThree() yields to the browser between
+  // build steps so it repaints, and it dissolves once the first real world frame is drawn (animate).
+  let starting = false;
+  async function startAdventure(opts) {
+    if (starting || playing) return;
+    starting = true;
     els.start.style.display = 'none';
     els.wrap.style.display = '';
     els.belowHint.style.display = isTouch ? 'none' : '';
     if (isTouch) els.wrap.classList.add('touch-mode');
+    const isle = isleById(save.lastIsland) || SKY_ISLANDS[0];
 
     if (!threeReady) {
+      // the wrap has no height until the renderer sizes it: give the loader its box now
+      els.wrap.style.height = canvasSize().h + 'px';
+      SkyLoader.open(els.wrap, opts && opts.resume ? 'resume' : 'start', { touch: isTouch, dest: isle.name, cont: totalCleared() > 0 });
+      // let the loader reach the screen before the main thread gets busy (rAF never fires in a
+      // background tab — the timeout keeps a resume from waiting for the tab to be shown)
+      await new Promise(r => { const t = setTimeout(r, 120); requestAnimationFrame(() => setTimeout(() => { clearTimeout(t); r(); }, 0)); });
       try {
-        initThree();
+        await initThree();
       } catch (err) {
+        starting = false;
+        SkyLoader.close();
         console.error('Sky 3D init failed:', err);
         els.wrap.innerHTML = '<p style="padding:30px;text-align:center;color:#fff">😢 3D 畫面（WebGL）現在無法啟動。<br>' +
           '請把瀏覽器完全關掉再打開一次；如果還是不行，代表這台裝置不支援 3D 顯示。<br><small style="opacity:.7">' +
@@ -672,11 +687,15 @@ const SkyGame = (() => {
         return;
       }
     }
+    starting = false;
     // spawn at last visited island
-    const isle = isleById(save.lastIsland) || SKY_ISLANDS[0];
     respawnAt(isle, false);
     refreshEquipment();
     emitFx('start');
+    // aim the camera (and the sun's shadow frustum) at the hero's start pose now, so the staged
+    // warm-up — during which the world holds still — compiles what the first real frame will see
+    updateCamera(0);
+    if (!SkyArt.warming) SkyLoader.final();
     hearts = maxHearts();
     playing = true;
     updateHudHearts();
@@ -718,11 +737,16 @@ const SkyGame = (() => {
     camera.updateProjectionMatrix();
   }
 
-  function initThree() {
+  // Builds the world in steps, reporting to the loading screen and yielding between them
+  // (SkyLoader.step). Fractions are this build's share of the time measured on a throttled phone.
+  async function initThree() {
     const { w, h } = canvasSize();
+    const L = SkyLoader;
 
     // renderer, post FX, sky, lights, clouds and particles: js/sky-art.js
+    await L.step(0, '打開魔法視窗…');
     renderer = SkyArt.createRenderer(w, h, lowPower());
+    L.plan(SkyArt.warming);   // a staged shader warm-up follows the build (touch / unproven tier)
     renderer.domElement.className = 'aw-canvas';
     els.wrap.insertBefore(renderer.domElement, els.wrap.firstChild);
     els.wrap.style.height = h + 'px';
@@ -732,27 +756,38 @@ const SkyGame = (() => {
 
     scene = new THREE.Scene();
     camera = new THREE.PerspectiveCamera(55, w / h, 0.1, 1800);
+    await L.step(0.04, '畫天空和雲海…', 'renderer');
     SkyArt.init(ctx);
     hemiLight = SkyArt.hemi;
     sunLight = SkyArt.sun;
     skyDome = SkyArt.dome;
     fogBase = SkyArt.fogBase;   // the storm-boss victory brightens the haze through this
 
-    SKY_ISLANDS.forEach(buildIsland);
+    await L.step(0.09, '搭建浮島… 0/' + SKY_ISLANDS.length, 'sky');
+    for (let i = 0; i < SKY_ISLANDS.length; i++) {
+      buildIsland(SKY_ISLANDS[i]);
+      await L.step(0.09 + 0.58 * (i + 1) / SKY_ISLANDS.length, '搭建浮島… ' + (i + 1) + '/' + SKY_ISLANDS.length);
+    }
+    await L.step(0.67, '架起空中橋樑…', 'islands');
     SKY_BRIDGES.forEach(b => {
       if (b.quest && !isBridgeBuilt(b.quest)) return; // built by its quest
       if (b.switch && !save.stairsBuilt[b.switch]) return; // built by its switch
       buildBridge(b);
     });
     SKY_PADS.forEach(buildPad);
+    await L.step(0.75, '擺放寶箱和任務…', 'bridges');
     buildQuestObjects();
     buildPortals();
     buildSwitches();
     flushQuestProps();
+    await L.step(0.84, '叫醒島上的小怪物…', 'quests');
     AMBIENT_MOBS.forEach(a => spawnMob(a.mob, a.island, a.dx, a.dz));
+    await L.step(0.88, '準備你的英雄…', 'mobs');
     buildPlayer();
     setupPointerControls();
+    await L.step(0.89, '撒下星星硬幣、擺好寵物蛋…', 'hero');
     SkyPlay.init(ctx);   // PLAY: coins, pets, egg stand, obby courses (js/sky-play.js)
+    await L.step(1, SkyArt.warming ? '準備替世界上色…' : '最後衝刺，馬上出發！', 'play');
 
     clock = new THREE.Timer();
     threeReady = true;
@@ -3788,7 +3823,7 @@ const SkyGame = (() => {
 
   function setupKeyboard() {
     window.addEventListener('keydown', e => {
-      if (!playing || !zoneActive()) return;
+      if (!playing || !zoneActive() || SkyLoader.isOpen()) return;   // nothing happens behind the loader
       if (document.querySelector('.modal.active')) return;
       if (quizOpen) {
         if (e.code === 'Escape') closeQuiz();
@@ -4495,7 +4530,9 @@ const SkyGame = (() => {
       updatePlayer(dt);
       updateCamera(dt);
     }
-    SkyArt.frame(dt);   // world animation, atmosphere, sun/sky follow + render (js/sky-art.js)
+    // world animation, atmosphere, sun/sky follow + render (js/sky-art.js); true = the real world
+    // was drawn (not a warm-up stage) → the loading screen may dissolve onto it
+    if (SkyArt.frame(dt) && SkyLoader.isOpen()) SkyLoader.done();
   }
 
   return { init, onShow };

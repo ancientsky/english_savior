@@ -575,7 +575,10 @@ const SkyArt = (() => {
   // stages of their own. The stage name is written to english_savior_sky_gfx before it runs, so a
   // crash that kills the page names the stage on the next visit.
   const WARM_LAYER = 30;
-  let warm = null, warmNeeded = false, warmEl = null;
+  // Progress goes to the loading screen (js/sky-loader.js): SkyLoader.warm(i, n, stage) per stage;
+  // after a context restore the warm-up opens the loader itself (mode 'rewarm').
+  let warm = null, warmNeeded = false;
+  const LD = () => (typeof SkyLoader !== 'undefined' ? SkyLoader : null);
   function progKey(o) {
     const m = Array.isArray(o.material) ? o.material[0] : o.material;
     if (!m) return 'none';
@@ -620,8 +623,8 @@ const SkyArt = (() => {
     const g = gfxRead();
     g.warm = s.name; gfxWrite();
     diag.warm.stage = s.name; diag.warm.i = warm.i + 1;
+    LD()?.warm(warm.i, warm.stages.length, s.name);
     warm.i++;
-    if (warmEl) warmEl.querySelector('i').style.width = Math.round(warm.i / warm.stages.length * 100) + '%';
     if (s.run) { s.run(); return; }
     const post = composer && !ctx.lowPower();
     if (!s.objs.length) { if (post) composer.render(0); return; }
@@ -640,18 +643,14 @@ const SkyArt = (() => {
     warm = null;
     const g = gfxRead();
     if (g.warm !== undefined && !aborted) { delete g.warm; gfxWrite(); }
-    if (warmEl) warmEl.remove();
+    // aborted (context lost): the 🔧 overlay underneath must be seen; else "last step" until the
+    // first real frame (sky.js animate → SkyLoader.done)
+    if (aborted) LD()?.close(); else LD()?.warm(1, 1, 'done');
   }
+  // the loader is already up on a first start; after a context restore it opens here
   function showWarm() {
     const wrap = renderer && renderer.domElement.parentNode;
-    if (!wrap) return;
-    if (!warmEl) {
-      warmEl = document.createElement('div');
-      warmEl.className = 'aw-gfx-warm';
-      warmEl.innerHTML = '<div><b>🌤️ 天空之城準備中…</b><span><i></i></span></div>';
-    }
-    warmEl.querySelector('i').style.width = '0%';
-    wrap.appendChild(warmEl);
+    if (wrap) LD()?.open(wrap, 'rewarm', { touch: isTouch });
   }
 
   // ---- WebGL context loss (GPU process crash / reset / memory pressure) ----
@@ -672,6 +671,7 @@ const SkyArt = (() => {
     lostUnproven = !byProbe && visible && (!diag.healthy || performance.now() - tierStart < 60000);
     if (lostUnproven && !low && diag.tier < 3) noteStep('WebGL context lost at ' + rungName(diag.tier, diag.shadow) + (stage ? '（準備「' + stage + '」時）' : '（還沒穩定）'));
     finishWarm(true);
+    LD()?.close();   // never cover the 🔧 overlay (also a loss on the first frame, with no warm-up)
     dropComposer(true);
     envRT = null;
     showLost();
@@ -792,6 +792,7 @@ const SkyArt = (() => {
       '功能開關 switches: ' + swText(g.sw) + (renderer && swText(g.sw) !== swText(featSw()) ? '（這次執行中：' + swText(featSw()) + '，重新載入後生效）' : ''),
       'gfx: ' + JSON.stringify(g),
       'warm-up: ' + (diag.warm ? diag.warm.i + '/' + diag.warm.n + ' ' + (warm ? '… ' + diag.warm.stage : diag.warm.stage + ' in ' + diag.warm.ms + ' ms') : '-'),
+      typeof SkyLoader !== 'undefined' && SkyLoader.timings() ? '載入 load: ' + SkyLoader.timings() : '',
       'frames: ' + diag.frames + '  healthy: ' + diag.healthy + '  health: ' + H.verdict + '  gl errors: ' + glErr +
         (inf ? '  programs: ' + (inf.programs ? inf.programs.length : '?') + '  calls: ' + inf.render.calls + '  tex: ' + inf.memory.textures : ''),
       '  checks: ' + (H.checks.length ? H.checks.map(k => 'f' + k.f + ' ' + k.v).join(', ') : '-'),
@@ -1599,12 +1600,14 @@ const SkyArt = (() => {
     updateOcclusion();
     renderer.info.reset();
     if (warmNeeded) startWarm();
+    let real = false;
     if (warm) {
       warmStep();
       if (warm.i >= warm.stages.length) finishWarm();   // everything revealed: next frame is the real one
-    } else if (composer && !ctx.lowPower()) composer.render(dt);
-    else renderer.render(scene, camera);
+    } else if (composer && !ctx.lowPower()) { composer.render(dt); real = true; }
+    else { renderer.render(scene, camera); real = true; }
     healthTick();
+    return real && !renderer.getContext().isContextLost();   // sky.js: the loading screen may hand off
   }
 
   const _occV = new THREE.Vector3(), _occS = new THREE.Vector2();
